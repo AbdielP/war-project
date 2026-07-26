@@ -19,3 +19,5 @@ PC, móvil, Nintendo Switch.
 
 ## Pendiente de definir
 (ir agregando acá temas abiertos: economía, progresión, tipos de unidades, diseño de niveles, etc.)
+- Minimapa: cómo funciona el zoom/navegación dentro del recuadro chico del HUD (no se centra en ninguna unidad, eso se descartó). Ver detalle técnico en `docs/decisions.md` (2026-07-26).
+- Mapa táctico grande: pantalla aparte, todavía no implementada. Se abriría al hacer click en el minimapa.

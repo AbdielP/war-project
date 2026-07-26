@@ -19,3 +19,7 @@ func get_display_name() -> String:
 	if unit_name != "":
 		return unit_name
 	return tr(unit_type.display_name) if unit_type else ""
+
+
+func get_actions() -> PackedStringArray:
+	return unit_type.actions if unit_type else []

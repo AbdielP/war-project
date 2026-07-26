@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="UnitType" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="UnitType" format=3 uid="uid://bpcombri2c111"]
 
-[ext_resource type="Script" path="res://core/unit/unit_type.gd" id="1"]
+[ext_resource type="Script" uid="uid://c1lw2d718qt22" path="res://core/unit/unit_type.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
 display_name = "Buque de asalto anfibio"
+actions = ["Hangar"]

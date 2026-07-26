@@ -4,6 +4,8 @@
 [ext_resource type="PackedScene" path="res://ui/hud/event_log/event_log.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://ui/hud/minimap/minimap.tscn" id="2"]
 [ext_resource type="PackedScene" path="res://ui/hud/selection_panel/selection_panel.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://ui/hud/actions_panel/actions_panel.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://ui/hud/hangar_window/hangar_window.tscn" id="5"]
 
 [node name="HUD" type="CanvasLayer" unique_id=1219806315]
 script = ExtResource("0")
@@ -19,6 +21,13 @@ offset_left = 5.0
 offset_top = 292.0
 offset_right = 92.0
 offset_bottom = 379.0
+
+[node name="HangarWindow" parent="." instance=ExtResource("5")]
+
+[node name="ActionsPanel" parent="." instance=ExtResource("4")]
+offset_left = 544.0
+offset_top = 313.0
+offset_right = 637.0
 
 [node name="SelectionPanel" parent="." unique_id=464690185 instance=ExtResource("3")]
 offset_left = 544.0

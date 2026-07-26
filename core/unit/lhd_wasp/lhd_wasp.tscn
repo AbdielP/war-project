@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://c8msftcqwylmn"]
+
+[ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
+[ext_resource type="Texture2D" uid="uid://cnjtmdbvdvacx" path="res://assets/art/sprites/LHD_WASP.png" id="2"]
+[ext_resource type="Resource" path="res://core/unit/lhd_wasp/lhd_wasp_type.tres" id="3"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(160, 304)
+
+[node name="LhdWasp" unique_id=1112537189 instance=ExtResource("1")]
+unit_type = ExtResource("3")
+unit_name = "LHD Wasp"
+
+[node name="Sprite2D" parent="." index="0"]
+texture = ExtResource("2")
+
+[node name="CollisionShape2D" parent="." index="1"]
+shape = SubResource("RectangleShape2D_1")
+
+[node name="SelectionIndicator" parent="." index="2"]
+size = Vector2(160, 304)

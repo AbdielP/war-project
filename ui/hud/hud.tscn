@@ -1,0 +1,23 @@
+[gd_scene load_steps=4 format=3 uid="uid://ee4bxicqku18"]
+
+[ext_resource type="Script" path="res://ui/hud/hud.gd" id="0"]
+[ext_resource type="PackedScene" path="res://ui/hud/event_log/event_log.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://ui/hud/minimap/minimap.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://ui/hud/selection_panel/selection_panel.tscn" id="3"]
+
+[node name="HUD" type="CanvasLayer" unique_id=1219806315]
+script = ExtResource("0")
+
+[node name="EventLog" parent="." unique_id=173143879 instance=ExtResource("1")]
+offset_left = 4.0
+offset_top = 183.0
+offset_right = 73.0
+offset_bottom = 274.0
+
+[node name="Minimap" parent="." unique_id=1579022018 instance=ExtResource("2")]
+offset_left = 4.0
+offset_top = 278.0
+offset_right = 91.0
+offset_bottom = 365.0
+
+[node name="SelectionPanel" parent="." instance=ExtResource("3")]

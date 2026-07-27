@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
+[ext_resource type="Texture2D" path="res://assets/art/sprites/AV-8B Harrier II.png" id="2"]
+[ext_resource type="Resource" path="res://core/unit/av8b_harrier/av8b_harrier_type.tres" id="3"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(28, 32)
+
+[node name="Av8bHarrier" unique_id=1 instance=ExtResource("1")]
+unit_type = ExtResource("3")
+unit_name = ""
+
+[node name="Sprite2D" parent="." index="0"]
+texture = ExtResource("2")
+
+[node name="CollisionShape2D" parent="." index="1"]
+shape = SubResource("RectangleShape2D_1")
+
+[node name="SelectionIndicator" parent="." index="2"]
+size = Vector2(28, 32)

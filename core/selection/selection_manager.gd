@@ -31,6 +31,6 @@ func _select(unit: Unit) -> void:
 	_selected_unit = unit
 	if _selected_unit:
 		_selected_unit.set_selected(true)
-		_hud.show_selected_unit(_selected_unit.get_display_name(), _selected_unit.get_actions())
+		_hud.show_selected_unit(_selected_unit)
 	else:
 		_hud.clear_selected_unit()

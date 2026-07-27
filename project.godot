@@ -24,6 +24,10 @@ window/size/window_height_override=768
 window/stretch/mode="viewport"
 window/stretch/scale_mode="integer"
 
+[autoload]
+
+PlayerFleet="*res://core/fleet/player_fleet.gd"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

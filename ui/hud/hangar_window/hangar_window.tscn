@@ -29,13 +29,14 @@ content_margin_bottom = 3.0
 [node name="HangarWindow" type="PanelContainer"]
 visible = false
 offset_left = 180.0
-offset_top = 80.0
+offset_top = 60.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_1")
 script = ExtResource("1")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="."]
 layout_mode = 2
-custom_minimum_size = Vector2(200, 0)
+custom_minimum_size = Vector2(220, 0)
+theme_override_constants/separation = 4
 
 [node name="TitleBar" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
@@ -52,7 +53,53 @@ theme_override_colors/font_color = Color(0.56078434, 0.827451, 1, 1)
 layout_mode = 2
 text = "X"
 
-[node name="Content" type="VBoxContainer" parent="VBoxContainer"]
+[node name="UnitList" type="VBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 20)
+theme_override_constants/separation = 3
+
+[node name="SelectionArea" type="VBoxContainer" parent="VBoxContainer"]
+visible = false
+layout_mode = 2
 theme_override_constants/separation = 4
+
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer/SelectionArea"]
+layout_mode = 2
+theme_override_colors/separator_color = Color(0.56078434, 0.827451, 1, 0.4)
+
+[node name="QuantityRow" type="HBoxContainer" parent="VBoxContainer/SelectionArea"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="QuantityLabel" type="Label" parent="VBoxContainer/SelectionArea/QuantityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Cantidad:"
+theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+
+[node name="MinusBtn" type="Button" parent="VBoxContainer/SelectionArea/QuantityRow"]
+layout_mode = 2
+text = "-"
+
+[node name="CountLabel" type="Label" parent="VBoxContainer/SelectionArea/QuantityRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(18, 0)
+horizontal_alignment = 1
+text = "1"
+theme_override_colors/font_color = Color(0.56078434, 0.827451, 1, 1)
+
+[node name="PlusBtn" type="Button" parent="VBoxContainer/SelectionArea/QuantityRow"]
+layout_mode = 2
+text = "+"
+
+[node name="MissionRow" type="HBoxContainer" parent="VBoxContainer/SelectionArea"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="HSeparator2" type="HSeparator" parent="VBoxContainer/SelectionArea"]
+layout_mode = 2
+theme_override_colors/separator_color = Color(0.56078434, 0.827451, 1, 0.4)
+
+[node name="DeployBtn" type="Button" parent="VBoxContainer/SelectionArea"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "DESPLEGAR"

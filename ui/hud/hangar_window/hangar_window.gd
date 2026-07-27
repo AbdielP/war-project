@@ -1,26 +1,47 @@
 extends PanelContainer
 
-const _COLOR_TEXT := Color(0.6705882, 0.5803922, 0.4784314)
-const _COLOR_ACCENT := Color(0.56078434, 0.827451, 1.0)
+const _COLOR_TEXT    := Color(0.6705882, 0.5803922, 0.4784314)
+const _COLOR_ACCENT  := Color(0.56078434, 0.827451, 1.0)
+const _COLOR_MUTED   := Color(0.6705882, 0.5803922, 0.4784314, 0.4)
+const _MISSIONS      := ["SEAD", "CAP", "CAS"]
 
-var _dragging := false
-var _drag_offset := Vector2.ZERO
-var _ship: Node2D = null
+var _dragging        := false
+var _drag_offset     := Vector2.ZERO
+var _ship            : Node2D = null
+var _selected_entry  : Dictionary = {}
+var _selected_unit_btn : Button = null
+var _quantity        := 1
+var _selected_mission := ""
+var _mission_buttons : Array[Button] = []
 
-@onready var _title_bar: HBoxContainer = $VBoxContainer/TitleBar
-@onready var _close_btn: Button = $VBoxContainer/TitleBar/CloseButton
-@onready var _content: VBoxContainer = $VBoxContainer/Content
+@onready var _title_bar      : HBoxContainer = $VBoxContainer/TitleBar
+@onready var _close_btn      : Button        = $VBoxContainer/TitleBar/CloseButton
+@onready var _unit_list      : VBoxContainer = $VBoxContainer/UnitList
+@onready var _selection_area : VBoxContainer = $VBoxContainer/SelectionArea
+@onready var _minus_btn      : Button        = $VBoxContainer/SelectionArea/QuantityRow/MinusBtn
+@onready var _count_lbl      : Label         = $VBoxContainer/SelectionArea/QuantityRow/CountLabel
+@onready var _plus_btn       : Button        = $VBoxContainer/SelectionArea/QuantityRow/PlusBtn
+@onready var _mission_row    : HBoxContainer = $VBoxContainer/SelectionArea/MissionRow
+@onready var _deploy_btn     : Button        = $VBoxContainer/SelectionArea/DeployBtn
 
 
 func _ready() -> void:
 	_title_bar.gui_input.connect(_on_title_bar_input)
 	_close_btn.pressed.connect(close)
-	_style_button(_close_btn)
+	_minus_btn.pressed.connect(_on_minus)
+	_plus_btn.pressed.connect(_on_plus)
+	_deploy_btn.pressed.connect(_on_deploy)
+	_style_btn(_close_btn)
+	_style_btn(_minus_btn)
+	_style_btn(_plus_btn)
+	_style_deploy_btn()
+	_build_mission_buttons()
 
 
 func open(ship: Node2D) -> void:
 	_ship = ship
-	_refresh()
+	_reset_selection()
+	_refresh_unit_list()
 	show()
 	move_to_front()
 
@@ -29,56 +50,108 @@ func close() -> void:
 	hide()
 
 
-func _refresh() -> void:
-	for child in _content.get_children():
+# ── unidades ────────────────────────────────────────────────────────────────
+
+func _refresh_unit_list() -> void:
+	for child in _unit_list.get_children():
 		child.queue_free()
-	if _ship == null:
-		return
-	var loadout := PlayerFleet.get_loadout(_ship.unit_name)
-	for entry in loadout:
-		_content.add_child(_make_entry(entry))
+	_selected_unit_btn = null
+	for entry in PlayerFleet.get_loadout(_ship.unit_name):
+		_unit_list.add_child(_make_unit_btn(entry))
 
 
-func _make_entry(entry: Dictionary) -> HBoxContainer:
+func _make_unit_btn(entry: Dictionary) -> Button:
 	var available: int = entry["total"] - entry["deployed"]
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-
-	var lbl := Label.new()
-	lbl.text = "%s  %d/%d" % [entry["display_name"], available, entry["total"]]
-	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lbl.add_theme_color_override("font_color", _COLOR_TEXT)
-	row.add_child(lbl)
-
 	var btn := Button.new()
-	btn.text = "▶"
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.text = "%s  [%d/%d]" % [entry["display_name"], available, entry["total"]]
 	btn.disabled = available <= 0
-	_style_button(btn)
-	btn.pressed.connect(_on_deploy.bind(entry, lbl))
-	row.add_child(btn)
-
-	return row
+	_style_btn(btn)
+	btn.pressed.connect(_on_unit_selected.bind(entry, btn))
+	return btn
 
 
-func _on_deploy(entry: Dictionary, lbl: Label) -> void:
-	if not PlayerFleet.try_deploy(entry):
+func _on_unit_selected(entry: Dictionary, btn: Button) -> void:
+	if _selected_unit_btn:
+		_selected_unit_btn.add_theme_color_override("font_color", _COLOR_TEXT)
+	_selected_unit_btn = btn
+	btn.add_theme_color_override("font_color", _COLOR_ACCENT)
+	_selected_entry = entry
+	_quantity = 1
+	_selected_mission = ""
+	_update_quantity()
+	_update_mission_display()
+	_selection_area.visible = true
+
+
+# ── cantidad ─────────────────────────────────────────────────────────────────
+
+func _on_minus() -> void:
+	_quantity = max(1, _quantity - 1)
+	_update_quantity()
+
+
+func _on_plus() -> void:
+	var avail: int = _selected_entry["total"] - _selected_entry["deployed"]
+	_quantity = min(avail, _quantity + 1)
+	_update_quantity()
+
+
+func _update_quantity() -> void:
+	_count_lbl.text = str(_quantity)
+	var avail: int = _selected_entry.get("total", 0) - _selected_entry.get("deployed", 0)
+	_minus_btn.disabled = _quantity <= 1
+	_plus_btn.disabled = _quantity >= avail
+
+
+# ── misión ───────────────────────────────────────────────────────────────────
+
+func _build_mission_buttons() -> void:
+	for mission in _MISSIONS:
+		var btn := Button.new()
+		btn.text = mission
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_btn(btn)
+		btn.pressed.connect(_on_mission_pressed.bind(mission))
+		_mission_row.add_child(btn)
+		_mission_buttons.append(btn)
+
+
+func _on_mission_pressed(mission: String) -> void:
+	_selected_mission = mission
+	_update_mission_display()
+
+
+func _update_mission_display() -> void:
+	for btn in _mission_buttons:
+		var color := _COLOR_ACCENT if btn.text == _selected_mission else _COLOR_TEXT
+		btn.add_theme_color_override("font_color", color)
+
+
+# ── despliegue ───────────────────────────────────────────────────────────────
+
+func _on_deploy() -> void:
+	if _selected_entry.is_empty() or _selected_mission.is_empty():
 		return
-	var instance: Node2D = entry["scene"].instantiate()
-	get_tree().current_scene.add_child(instance)
-	instance.global_position = _ship.global_position
-	var available: int = entry["total"] - entry["deployed"]
-	lbl.text = "%s  %d/%d" % [entry["display_name"], available, entry["total"]]
+	for i in _quantity:
+		if not PlayerFleet.try_deploy(_selected_entry):
+			break
+		var instance: Node2D = _selected_entry["scene"].instantiate()
+		get_tree().current_scene.add_child(instance)
+		instance.global_position = _ship.global_position
+	_reset_selection()
+	_refresh_unit_list()
 
 
-func _style_button(btn: Button) -> void:
-	var empty := StyleBoxEmpty.new()
-	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
-		btn.add_theme_stylebox_override(state, empty)
-	btn.add_theme_color_override("font_color", _COLOR_TEXT)
-	btn.add_theme_color_override("font_hover_color", _COLOR_ACCENT)
-	btn.add_theme_color_override("font_pressed_color", _COLOR_ACCENT)
-	btn.add_theme_color_override("font_disabled_color", Color(_COLOR_TEXT, 0.4))
+func _reset_selection() -> void:
+	_selected_entry = {}
+	_selected_unit_btn = null
+	_quantity = 1
+	_selected_mission = ""
+	_selection_area.visible = false
 
+
+# ── drag ─────────────────────────────────────────────────────────────────────
 
 func _on_title_bar_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
@@ -87,3 +160,22 @@ func _on_title_bar_input(event: InputEvent) -> void:
 			_drag_offset = get_global_mouse_position() - global_position
 	elif event is InputEventMouseMotion and _dragging:
 		global_position = get_global_mouse_position() - _drag_offset
+
+
+# ── estilos ──────────────────────────────────────────────────────────────────
+
+func _style_btn(btn: Button) -> void:
+	var empty := StyleBoxEmpty.new()
+	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+		btn.add_theme_stylebox_override(state, empty)
+	btn.add_theme_color_override("font_color", _COLOR_TEXT)
+	btn.add_theme_color_override("font_hover_color", _COLOR_ACCENT)
+	btn.add_theme_color_override("font_pressed_color", _COLOR_ACCENT)
+	btn.add_theme_color_override("font_focus_color", _COLOR_TEXT)
+	btn.add_theme_color_override("font_disabled_color", _COLOR_MUTED)
+
+
+func _style_deploy_btn() -> void:
+	_style_btn(_deploy_btn)
+	_deploy_btn.add_theme_color_override("font_color", _COLOR_ACCENT)
+	_deploy_btn.add_theme_color_override("font_hover_color", _COLOR_TEXT)

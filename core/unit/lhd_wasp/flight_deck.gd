@@ -1,6 +1,7 @@
 extends Node2D
 
-@export var taxi_speed: float = 30.0  # px/s — ajustable en el Inspector
+@export var taxi_speed: float = 30.0         # px/s — ajustable en el Inspector
+@export var elevator_cycle_time: float = 2.0  # segundos antes de reutilizar el elevador (placeholder para animación)
 
 # Elevator1 → TP2 primero, luego TP1. Elevator2 → TP4 primero, luego TP3.
 const _ELEVATOR_SLOTS: Array = [[1, 0], [3, 2]]
@@ -63,6 +64,13 @@ func _process_queue(elev_idx: int) -> void:
 	var target: Marker2D = _takeoff_points[slot]
 	var waypoint_idx: int = _SLOT_WAYPOINTS[slot]
 
+	# Libera el elevador tras un tiempo fijo — independiente de la geometría.
+	# Cuando llegue la animación del elevador, este tiempo = duración de la animación.
+	get_tree().create_timer(elevator_cycle_time).timeout.connect(func() -> void:
+		_taxiing[elev_idx] = false
+		_process_queue(elev_idx)
+	)
+
 	var tw := unit.create_tween()
 
 	if waypoint_idx >= 0:
@@ -70,27 +78,16 @@ func _process_queue(elev_idx: int) -> void:
 		var d1 := unit.global_position.distance_to(wp.global_position)
 		tw.tween_property(unit, "global_position", wp.global_position,
 				d1 / taxi_speed if taxi_speed > 0.0 else 0.01)
-		# Al llegar al waypoint el avión ya salió del elevador — se libera para el siguiente
-		tw.tween_callback(func() -> void:
-			unit.global_rotation = wp.global_rotation
-			_taxiing[elev_idx] = false
-			_process_queue(elev_idx)
-		)
+		tw.tween_callback(func() -> void: unit.global_rotation = wp.global_rotation)
 		var d2 := wp.global_position.distance_to(target.global_position)
 		tw.tween_property(unit, "global_position", target.global_position,
 				d2 / taxi_speed if taxi_speed > 0.0 else 0.01)
-		tw.finished.connect(func() -> void:
-			unit.global_rotation = target.global_rotation
-		)
+		tw.finished.connect(func() -> void: unit.global_rotation = target.global_rotation)
 	else:
 		var d := unit.global_position.distance_to(target.global_position)
 		tw.tween_property(unit, "global_position", target.global_position,
 				d / taxi_speed if taxi_speed > 0.0 else 0.01)
-		tw.finished.connect(func() -> void:
-			unit.global_rotation = target.global_rotation
-			_taxiing[elev_idx] = false
-			_process_queue(elev_idx)
-		)
+		tw.finished.connect(func() -> void: unit.global_rotation = target.global_rotation)
 
 
 func _next_slot_for_elevator(elev_idx: int) -> int:

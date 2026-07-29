@@ -2,12 +2,15 @@
 
 [ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
 [ext_resource type="Texture2D" uid="uid://cnjtmdbvdvacx" path="res://assets/art/sprites/LHD_WASP.png" id="2"]
-[ext_resource type="Resource" path="res://core/unit/lhd_wasp/lhd_wasp_type.tres" id="3"]
+[ext_resource type="Resource" uid="uid://bpcombri2c111" path="res://core/unit/lhd_wasp/lhd_wasp_type.tres" id="3"]
+[ext_resource type="Script" uid="uid://dntj4qknbqy43" path="res://core/unit/lhd_wasp/lhd_wasp.gd" id="4"]
+[ext_resource type="Script" uid="uid://bf08vtibkljvq" path="res://core/unit/lhd_wasp/flight_deck.gd" id="5"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(160, 304)
 
 [node name="LhdWasp" unique_id=1112537189 instance=ExtResource("1")]
+script = ExtResource("4")
 unit_type = ExtResource("3")
 unit_name = "LHD Wasp"
 
@@ -19,3 +22,37 @@ shape = SubResource("RectangleShape2D_1")
 
 [node name="SelectionIndicator" parent="." index="2"]
 size = Vector2(160, 304)
+
+[node name="FlightDeck" type="Node2D" parent="." index="3" unique_id=491283156]
+script = ExtResource("5")
+taxi_speed = 15.0
+
+[node name="Elevator1" type="Marker2D" parent="FlightDeck" index="0" unique_id=808317051]
+position = Vector2(34, 94)
+rotation = 1.5707964
+gizmo_extents = 8.0
+
+[node name="Elevator2" type="Marker2D" parent="FlightDeck" index="1" unique_id=269206936]
+position = Vector2(-46, 24)
+rotation = 4.712389
+gizmo_extents = 8.0
+
+[node name="TakeoffPoint1" type="Marker2D" parent="FlightDeck" index="2" unique_id=1325073332]
+position = Vector2(-22, 94)
+rotation = 3.1415927
+gizmo_extents = 6.0
+
+[node name="TakeoffPoint2" type="Marker2D" parent="FlightDeck" index="3" unique_id=1327697661]
+position = Vector2(-22, 58)
+rotation = 3.1415927
+gizmo_extents = 6.0
+
+[node name="TakeoffPoint3" type="Marker2D" parent="FlightDeck" index="4" unique_id=1182825276]
+position = Vector2(-22, 24)
+rotation = 3.1415927
+gizmo_extents = 6.0
+
+[node name="TakeoffPoint4" type="Marker2D" parent="FlightDeck" index="5" unique_id=302789504]
+position = Vector2(-22, -17)
+rotation = 3.1415927
+gizmo_extents = 6.0

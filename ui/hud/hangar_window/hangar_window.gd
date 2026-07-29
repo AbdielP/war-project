@@ -97,15 +97,16 @@ func _on_minus() -> void:
 
 func _on_plus() -> void:
 	var avail: int = _selected_entry.get("total", 1) - _selected_entry.get("deployed", 0)
-	_quantity = min(avail, _quantity + 1)
+	_quantity = min(min(avail, 4), _quantity + 1)
 	_update_quantity()
 
 
 func _update_quantity() -> void:
 	_count_lbl.text = str(_quantity)
 	var avail: int = _selected_entry.get("total", 0) - _selected_entry.get("deployed", 0)
+	var max_qty: int = min(avail, 4)
 	_minus_btn.disabled = _quantity <= 1
-	_plus_btn.disabled  = _quantity >= avail or avail <= 0
+	_plus_btn.disabled  = _quantity >= max_qty or max_qty <= 0
 
 
 # ── misión ───────────────────────────────────────────────────────────────────
@@ -137,12 +138,13 @@ func _update_mission_display() -> void:
 func _on_deploy() -> void:
 	if _selected_entry.is_empty() or _selected_mission.is_empty():
 		return
+	var flight_deck: Node = _ship.get_node("FlightDeck")
 	for i in _quantity:
 		if not PlayerFleet.try_deploy(_selected_entry):
 			break
-		var instance: Node2D = _selected_entry["scene"].instantiate()
-		get_tree().current_scene.add_child(instance)
-		instance.global_position = _ship.global_position
+		if not flight_deck.request_deploy(_selected_entry["scene"]):
+			PlayerFleet.recall(_selected_entry)
+			break
 	_selected_entry    = {}
 	_selected_unit_btn = null
 	_quantity          = 1

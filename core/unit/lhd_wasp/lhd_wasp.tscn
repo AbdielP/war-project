@@ -56,3 +56,7 @@ gizmo_extents = 6.0
 position = Vector2(-22, -17)
 rotation = 3.1415927
 gizmo_extents = 6.0
+
+[node name="LaunchPoint" type="Marker2D" parent="FlightDeck" index="6" unique_id=902074173]
+position = Vector2(-22, -85)
+rotation = 3.1415927

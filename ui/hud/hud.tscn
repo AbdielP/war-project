@@ -33,3 +33,12 @@ offset_right = 637.0
 offset_left = 544.0
 offset_top = 349.0
 offset_right = 637.0
+
+[node name="DeselButton" type="Button" parent="."]
+visible = false
+offset_left = 526.0
+offset_top = 351.0
+offset_right = 542.0
+offset_bottom = 367.0
+flat = true
+text = "×"

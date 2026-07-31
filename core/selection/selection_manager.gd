@@ -16,6 +16,7 @@ func _ready() -> void:
 	_camera = get_node(camera_path) as PanCamera
 	_hud = get_node(hud_path) as HUD
 	_camera.clicked.connect(_on_camera_clicked)
+	_hud.deselect_requested.connect(func() -> void: _select(null))
 	_move_marker = _MoveMarker.new()
 	get_tree().current_scene.add_child(_move_marker)
 	_move_marker.hide()
@@ -25,6 +26,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 		if _selected_unit != null:
 			_issue_move_order(get_global_mouse_position())
+	elif event is InputEventKey and event.keycode == KEY_ESCAPE and event.pressed and not event.echo:
+		_select(null)
 
 
 func _on_camera_clicked(world_position: Vector2) -> void:

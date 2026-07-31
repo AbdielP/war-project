@@ -24,13 +24,13 @@ func _on_camera_clicked(world_position: Vector2) -> void:
 
 
 func _select(unit: Unit) -> void:
-	if _selected_unit == unit:
-		return
-	if _selected_unit:
-		_selected_unit.set_selected(false)
-	_selected_unit = unit
-	if _selected_unit:
-		_selected_unit.set_selected(true)
-		_hud.show_selected_unit(_selected_unit)
-	else:
-		_hud.clear_selected_unit()
+	if _selected_unit != unit:
+		if _selected_unit:
+			_selected_unit.set_selected(false)
+		_selected_unit = unit
+		if _selected_unit:
+			_selected_unit.set_selected(true)
+			_hud.show_selected_unit(_selected_unit)
+		else:
+			_hud.clear_selected_unit()
+	_camera.follow_target = _selected_unit

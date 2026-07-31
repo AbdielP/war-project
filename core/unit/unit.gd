@@ -23,3 +23,7 @@ func get_display_name() -> String:
 
 func get_actions() -> PackedStringArray:
 	return unit_type.actions if unit_type else []
+
+
+func receive_move_order(_target: Vector2) -> void:
+	pass

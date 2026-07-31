@@ -81,9 +81,16 @@ func _start_patrol(unit: Node2D) -> void:
 		rel.y / maxf(patrol_semi_y, 1.0),
 		rel.x / maxf(patrol_semi_x, 1.0)
 	)
-	# Heading inicial = dirección actual de vuelo (eje Y local del sprite)
 	var fwd: Vector2 = unit.global_transform.y
 	_patrol_planes.append({"unit": unit, "angle": init_angle, "heading": atan2(fwd.y, fwd.x)})
+	# Si la unidad puede tomar control propio (ej. al recibir una orden), se retira del óvalo
+	if unit.has_signal("taking_self_control"):
+		unit.taking_self_control.connect(func() -> void:
+			for i in range(_patrol_planes.size() - 1, -1, -1):
+				if _patrol_planes[i]["unit"] == unit:
+					_patrol_planes.remove_at(i)
+					break
+		, CONNECT_ONE_SHOT)
 
 
 func request_deploy(scene: PackedScene) -> bool:

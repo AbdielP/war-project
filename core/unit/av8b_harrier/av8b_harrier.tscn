@@ -3,11 +3,13 @@
 [ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
 [ext_resource type="Texture2D" path="res://assets/art/sprites/AV-8B Harrier II.png" id="2"]
 [ext_resource type="Resource" path="res://core/unit/av8b_harrier/av8b_harrier_type.tres" id="3"]
+[ext_resource type="Script" path="res://core/unit/av8b_harrier/av8b_harrier.gd" id="4"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(28, 32)
 
 [node name="Av8bHarrier" unique_id=1 instance=ExtResource("1")]
+script = ExtResource("4")
 unit_type = ExtResource("3")
 unit_name = ""
 

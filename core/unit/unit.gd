@@ -4,6 +4,8 @@ class_name Unit
 @export var unit_type: UnitType
 @export var unit_name: String = ""
 
+var squad: Squad = null  # null = unidad suelta, sin escuadrón
+
 @onready var _selection_indicator: Node2D = $SelectionIndicator
 
 

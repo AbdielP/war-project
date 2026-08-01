@@ -30,6 +30,7 @@ Base de toda unidad seleccionable. Tiene `CollisionShape2D` + `SelectionIndicato
 |--------|------|-----|
 | `unit_type` | UnitType | Resource compartido por tipo |
 | `unit_name` | String | Nombre propio de instancia (sin traducción) |
+| `squad` | Squad | No exportado. `null` = unidad suelta. Asignado por quien despliega en grupo (ver `Squad` más abajo) |
 
 | Método | Descripción |
 |--------|-------------|
@@ -43,6 +44,14 @@ Señales opcionales (no en la base, implementadas por subclases que las necesite
 - `taking_self_control` — la unidad dejó de ser controlada externamente
 
 SelectionManager usa `has_signal()` antes de conectar — no acoplamiento directo.
+
+---
+
+### `Squad` — `core/unit/squad.gd`
+```
+extends RefCounted   class_name Squad
+```
+Agrupación en tiempo de ejecución (no se guarda en disco). `leader: Unit`, `members: Array[Unit]`. `add(unit)` agrega y, si todavía no hay líder, lo asigna (el primero en llegar). No implementa seguimiento/formación — solo identidad de grupo. Ver `docs/decisions.md` (2026-08-01).
 
 ---
 
@@ -172,7 +181,7 @@ Gestiona el ciclo completo de despliegue: Elevador → Taxi → Despegue → Pat
 - `_patrol_planes: Array[{unit, angle, heading}]` — aviones en óvalo
 
 **API pública:**
-- `request_deploy(scene: PackedScene) → bool` — inicia ciclo de despliegue
+- `request_deploy(scene: PackedScene, squad: Squad = null) → bool` — inicia ciclo de despliegue; si se pasa `squad`, el avión se suma a ese `Squad` al spawnear (ver `Squad` más arriba)
 - `has_free_slot() → bool`
 
 **`_start_patrol(unit)`:** Añade avión al óvalo. Si la unidad tiene señal `taking_self_control`, la conecta con `CONNECT_ONE_SHOT` para removerla del óvalo automáticamente cuando tome control propio.
@@ -227,6 +236,7 @@ extends CanvasLayer   class_name HUD
 | Señal | Cuándo |
 |-------|--------|
 | `deselect_requested` | Botón × presionado |
+| `unit_focus_requested(unit: Unit)` | Click en un cuadrito de `DeployedPanel` |
 
 API:
 - `show_selected_unit(unit: Unit)` — muestra panel + acciones + botón ×
@@ -247,6 +257,7 @@ CanvasLayer (HUD)
 ├── HangarWindow     (PanelContainer)
 ├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=313
 ├── SelectionPanel   (PanelContainer) — offset_left=544, offset_top=349
+├── DeployedPanel    (PanelContainer) — panel superior, unidades desplegadas
 └── DeselButton      (Button)         — offset (526,351), visible=false, flat, text="×"
 ```
 
@@ -281,6 +292,17 @@ Ventana arrastrable. Patrón de drag: `TitleBar.gui_input` con `mouse_filter=STO
 - Selector de cantidad: 1–4, máximo disponible no desplegado
 - Misiones: SEAD / CAP / CAS (botones, sin lógica aún)
 - DESPLEGAR: `PlayerFleet.try_deploy` → `flight_deck.request_deploy(scene)`
+
+---
+
+### `DeployedPanel` — `ui/hud/deployed_panel/deployed_panel.gd`
+```
+extends PanelContainer
+signal unit_selected(unit: Unit)
+```
+Panel superior con las unidades desplegadas, agrupadas por categoría (grupos de Godot `unit_maritime`/`unit_air`/`unit_ground` — sin referencia directa, se descubre igual que el minimapa está pensado que haga). Se refresca (`_refresh()`) cuando se agrega/quita un `Unit` de la escena (`get_tree().node_added`/`node_removed`, con flag `_dirty` para no recalcular más de una vez por frame).
+
+Un cuadrito (`Button`, 30×14px) por unidad suelta o por **escuadrón**: si `unit.squad != null`, todos sus miembros colapsan en un solo cuadrito (con el nombre del líder), y si tiene más de 1 miembro se agrega un badge `xN` en la esquina inferior derecha (`Label` hijo del botón, `mouse_filter = IGNORE` para no tapar el click). Al presionar, emite `unit_selected(unit)` — la unidad individual, o `squad.leader` si es un escuadrón. `HUD` conecta esto a `unit_focus_requested`.
 
 ---
 
@@ -388,6 +410,7 @@ Si usas `_draw()` en un nodo que puede ocultarse/mostrarse, llamar `queue_redraw
 - [x] HangarWindow: selector cantidad + misión + DESPLEGAR
 - [x] HUD base: event log, minimap placeholder, selection panel, actions panel
 - [x] Transición flight_deck → control propio del Harrier via `taking_self_control`
+- [x] Escuadrones agrupan en un solo cuadrito con badge `xN` en `DeployedPanel`, click enfoca al líder
 
 ### Pendiente
 - [ ] Suavizar movimiento en patrulla oval del portaaviones

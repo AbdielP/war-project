@@ -93,7 +93,7 @@ func _start_patrol(unit: Node2D) -> void:
 		, CONNECT_ONE_SHOT)
 
 
-func request_deploy(scene: PackedScene) -> bool:
+func request_deploy(scene: PackedScene, squad: Squad = null) -> bool:
 	var elev_idx: int = _elevator_idx % _elevators.size()
 	var slot := _next_slot_for_elevator(elev_idx)
 	if slot == -1:
@@ -108,6 +108,7 @@ func request_deploy(scene: PackedScene) -> bool:
 		"slot": slot,
 		"spawn_pos": elevator.global_position,
 		"spawn_rot": elevator.global_rotation,
+		"squad": squad,
 	})
 	_process_queue(elev_idx)
 	return true
@@ -132,6 +133,11 @@ func _process_queue(elev_idx: int) -> void:
 	unit.global_position = job["spawn_pos"]
 	unit.global_rotation = job["spawn_rot"]
 	unit.scale = Vector2(0.7, 0.7)
+	var squad: Squad = job["squad"]
+	if squad != null:
+		var u := unit as Unit
+		u.squad = squad
+		squad.add(u)
 	var slot: int = job["slot"]
 	unit.tree_exited.connect(func() -> void:
 		_occupied[slot] = false

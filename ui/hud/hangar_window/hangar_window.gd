@@ -139,10 +139,11 @@ func _on_deploy() -> void:
 	if _selected_entry.is_empty() or _selected_mission.is_empty():
 		return
 	var flight_deck: Node = _ship.get_node("FlightDeck")
+	var squad: Squad = Squad.new() if _quantity > 1 else null
 	for i in _quantity:
 		if not PlayerFleet.try_deploy(_selected_entry):
 			break
-		if not flight_deck.request_deploy(_selected_entry["scene"]):
+		if not flight_deck.request_deploy(_selected_entry["scene"], squad):
 			PlayerFleet.recall(_selected_entry)
 			break
 	_selected_entry    = {}

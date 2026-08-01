@@ -33,6 +33,6 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay. Mec�
 # PENDIENTES:
 - No desplegar aviones si hay otro vuelo en pista. puede ir subiendo al elevador, eso es todo.
 - Las unidades desplegadas como escuadron deben navegar/desplazarce siguiendo al lider.
-- Las unidades desplegadas como escuadron deben salir en el menú deu nidades como una sola y un multiplicador de la cantidad: x2, x3.. xN
+- [X] Las unidades desplegadas como escuadron deben salir en el menú deu nidades como una sola y un multiplicador de la cantidad: x2, x3.. xN
 - Minimapa y mapa tactico
     - A partir de aqui iniciar las opciones de ataque de unidades

@@ -73,12 +73,21 @@ func _refresh() -> void:
 		for child in row.get_children():
 			child.free()
 		var group: String = _CATEGORIES[i][0]
+		var seen_squads: Array[Squad] = []
 		for node: Node in get_tree().get_nodes_in_group(group):
-			if is_instance_valid(node):
-				row.add_child(_make_btn(node as Unit))
+			if not is_instance_valid(node):
+				continue
+			var unit := node as Unit
+			if unit.squad != null:
+				if unit.squad in seen_squads:
+					continue
+				seen_squads.append(unit.squad)
+				row.add_child(_make_btn(unit.squad.leader, unit.squad.members.size()))
+			else:
+				row.add_child(_make_btn(unit, 1))
 
 
-func _make_btn(unit: Unit) -> Button:
+func _make_btn(unit: Unit, count: int) -> Button:
 	var btn := Button.new()
 	# primer token del nombre como etiqueta compacta
 	btn.text = unit.get_display_name().split(" ")[0]
@@ -110,4 +119,16 @@ func _make_btn(unit: Unit) -> Button:
 		if is_instance_valid(unit):
 			unit_selected.emit(unit)
 	)
+
+	if count > 1:
+		var badge := Label.new()
+		badge.text = "x%d" % count
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge.add_theme_font_size_override("font_size", 7)
+		badge.add_theme_color_override("font_color", _COLOR_ACCENT)
+		badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		badge.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		badge.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		btn.add_child(badge)
+
 	return btn

@@ -33,11 +33,11 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay. Mec�
 # PENDIENTES:
 - No desplegar aviones si hay otro vuelo en pista. puede ir subiendo al elevador, eso es todo.
 - Las unidades desplegadas como escuadron deben navegar/desplazarce siguiendo al lider.
-    - [ ] Hay que hacer que se... 
+    - [X] Se completó el leadId al que despegue en el takeoffpoint mayor, y que al dar click sobre cualquier unidad del escuadron, se enfoque al lider.
     - Esto tiene tantos problemas que no puede el asistente:
+        [ ] - Debes partir de el script core/unit/squad.gd 
         - debes modificar los parametros de vuelo por tu cuenta: en el script core/unit/lhd_wasp/flight_deck.gd,
         - debes modificar los parametros del harrier por tu cuenta: core/unit/av8b_harrier/av8b_harrier.gd
-        [ ] - Debes hacer tu mismo un script o clase o función
 - [X] Las unidades desplegadas como escuadron deben salir en el menú deu nidades como una sola y un multiplicador de la cantidad: x2, x3.. xN
 - Minimapa y mapa tactico
     - A partir de aqui iniciar las opciones de ataque de unidades

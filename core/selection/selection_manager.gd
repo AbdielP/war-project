@@ -48,7 +48,11 @@ func _find_unit_at(world_position: Vector2) -> Unit:
 	query.collide_with_areas = true
 	query.collide_with_bodies = false
 	var results := get_world_2d().direct_space_state.intersect_point(query, 1)
-	return results[0].collider as Unit if not results.is_empty() else null
+	if results.is_empty():
+		return null
+	var unit := results[0].collider as Unit
+	# Click en cualquier integrante de un escuadrón selecciona al líder.
+	return unit.squad.leader if unit != null and unit.squad != null else unit
 
 
 func _select(unit: Unit) -> void:

@@ -133,12 +133,12 @@ func _process_queue(elev_idx: int) -> void:
 	unit.global_position = job["spawn_pos"]
 	unit.global_rotation = job["spawn_rot"]
 	unit.scale = Vector2(0.7, 0.7)
+	var slot: int = job["slot"]
 	var squad: Squad = job["squad"]
 	if squad != null:
 		var u := unit as Unit
 		u.squad = squad
-		squad.add(u)
-	var slot: int = job["slot"]
+		squad.add(u, slot)
 	unit.tree_exited.connect(func() -> void:
 		_occupied[slot] = false
 		_units[slot] = null

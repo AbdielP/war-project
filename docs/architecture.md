@@ -51,7 +51,7 @@ SelectionManager usa `has_signal()` antes de conectar — no acoplamiento direct
 ```
 extends RefCounted   class_name Squad
 ```
-Agrupación en tiempo de ejecución (no se guarda en disco). `leader: Unit`, `members: Array[Unit]`. `add(unit)` agrega y, si todavía no hay líder, lo asigna (el primero en llegar). No implementa seguimiento/formación — solo identidad de grupo. Ver `docs/decisions.md` (2026-08-01).
+Agrupación en tiempo de ejecución (no se guarda en disco). `leader: Unit`, `members: Array[Unit]`. `add(unit, slot)` agrega y asigna líder a quien tenga el `slot` de cubierta más alto del grupo (`_leader_slot`, se recalcula en cada `add`) — el slot más alto despega primero (`FlightDeck._launch_next`), así el líder siempre despega primero. No implementa seguimiento/formación todavía — solo identidad de grupo. Ver `docs/decisions.md` (2026-08-01).
 
 ---
 
@@ -112,7 +112,7 @@ ESC → _select(null)
 HUD.deselect_requested → _select(null)
 ```
 
-**`_find_unit_at(pos)`:** Query `PhysicsPointQueryParameters2D` con `collide_with_areas=true, collide_with_bodies=false`. Devuelve la primer `Unit` bajo el cursor o null.
+**`_find_unit_at(pos)`:** Query `PhysicsPointQueryParameters2D` con `collide_with_areas=true, collide_with_bodies=false`. Devuelve la primer `Unit` bajo el cursor o null — si esa unidad tiene `squad != null`, devuelve `unit.squad.leader` en su lugar (click en cualquier integrante de un escuadrón selecciona al líder, no al que se clickeó).
 
 **`_select(unit)`:**
 1. Llama `set_selected(false/true)` en la unidad anterior/nueva

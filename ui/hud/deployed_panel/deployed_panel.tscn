@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/hud/deployed_panel/deployed_panel.gd" id="1"]
+
+[node name="DeployedPanel" type="PanelContainer"]
+script = ExtResource("1")

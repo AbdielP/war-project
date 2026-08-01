@@ -17,6 +17,7 @@ func _ready() -> void:
 	_hud = get_node(hud_path) as HUD
 	_camera.clicked.connect(_on_camera_clicked)
 	_hud.deselect_requested.connect(func() -> void: _select(null))
+	_hud.unit_focus_requested.connect(func(unit: Unit) -> void: _select(unit))
 	_move_marker = _MoveMarker.new()
 	get_tree().current_scene.add_child(_move_marker)
 	_move_marker.hide()

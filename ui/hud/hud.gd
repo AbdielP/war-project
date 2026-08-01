@@ -2,17 +2,20 @@ extends CanvasLayer
 class_name HUD
 
 signal deselect_requested
+signal unit_focus_requested(unit: Unit)
 
 @onready var _selection_panel: PanelContainer = $SelectionPanel
 @onready var _actions_panel: PanelContainer = $ActionsPanel
 @onready var _hangar_window: PanelContainer = $HangarWindow
 @onready var _desel_btn: Button = $DeselButton
+@onready var _deployed_panel: PanelContainer = $DeployedPanel
 
 var _current_unit: Unit = null
 
 
 func _ready() -> void:
 	_actions_panel.action_pressed.connect(_on_action_pressed)
+	_deployed_panel.unit_selected.connect(func(unit: Unit) -> void: unit_focus_requested.emit(unit))
 	_desel_btn.add_theme_color_override("font_color", Color(0.6705882, 0.5803922, 0.4784314))
 	_desel_btn.add_theme_color_override("font_hover_color", Color(0.56078434, 0.827451, 1.0))
 	_desel_btn.add_theme_color_override("font_pressed_color", Color(0.56078434, 0.827451, 1.0))

@@ -16,6 +16,11 @@ var _heading: float = 0.0
 var _state: _State = _State.ORBITING
 
 
+func _ready() -> void:
+	super._ready()
+	add_to_group("unit_air")
+
+
 func _process(delta: float) -> void:
 	if not _patrol_active:
 		return

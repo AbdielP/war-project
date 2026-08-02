@@ -19,8 +19,10 @@ func _ready() -> void:
 	_hud.deselect_requested.connect(func() -> void: _select(null))
 	_hud.unit_focus_requested.connect(func(unit: Unit) -> void: _select(unit))
 	_move_marker = _MoveMarker.new()
-	get_tree().current_scene.add_child(_move_marker)
 	_move_marker.hide()
+	# Diferido: en _ready() la escena todavía se está montando y Godot
+	# rechaza el add_child (el marcador nunca llegaba a existir).
+	get_tree().current_scene.add_child.call_deferred(_move_marker)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -66,7 +68,6 @@ func _select(unit: Unit) -> void:
 		else:
 			_hud.clear_selected_unit()
 	_camera.follow_target = _selected_unit
-	_move_marker.visible = (_selected_unit != null and _selected_unit == _order_unit)
 
 
 func _issue_move_order(target: Vector2) -> void:
@@ -85,5 +86,6 @@ func _issue_move_order(target: Vector2) -> void:
 
 
 func _on_order_fulfilled() -> void:
+	# El marcador se queda donde está: sirve de referencia para ver dónde
+	# se pidió el punto y cómo lo voló el avión.
 	_order_unit = null
-	_move_marker.hide()

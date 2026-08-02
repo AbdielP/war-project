@@ -1,9 +1,11 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://b677jbvo2q0oo"]
 
 [ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
-[ext_resource type="Texture2D" path="res://assets/art/sprites/AV-8B Harrier II.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://c4tlxqkysfxpj" path="res://assets/art/sprites/AV-8B Harrier II.png" id="2"]
 [ext_resource type="Resource" path="res://core/unit/av8b_harrier/av8b_harrier_type.tres" id="3"]
-[ext_resource type="Script" path="res://core/unit/av8b_harrier/av8b_harrier.gd" id="4"]
+[ext_resource type="Script" uid="uid://b3c08xr25m8lk" path="res://core/unit/av8b_harrier/av8b_harrier.gd" id="4"]
+[ext_resource type="Script" uid="uid://c1s3dnfi6aan1" path="res://core/unit/flight/plane_controller.gd" id="5"]
+[ext_resource type="Script" uid="uid://d3s0jasumaqvv" path="res://core/unit/flight/orbit_behavior.gd" id="6"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(28, 32)
@@ -11,7 +13,6 @@ size = Vector2(28, 32)
 [node name="Av8bHarrier" unique_id=1 instance=ExtResource("1")]
 script = ExtResource("4")
 unit_type = ExtResource("3")
-unit_name = ""
 
 [node name="Sprite2D" parent="." index="0"]
 texture = ExtResource("2")
@@ -21,3 +22,10 @@ shape = SubResource("RectangleShape2D_1")
 
 [node name="SelectionIndicator" parent="." index="2"]
 size = Vector2(28, 32)
+
+[node name="PlaneController" type="Node" parent="." index="3" unique_id=266563471]
+script = ExtResource("5")
+release_deg = 20.0
+
+[node name="OrbitBehavior" type="Node" parent="." index="4" unique_id=1582074282]
+script = ExtResource("6")

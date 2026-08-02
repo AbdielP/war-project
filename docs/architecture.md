@@ -41,7 +41,6 @@ Base de toda unidad seleccionable. Tiene `CollisionShape2D` + `SelectionIndicato
 
 Señales opcionales (no en la base, implementadas por subclases que las necesiten):
 - `order_fulfilled` — la unidad llegó al destino
-- `taking_self_control` — la unidad dejó de ser controlada externamente
 
 SelectionManager usa `has_signal()` antes de conectar — no acoplamiento directo.
 
@@ -167,63 +166,124 @@ Area2D (Unit)
 ```
 extends Node2D
 ```
-Gestiona el ciclo completo de despliegue: Elevador → Taxi → Despegue → Patrulla oval.
+Gestiona el ciclo de cubierta: Elevador → Taxi → Despegue → entrega de control.
+**No vuela aviones.** Al terminar la carrera de proa suelta el avión y no vuelve a tocarlo.
 
 **Exports clave:**
 - `taxi_speed`, `elevator_cycle_time`, `launch_delay`, `takeoff_speed`
 - `post_bow_distance`, `climb_duration`
-- `patrol_semi_x` (200), `patrol_semi_y` (280) — semiejes del óvalo alrededor del barco
-- `turn_rate` (2.0 rad/s) — giro de aviones en el óvalo
 
 **Estado interno:**
 - `_occupied[4]`, `_units[4]` — slots de cubierta
 - `_taxi_queues[2]` — cola por elevador
-- `_patrol_planes: Array[{unit, angle, heading}]` — aviones en óvalo
 
 **API pública:**
 - `request_deploy(scene: PackedScene, squad: Squad = null) → bool` — inicia ciclo de despliegue; si se pasa `squad`, el avión se suma a ese `Squad` al spawnear (ver `Squad` más arriba)
 - `has_free_slot() → bool`
 
-**`_start_patrol(unit)`:** Añade avión al óvalo. Si la unidad tiene señal `taking_self_control`, la conecta con `CONNECT_ONE_SHOT` para removerla del óvalo automáticamente cuando tome control propio.
+**`_hand_over_control(unit)`:** Si la unidad tiene `start_flight()`, se la llama pasándole el barco como centro de órbita y `takeoff_speed` como velocidad inicial. A partir de ahí el avión se pilota solo.
 
-**`_process`:** Mueve cada avión en el óvalo. Velocidad lineal constante compensando la curvatura. Steering con blend tangente/corrección (igual que Harrier pero elipse).
+---
+
+### Vuelo — `core/unit/flight/`
+
+Dos responsabilidades separadas, ambas `Node` colgando de la escena del avión.
+Se sustituyeron al steering que antes vivía repartido entre `flight_deck.gd` y
+`av8b_harrier.gd` (ver `decisions.md`, 2026-08-01 (3)).
+
+#### `PlaneController` — `plane_controller.gd`
+Decide **cómo** vuela: velocidad, viraje, inercia. No sabe a dónde va.
+Mueve al nodo padre desde `_physics_process`. Arranca inactivo.
+
+| Señal | Cuándo |
+|-------|--------|
+| `target_reached` | Entró en `arrive_radius`, o rebasó el destino dentro de su radio de giro |
+| `committed(side)` | Se comprometió a virar por un lado (−1 izq, +1 der) |
+
+| Grupo | Exports |
+|-------|---------|
+| Velocidad | `min_speed` (70), `max_speed` (150), `acceleration` (90), `brake_in_turns` |
+| Giro | `base_turn_deg` (150), `fine_gain`, `turn_inertia`, `velocity_align` |
+| Compromiso | `release_deg` (22), `reengage_deg` (45), `dead_circle_hysteresis` (1.12) |
+| Navegación | `arrive_radius` (40), `flyby_capture`, `sprite_offset_deg` (−90) |
+| Alabeo | `bank_sprite_path` (opcional, `AnimatedSprite2D` de 5 frames) |
+
+**API:** `enable(initial_speed)`, `disable()`, `set_target(pos)`, `update_target(pos)`, `clear_target()`, `current_turn_rate()`, `min_turn_radius()`.
+
+`set_target` replantea el viraje desde cero; `update_target` corrige el punto
+sin soltar el compromiso en curso — para objetivos que se mueven.
+
+**Compromiso de viraje:** una vez elegido el lado no se replantea hasta bajar de
+`release_deg`. Es lo que evita el amague. Tiene dos salvaguardas:
+- **Círculo muerto:** si el destino cae dentro del círculo de giro, virar hacia él
+  sólo daría vueltas a su alrededor para siempre. Se nivela y se sale recto hasta
+  que la geometría permita enfilarlo. Invertir el viraje en su lugar produce
+  oscilación — se probó y se descartó.
+- **`flyby_capture`:** da por alcanzado un destino ya rebasado si está dentro del
+  radio de giro. Sin esto el avión, que no puede frenar, da un bucle completo.
+
+**Orientación:** `sprite_offset_deg` traduce rumbo → rotación del sprite.
+El arte del Harrier apunta a **+Y local** (abajo), de ahí el −90.
+
+#### `OrbitBehavior` — `orbit_behavior.gd`
+Decide **a dónde** va cuando no hay órdenes: vueltas alrededor de un centro.
+
+| Señal | Cuándo |
+|-------|--------|
+| `center_reached` | Llegó al punto que ordenó el jugador; a partir de ahí orbita ahí |
+
+| Export | Default |
+|--------|---------|
+| `semi_x` / `semi_y` | 200 / 280 px |
+| `lead_deg` | 35° — cuánto por delante se pone el punto de referencia |
+| `clockwise` | false |
+| `center_deadzone` | 0.25 — dentro de esa fracción del óvalo manda el rumbo, no la posición |
+| `sync_rate` | 2.5 — con qué rapidez la fase se engancha a dónde está el avión |
+| `pilot_path` | `../PlaneController` |
+
+**API:** `orbit_around(node)` (centro móvil, el barco), `orbit_at(pos)` (orden del
+jugador: va al punto y luego orbita ahí), `stop()`.
+
+**El óvalo no es un riel.** Se mantiene una fase propia (`_phase`) que avanza sola
+cada frame al ritmo al que vuela el avión, y el punto de esa fase sobre la elipse es
+lo que persigue el piloto. La curva que se ve la produce él con su inercia y su radio
+de giro reales.
+
+**La fase avanza sola, no se deduce de la posición.** Deducirla con
+`atan2(rel.y/semi_y, rel.x/semi_x)` parece natural pero es indeterminada en el centro
+del óvalo: al pasar por ahí saltaba 180° en un frame y el punto objetivo se movía
+450 px de golpe — el avión amagaba a un lado y viraba al otro. Ocurría justo al
+terminar una orden del jugador, que es cuando el avión queda en el centro exacto.
+La posición sólo se usa para enganchar la fase (`sync_rate`) y sólo más allá de
+`center_deadzone`; dentro, manda el rumbo del avión.
+
+Waypoints discretos tampoco funcionan aquí: un avión que no puede frenar nunca "llega"
+a un punto que tiene al costado — se queda orbitándolo.
+
+Medido en headless: el avión ciñe el óvalo con error < 9 %, y 0 amagues en el ciclo
+completo y en un barrido de 16 órdenes.
+
+**Coherencia de parámetros:** `min_turn_radius()` a velocidad de crucero debe ser
+menor que el radio de curvatura del óvalo (`semi_x²/semi_y` en el punto más cerrado).
+Si el avión es demasiado rápido para el óvalo, vuela por fuera.
 
 ---
 
 ### `AV-8B Harrier II` — `core/unit/av8b_harrier/`
 
-**`av8b_harrier.gd`:**
+**`av8b_harrier.gd`:** sólo identidad y ruteo de órdenes. No pilota.
 ```
 extends Unit
 ```
 | Señal | Cuándo |
 |-------|--------|
-| `order_fulfilled` | Llegó al punto destino (entró en órbita) |
-| `taking_self_control` | Recibió una orden de movimiento |
+| `order_fulfilled` | Llegó al punto ordenado (reenvía `OrbitBehavior.center_reached`) |
 
-| Export | Default |
-|--------|---------|
-| `patrol_radius` | 120.0 px |
-| `turn_rate` | 2.0 rad/s |
-| `patrol_speed` | 120.0 px/s |
+**Escena:** `Sprite2D`, `CollisionShape2D`, `SelectionIndicator`, `PlaneController`, `OrbitBehavior`.
 
-**Estados (`_State`):**
-- `FLYING_TO` — navega al punto, gira hacia él con `turn_rate`
-- `ORBITING` — círculo CCW (ángulo decreciente), radio `patrol_radius`
-
-**`receive_move_order(target)`:**
-1. Inicializa `_heading` desde `global_transform.y` (continuidad de vuelo)
-2. Entra en `FLYING_TO`
-3. Emite `taking_self_control` → FlightDeck lo elimina del óvalo
-
-**Entrada al círculo:** Al llegar a < 30px del centro, `_patrol_angle = _heading`. Esto pone el primer punto target adelante en la dirección de llegada, evitando inversión brusca.
-
-**Órbita:** Siempre CCW. Steering: blend entre tangente y corrección al punto de la elipse, clamped a 0.4 máximo.
-
-**Rotación sprite (Y-forward):**
-```gdscript
-global_rotation = atan2(-move_dir.x, move_dir.y)
-```
+**API:**
+- `start_flight(orbit_center, initial_speed)` — la cubierta le cede el control
+- `receive_move_order(target)` — delega en `orbit.orbit_at(target)`
 
 ---
 
@@ -409,7 +469,7 @@ Si usas `_draw()` en un nodo que puede ocultarse/mostrarse, llamar `queue_redraw
 - [x] LHD Wasp: despliegue completo (elevador → taxi → despegue → óvalo)
 - [x] HangarWindow: selector cantidad + misión + DESPLEGAR
 - [x] HUD base: event log, minimap placeholder, selection panel, actions panel
-- [x] Transición flight_deck → control propio del Harrier via `taking_self_control`
+- [x] Vuelo separado en `PlaneController` (cómo vuela) + `OrbitBehavior` (a dónde va); la cubierta cede el control con `start_flight()` y no vuelve a tocar al avión
 - [x] Escuadrones agrupan en un solo cuadrito con badge `xN` en `DeployedPanel`, click enfoca al líder
 
 ### Pendiente

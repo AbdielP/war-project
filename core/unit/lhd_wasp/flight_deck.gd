@@ -6,9 +6,6 @@ extends Node2D
 @export var takeoff_speed: float = 120.0
 @export var post_bow_distance: float = 80.0
 @export var climb_duration: float = 2.5
-@export var patrol_semi_x: float = 200.0  # semi-eje horizontal del óvalo
-@export var patrol_semi_y: float = 280.0  # semi-eje vertical (a lo largo del barco)
-@export var turn_rate: float = 2.0        # rad/s — velocidad de giro del avión en patrulla
 
 # Elevator1 → TP2 primero, luego TP1. Elevator2 → TP4 primero, luego TP3.
 const _ELEVATOR_SLOTS: Array = [[1, 0], [3, 2]]
@@ -27,70 +24,15 @@ var _elevator_idx := 0
 var _taxi_queues: Array  = [[], []]
 var _taxiing: Array[bool] = [false, false]
 var _launching := false
-var _patrol_planes: Array = []  # [{unit, angle, heading}]
 
 
-func _process(delta: float) -> void:
-	if _patrol_planes.is_empty():
+## Suelta el avión: a partir de aquí se pilota solo. La cubierta no vuelve
+## a tocarlo.
+func _hand_over_control(unit: Node2D) -> void:
+	if not is_instance_valid(unit):
 		return
-	var ship_pos: Vector2 = get_parent().global_position
-	for i in range(_patrol_planes.size() - 1, -1, -1):
-		var entry: Dictionary = _patrol_planes[i]
-		var unit: Node2D = entry["unit"]
-		if not is_instance_valid(unit):
-			_patrol_planes.remove_at(i)
-			continue
-
-		# Avanza el ángulo de la elipse a velocidad lineal constante
-		var angle: float = entry["angle"]
-		var ds: float = sqrt(
-			pow(patrol_semi_x * sin(angle), 2.0) +
-			pow(patrol_semi_y * cos(angle), 2.0)
-		)
-		_patrol_planes[i]["angle"] -= (takeoff_speed / maxf(ds, 1.0)) * delta
-		angle = _patrol_planes[i]["angle"]
-
-		# Punto objetivo en la elipse y su tangente
-		var ellipse_pos: Vector2 = ship_pos + Vector2(patrol_semi_x * cos(angle), patrol_semi_y * sin(angle))
-		var tangent: Vector2 = Vector2(patrol_semi_x * sin(angle), -patrol_semi_y * cos(angle)).normalized()
-
-		# Dirección deseada: mezcla tangente (en elipse) con corrección (fuera de ella)
-		var to_ellipse: Vector2 = ellipse_pos - unit.global_position
-		var dist: float = to_ellipse.length()
-		var blend: float = clampf(dist / 150.0, 0.0, 0.85)
-		var desired: Vector2 = tangent.lerp(to_ellipse.normalized(), blend).normalized()
-		var desired_heading: float = atan2(desired.y, desired.x)
-
-		# Giro con tasa máxima — no puede girar más rápido de turn_rate rad/s
-		var current_heading: float = entry["heading"]
-		var diff: float = wrapf(desired_heading - current_heading, -PI, PI)
-		_patrol_planes[i]["heading"] = current_heading + clampf(diff, -turn_rate * delta, turn_rate * delta)
-
-		var heading: float = _patrol_planes[i]["heading"]
-		var move_dir: Vector2 = Vector2(cos(heading), sin(heading))
-
-		# Posición y rotación derivadas del heading real — sin snaps
-		unit.global_position += move_dir * takeoff_speed * delta
-		unit.global_rotation = atan2(-move_dir.x, move_dir.y)
-
-
-func _start_patrol(unit: Node2D) -> void:
-	var ship_pos: Vector2 = get_parent().global_position
-	var rel: Vector2 = unit.global_position - ship_pos
-	var init_angle: float = atan2(
-		rel.y / maxf(patrol_semi_y, 1.0),
-		rel.x / maxf(patrol_semi_x, 1.0)
-	)
-	var fwd: Vector2 = unit.global_transform.y
-	_patrol_planes.append({"unit": unit, "angle": init_angle, "heading": atan2(fwd.y, fwd.x)})
-	# Si la unidad puede tomar control propio (ej. al recibir una orden), se retira del óvalo
-	if unit.has_signal("taking_self_control"):
-		unit.taking_self_control.connect(func() -> void:
-			for i in range(_patrol_planes.size() - 1, -1, -1):
-				if _patrol_planes[i]["unit"] == unit:
-					_patrol_planes.remove_at(i)
-					break
-		, CONNECT_ONE_SHOT)
+	if unit.has_method("start_flight"):
+		unit.start_flight(get_parent(), takeoff_speed)
 
 
 func request_deploy(scene: PackedScene, squad: Squad = null) -> bool:
@@ -221,7 +163,7 @@ func _launch_next(order: Array) -> void:
 		var end_pos: Vector2 = unit.global_position + direction * post_bow_distance
 		var fly_tw := unit.create_tween()
 		fly_tw.tween_property(unit, "global_position", end_pos, post_duration)
-		fly_tw.finished.connect(func() -> void: _start_patrol(unit))
+		fly_tw.finished.connect(func() -> void: _hand_over_control(unit))
 		_scale_climb(unit)
 		_launch_next(order)
 	)

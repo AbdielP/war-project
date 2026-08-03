@@ -31,8 +31,13 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay. Mec�
 
 
 # PENDIENTES:
+- [ ] Cargar las armas en el avión
+	- Donde van a spawnear y cuantas para no saturar.
+	- El problema es la escala, el avión se escala a 0.6 cuando spawnea? no recuerdo. y luego va agrandandose.
+- [ ] Las armas disponibles en el layout para armar un avión tienen que venir de una lista de "disponibles" al igual que los aviones. el jugador debe ir desbloqueando armas.
+- [ ] Pensar en nueva UI para avión y sus armas
 - No desplegar aviones si hay otro vuelo en pista. puede ir subiendo al elevador, eso es todo.
-- Las unidades desplegadas como escuadron deben navegar/desplazarce siguiendo al lider.
+- [ ] Limitar a 2 el vuelo en escuadrón?, Las unidades desplegadas como escuadron deben navegar/desplazarce siguiendo al lider.
 	- [X] Se completó el leadId al que despegue en el takeoffpoint mayor, y que al dar click sobre cualquier unidad del escuadron, se enfoque al lider.
 	- Aún no vuelan en formación
 		[ ] - Debes partir de el script core/unit/squad.gd 

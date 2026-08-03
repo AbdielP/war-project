@@ -12,6 +12,7 @@
 size = Vector2(28, 32)
 
 [node name="Av8bHarrier" unique_id=1 instance=ExtResource("1")]
+z_index = 10
 script = ExtResource("4")
 unit_type = ExtResource("3")
 
@@ -36,31 +37,31 @@ script = ExtResource("6")
 script = ExtResource("7")
 
 [node name="L1" type="Marker2D" parent="Hardpoints" index="0" unique_id=1824358855]
-position = Vector2(-15, -4)
+position = Vector2(-15, -2)
 
 [node name="L2a" type="Marker2D" parent="Hardpoints" index="1" unique_id=1496681346]
-position = Vector2(-12, -2)
+position = Vector2(-12, 0)
 
 [node name="L2c" type="Marker2D" parent="Hardpoints" index="2" unique_id=23834640]
-position = Vector2(-10, -2)
+position = Vector2(-10, 1)
 
 [node name="L3a" type="Marker2D" parent="Hardpoints" index="3" unique_id=198166047]
-position = Vector2(-8, 2)
+position = Vector2(-8, 5)
 
 [node name="L3c" type="Marker2D" parent="Hardpoints" index="4" unique_id=1410086896]
-position = Vector2(-6, 2)
+position = Vector2(-6, 6)
 
 [node name="R3c" type="Marker2D" parent="Hardpoints" index="5" unique_id=1285170254]
-position = Vector2(6, 2)
+position = Vector2(6, 6)
 
 [node name="R3a" type="Marker2D" parent="Hardpoints" index="6" unique_id=1963995778]
-position = Vector2(8, 2)
+position = Vector2(8, 5)
 
 [node name="R2c" type="Marker2D" parent="Hardpoints" index="7" unique_id=1694305615]
-position = Vector2(11, -2)
+position = Vector2(11, 1)
 
 [node name="R2a" type="Marker2D" parent="Hardpoints" index="8" unique_id=1965320155]
-position = Vector2(13, -2)
+position = Vector2(13, 0)
 
 [node name="R1" type="Marker2D" parent="Hardpoints" index="9" unique_id=554350331]
-position = Vector2(15, -4)
+position = Vector2(15, -2)

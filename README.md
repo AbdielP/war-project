@@ -31,10 +31,6 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay. Mec�
 
 
 # PENDIENTES:
-- [ ] Cargar las armas en el avión está bugeado
-	- Se supone que no se pueden poner sprites uno sobre el otro (no tiene sentido)
-	- Cambiar a sprites con animación? un harrier lanzando armas.
-	- Dibujar presets de armas en el harrier?
 - [ ] Las armas disponibles en el layout para armar un avión tienen que venir de una lista de "disponibles" al igual que los aviones. el jugador debe ir desbloqueando armas.
 - [ ] Pensar en nueva UI para avión y sus armas
 - No desplegar aviones si hay otro vuelo en pista. puede ir subiendo al elevador, eso es todo.

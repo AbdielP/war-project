@@ -13,3 +13,12 @@ var mounts: Array[WeaponMount] = []
 func _init(p_display_name: String = "", p_mounts: Array = []) -> void:
 	display_name = p_display_name
 	mounts.assign(p_mounts)
+
+
+## ¿Se puede armar esta configuración con las armas que tiene el jugador?
+## Todo o nada: si falta una sola, la configuración no se ofrece.
+func can_arm_with(available_weapons: Array) -> bool:
+	for mount in mounts:
+		if not available_weapons.has(mount.weapon):
+			return false
+	return true

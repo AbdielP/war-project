@@ -2,28 +2,56 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-03 (2)
+
+### El armamento del hangar sale de una lista de disponibles, no de una lista fija
+Las configuraciones de armamento se ofrecían siempre las tres, completas. Ahora `Av8bHarrierLoadouts.build()` recibe la lista de armas que tiene el jugador y devuelve sólo las que se pueden armar con ella (`WeaponLoadout.can_arm_with()`, todo o nada). La lista vive en `PlayerFleet._available_weapons`, hardcodeada igual que el inventario de aeronaves.
+
+**Las misiones no armables simplemente no aparecen.** Sin avisos de "no disponible" ni botones deshabilitados: no hay sistema de compra ni de desbloqueo que explique la ausencia, así que inventar el mensaje sería inventar la mecánica.
+
+**Por qué así y no con un sistema de desbloqueo de verdad:** el sistema de compra/desbloqueo no existe todavía. Lo único que cambia el día que exista es **quién llena la lista** (hoy el código, mañana la tienda); quién la lee no se entera. Por eso no se añadieron ids de arma para guardar en disco, ni catálogo, ni cantidades, ni precios — nada de eso hace falta para que la lista funcione, y cualquiera de esas piezas habría sido adivinar cómo será el desbloqueo.
+
+Descartado un autoload `PlayerWeapons` aparte: `PlayerFleet` ya es "lo que el jugador posee" y la pantalla de puerto lo va a reemplazar entero; separarlo ahora duplica esa migración.
+
+Verificado en headless: con todo disponible salen las tres misiones; sin AGM-65 desaparece CAS/Antitanque; con sólo AIM-9 + Mk-82 queda Bombardeo; sin AIM-9 (que va en las tres) no queda ninguna, y el hangar no rompe — el botón DESPLEGAR ya exigía una misión elegida.
+
+## 2026-08-03 (1)
+
+### Capas de dibujado: la capa la lleva la unidad, no sus piezas
+Las armas colgadas se dibujaban encima del fuselaje del Harrier. No era un fallo del motor: en 2D el orden es determinista — primero `z_index`, y a igual `z_index`, el orden del árbol. `Hardpoints` está después del `Sprite2D` en el árbol, así que se dibujaba después, o sea encima.
+
+Se fijó una convención en dos niveles, en vez de repartir `z_index` sueltos por cada escena:
+
+**Dentro de una unidad** (definido una sola vez en `core/unit/unit.tscn`, lo heredan todas):
+
+| z | qué va ahí |
+|---|---|
+| 0 | lo que cuelga bajo el fuselaje — `Hardpoints` y sus markers |
+| 1 | `Sprite2D`, el fuselaje |
+| 2 | `SelectionIndicator`, el contorno de selección |
+
+**Entre unidades** (`z_index` del nodo raíz de cada escena de unidad): naval 0, aire 10.
+
+El nivel entre unidades no es cosmético: `z_as_relative` está activo por defecto, así que los `z` de dentro se suman al de la raíz. Con el Harrier en 10 sus armas quedan en 10 y el fuselaje del portaaviones en 1 — las bombas se ven mientras el avión rueda por cubierta. Si la capa se hubiera puesto en el `Sprite2D` del avión en lugar de en su raíz, las armas se habrían quedado en 0 y la cubierta las habría tapado.
+
+Descartado poner las armas en `z = -1`: quedarían por debajo del terreno.
+
+Con las capas resueltas, **el dibujado de armamento por hardpoints queda adoptado**. El día anterior había quedado "a prueba" con recetas para echarlo atrás; se retiraron. Lo que sigue abierto es sólo el arte de los sprites de armas, no el sistema.
+
 ## 2026-08-02
 
-### Armamento visible en el Harrier: el dato se queda, el dibujado está a prueba
+### Armamento visible en el Harrier
 Se implementó armamento por misión: se elige un loadout en el hangar y el avión sale con las armas colgadas de puntos de anclaje (`Marker2D`) en las alas.
 
-**El dato funciona. El dibujado no convence** y puede echarse atrás sin tocar lo demás.
+Tres niveles separados a propósito: `WeaponType` (qué es un arma, un `.tres` por tipo), `WeaponLoadout`/`WeaponMount` (qué se monta en una salida) y `HardpointRack` (cómo se dibuja). El rack es lo único que sabe dibujar armas y no conoce misiones ni unidades. El nombre de cada marker empieza por el id de su estación, así que **mover, añadir o borrar markers en la escena cambia lo que se dibuja sin tocar código**.
 
-Por qué no convence, medido sobre los PNG y no supuesto: las armas del atlas miden **10–14 px de largo** (el AIM-120, 14) y la cuerda del ala donde cuelgan mide **10 px**. Dibujadas encima sobresalen siempre; dibujadas debajo desaparecen, porque el ala es opaca justo ahí (opaca de la fila 19 a la 28 en la columna de `L2a`, y el arma ocupa de la 16 a la 27: sobreviven 3 px). Además los cuerpos de 1–3 px de ancho hierven al rotar el avión en vuelo.
+`per_station` es dato de munición, no de dibujo: una estación con 3 Mk-82 lleva 3 aunque en pantalla quepa una sola.
 
-Se descartó por el camino que fuera un problema de capas o de escala. `z_index` hacía exactamente lo que debía. La escala fraccionaria del despegue (0.7 → 0.8 → 0.9) sí agravaba el pixel art y se dejó apagada tras un parámetro (`FlightDeck.spawn_scale`, 1.0 = apagado, 0.7 = comportamiento anterior), pero no era la causa.
+**Límite conocido del pixel art**, medido sobre los PNG y no supuesto: las armas del atlas miden **10–14 px de largo** (el AIM-120, 14) y la cuerda del ala donde cuelgan mide **10 px**, así que sobresalen de la silueta. Debajo del ala no es alternativa: es opaca justo ahí (de la fila 19 a la 28 en la columna de `L2a`, y el arma ocupa de la 16 a la 27 — sobreviven 3 px). Además los cuerpos de 1–3 px de ancho hierven al rotar el avión en vuelo.
 
-Opciones sobre la mesa, sin decidir: (1) redibujar las armas más cortas y gruesas (6–8 px de largo, 2–3 px de cuerpo) para que quepan dentro de la silueta del ala; (2) no dibujar armas y dejar el loadout sólo como dato de HUD y combate; (3) un sprite del Harrier por preset — viable si el daño se resuelve como capa superpuesta y no como variante del sprite base, porque las capas se suman y los sprites base se multiplican.
+Se descartó que fuera un problema de escala. La escala fraccionaria del despegue (0.7 → 0.8 → 0.9) sí agravaba el pixel art y se dejó apagada tras un parámetro (`FlightDeck.spawn_scale`, 1.0 = apagado, 0.7 = comportamiento anterior), pero no era la causa.
 
-**Cómo echar atrás sólo el dibujado** (el loadout sigue vivo como dato para HUD y combate):
-- borrar `core/weapon/hardpoint_rack.gd`
-- borrar los cinco `AtlasTexture` de `assets/art/sprites/`: `aim9_sidewinder.tres`, `aim120_amraam.tres`, `agm65_maverick.tres`, `mk82.tres`, `gbu54.tres`
-- borrar el nodo `Hardpoints` y sus `Marker2D` de `core/unit/av8b_harrier/av8b_harrier.tscn`
-- quitar de `Unit.set_weapon_loadout()` el bucle que busca el `HardpointRack` (la unidad sigue guardando su `weapon_loadout`)
-
-**Cómo echar atrás el sistema entero**, además de lo anterior: borrar la carpeta `core/weapon/` y `core/unit/av8b_harrier/av8b_harrier_loadouts.gd`, y revertir los retoques de `unit.gd`, `flight_deck.gd` (parámetro `weapon_loadout` de `request_deploy`), `player_fleet.gd` (clave `weapon_loadouts`) y `hangar_window.gd` (los botones de misión volverían a una lista fija).
-
-`assets/art/sprites/Jet_bombs_missiles.png` no se borra en ningún caso: sirve para iconos de HUD aunque no se dibujen armas en el avión.
+Opciones de arte sobre la mesa, sin decidir: (1) redibujar las armas más cortas y gruesas (6–8 px de largo, 2–3 px de cuerpo) para que quepan dentro de la silueta del ala; (2) un sprite del Harrier por preset — viable si el daño se resuelve como capa superpuesta y no como variante del sprite base, porque las capas se suman y los sprites base se multiplican.
 
 ## 2026-08-01 (4)
 

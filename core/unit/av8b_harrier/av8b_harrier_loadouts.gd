@@ -15,28 +15,33 @@ const _MK82   := preload("res://core/weapon/mk82.tres")
 const _GBU54  := preload("res://core/weapon/gbu54.tres")
 
 
-static func build() -> Array[WeaponLoadout]:
+## Devuelve sólo las configuraciones que el jugador puede armar con las armas
+## que tiene. Este archivo define qué configuraciones existen para el modelo;
+## quién tiene qué armas es asunto de `PlayerFleet`.
+static func build(available_weapons: Array) -> Array[WeaponLoadout]:
 	var outboard := PackedStringArray(["L1", "R1"])
 	var center := PackedStringArray(["L2", "R2"])
 	var inboard := PackedStringArray(["L3", "R3"])
 
+	var catalog: Array[WeaponLoadout] = [
+		WeaponLoadout.new("CAS / Antitanque", [
+			WeaponMount.new(_AGM65, center),
+			WeaponMount.new(_GBU54, inboard),
+			WeaponMount.new(_AIM9, outboard),
+		]),
+		WeaponLoadout.new("Bombardeo", [
+			WeaponMount.new(_MK82, center, 3),
+			WeaponMount.new(_AIM9, outboard),
+		]),
+		WeaponLoadout.new("Caza / Interceptor", [
+			WeaponMount.new(_AIM120, center),
+			WeaponMount.new(_AIM120, inboard),
+			WeaponMount.new(_AIM9, outboard),
+		]),
+	]
+
 	var loadouts: Array[WeaponLoadout] = []
-
-	loadouts.append(WeaponLoadout.new("CAS / Antitanque", [
-		WeaponMount.new(_AGM65, center),
-		WeaponMount.new(_GBU54, inboard),
-		WeaponMount.new(_AIM9, outboard),
-	]))
-
-	loadouts.append(WeaponLoadout.new("Bombardeo", [
-		WeaponMount.new(_MK82, center, 3),
-		WeaponMount.new(_AIM9, outboard),
-	]))
-
-	loadouts.append(WeaponLoadout.new("Caza / Interceptor", [
-		WeaponMount.new(_AIM120, center),
-		WeaponMount.new(_AIM120, inboard),
-		WeaponMount.new(_AIM9, outboard),
-	]))
-
+	for loadout in catalog:
+		if loadout.can_arm_with(available_weapons):
+			loadouts.append(loadout)
 	return loadouts

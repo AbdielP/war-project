@@ -269,6 +269,79 @@ Si el avión es demasiado rápido para el óvalo, vuela por fuera.
 
 ---
 
+### Armamento — `core/weapon/`
+
+Tres niveles, separados a propósito: qué es un arma, qué se monta en una salida, y
+cómo se dibuja.
+
+**`WeaponType`** (`weapon_type.gd`, `extends Resource`) — definición compartida de un
+arma. Existe un `.tres` por tipo (`aim9_sidewinder`, `aim120_amraam`, `agm65_maverick`,
+`mk82`, `gbu54`) y los loadouts lo referencian en vez de copiarlo, así el nombre y el
+icono no se desincronizan entre misiones.
+
+| Export | Tipo |
+|--------|------|
+| `display_name` | String |
+| `icon` | Texture2D (`AtlasTexture` sobre `Jet_bombs_missiles.png`) |
+
+**`WeaponMount`** (`weapon_mount.gd`, `extends RefCounted`) — un tipo de arma sobre un
+grupo de estaciones simétricas. `weapon: WeaponType`, `stations: PackedStringArray`
+(ids como `"L2"`, `"R2"` — no nombres de marker), `per_station: int`. `total()` suma
+todas las estaciones del grupo.
+
+`per_station` es **dato de munición, no de dibujo**: una estación con 3 Mk-82 lleva 3
+aunque en pantalla quepa una sola.
+
+**`WeaponLoadout`** (`weapon_loadout.gd`, `extends RefCounted`) — el armamento completo
+de una salida: `display_name` + `mounts: Array[WeaponMount]`. Única fuente de verdad —
+el HUD saca de aquí el resumen y el `HardpointRack` los sprites, así que no hay dos
+cifras que puedan discrepar.
+
+**`HardpointRack`** (`hardpoint_rack.gd`, `extends Node2D`) — lo único que sabe dibujar
+armas. No conoce misiones ni unidades: recibe un `WeaponLoadout` y lo representa
+colgando `Sprite2D` de los `Marker2D` hijos.
+
+| Método | Descripción |
+|--------|-------------|
+| `apply_loadout(loadout)` | Limpia y vuelve a colgar todo. `null` = desarmado |
+| `clear_weapons()` | Borra los sprites colgados |
+
+El nombre del marker empieza por el id de su estación — `L2a`, `L2b`, `L2c` son la
+estación `L2`. **Mover, añadir o borrar markers en la escena cambia lo que se dibuja
+sin tocar código.** Dentro de cada estación las armas se reparten desde el centro (con
+un arma y tres markers cuelga del de en medio, no del borde del pylon), y los markers
+se ordenan por distancia al eje del avión, no por orden en el árbol: eso es lo que hace
+que la posición N signifique lo mismo en las dos alas y las cargas simétricas salgan
+simétricas. Si una estación lleva más armas que markers se dibujan sólo las que caben.
+
+**Presets por modelo:** `core/unit/av8b_harrier/av8b_harrier_loadouts.gd`
+(`build(available_weapons) → Array[WeaponLoadout]`) define CAS/Antitanque, Bombardeo y
+Caza/Interceptor. Viven junto al avión porque las estaciones son propias del modelo.
+
+**Filtrado por armamento disponible:** `build()` devuelve sólo las configuraciones
+armables con la lista que recibe — `WeaponLoadout.can_arm_with()` es todo o nada: si
+falta un arma, esa misión no se ofrece. La lista vive en `PlayerFleet._available_weapons`,
+hardcodeada por ahora igual que el inventario de aeronaves. **Las misiones no armables
+no aparecen**: sin avisos ni botones deshabilitados, porque no hay sistema de
+compra/desbloqueo que explique la ausencia.
+
+**Recorrido del dato:** `HangarWindow` (el jugador elige misión) → `FlightDeck.request_deploy(scene, squad, loadout)`
+→ `Unit.set_weapon_loadout()`, que guarda el loadout **y** busca un `HardpointRack`
+entre sus hijos para aplicarlo. Las unidades sin rack lo guardan igual: llevar
+armamento y saber dibujarlo son cosas distintas.
+
+**Capas de dibujado** — ver `docs/decisions.md` (2026-08-03). Dentro de una unidad:
+`Hardpoints` en z 0, `Sprite2D` en 1, `SelectionIndicator` en 2 (definido en
+`unit.tscn`, lo heredan todas). Entre unidades, en el nodo raíz: naval 0, aire 10.
+`z_as_relative` está activo, así que los z de dentro se suman al de la raíz — por eso
+las armas del Harrier (10) se ven sobre la cubierta del Wasp (1) mientras rueda.
+
+**Límite conocido del pixel art:** las armas miden 10–14 px de largo y la cuerda del
+ala donde cuelgan mide 10 px, así que sobresalen de la silueta. Medido, no supuesto.
+Ver `docs/decisions.md` (2026-08-02) para las opciones de arte.
+
+---
+
 ### `AV-8B Harrier II` — `core/unit/av8b_harrier/`
 
 **`av8b_harrier.gd`:** sólo identidad y ruteo de órdenes. No pilota.
@@ -279,7 +352,9 @@ extends Unit
 |-------|--------|
 | `order_fulfilled` | Llegó al punto ordenado (reenvía `OrbitBehavior.center_reached`) |
 
-**Escena:** `Sprite2D`, `CollisionShape2D`, `SelectionIndicator`, `PlaneController`, `OrbitBehavior`.
+**Escena:** `Sprite2D`, `CollisionShape2D`, `SelectionIndicator`, `PlaneController`,
+`OrbitBehavior`, `Hardpoints` (`HardpointRack` con 10 `Marker2D`: `L1`, `L2a`, `L2c`,
+`L3a`, `L3c` y sus simétricos `R`). `z_index = 10` en el raíz.
 
 **API:**
 - `start_flight(orbit_center, initial_speed)` — la cubierta le cede el control
@@ -380,17 +455,29 @@ extends PanelContainer
 ```
 extends Node   (Autoload)
 ```
-Inventario de flota. **Hardcodeado** — reemplazar con sistema de puerto cuando exista.
+Lo que el jugador posee: aeronaves y armamento. **Hardcodeado** — reemplazar con
+sistema de puerto cuando exista.
 
 ```gdscript
+_available_weapons = [ aim9, aim120, agm65, mk82, gbu54 ]   # armas del jugador
+
 _loadouts = {
     "LHD Wasp": [
         { "display_name": "AV-8B Harrier II",
           "scene": preload("res://core/unit/av8b_harrier/av8b_harrier.tscn"),
-          "total": 6, "deployed": 0 }
+          "total": 6, "deployed": 0,
+          "weapon_loadouts": _HarrierLoadouts.build(_available_weapons) }
     ]
 }
 ```
+
+`_available_weapons` se declara **antes** que `_loadouts`: los inicializadores de miembro
+corren en orden de declaración y `_loadouts` lee esa lista. Quitar un arma de ahí hace
+desaparecer del hangar las misiones que la necesitan.
+
+El armamento vive aquí y no en un autoload aparte a propósito: es "lo que el jugador
+tiene", igual que las aeronaves, y como todo esto lo reemplaza la pantalla de puerto,
+partirlo en dos duplicaría esa migración.
 
 API: `get_loadout(ship_name)`, `try_deploy(entry) → bool`, `recall(entry)`.
 
@@ -463,7 +550,7 @@ Si usas `_draw()` en un nodo que puede ocultarse/mostrarse, llamar `queue_redraw
 - [x] Cámara con pan + follow a unidad seleccionada
 - [x] Selección de unidades por click (física query manual)
 - [x] Órdenes de movimiento (click izq. vacío / click der.)
-- [x] Marcador de destino (desaparece al llegar)
+- [x] Marcador de destino (se queda donde se ordenó, como referencia para ajustar el vuelo)
 - [x] Deselección: Escape + botón × en HUD
 - [x] AV-8B Harrier: vuelo al punto → órbita CCW
 - [x] LHD Wasp: despliegue completo (elevador → taxi → despegue → óvalo)
@@ -471,9 +558,10 @@ Si usas `_draw()` en un nodo que puede ocultarse/mostrarse, llamar `queue_redraw
 - [x] HUD base: event log, minimap placeholder, selection panel, actions panel
 - [x] Vuelo separado en `PlaneController` (cómo vuela) + `OrbitBehavior` (a dónde va); la cubierta cede el control con `start_flight()` y no vuelve a tocar al avión
 - [x] Escuadrones agrupan en un solo cuadrito con badge `xN` en `DeployedPanel`, click enfoca al líder
+- [x] Armamento por misión: se elige loadout en el hangar y el avión sale con las armas colgadas de los `Marker2D` de las alas (`HardpointRack`)
+- [x] Capas de dibujado por `z_index`: la capa la lleva el raíz de la unidad, las piezas de dentro usan 0/1/2
 
 ### Pendiente
-- [ ] Suavizar movimiento en patrulla oval del portaaviones
 - [ ] Vuelo en formación (aviones del mismo escuadrón)
 - [ ] Animación del elevador (placeholder `elevator_cycle_time` ya existe)
 - [ ] Misiones funcionales: SEAD/CAP/CAS tienen UI, sin comportamiento de IA

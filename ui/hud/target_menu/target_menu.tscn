@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/hud/target_menu/target_menu.gd" id="1"]
+
+[node name="TargetMenu" type="PanelContainer"]
+visible = false
+offset_right = 60.0
+offset_bottom = 40.0
+script = ExtResource("1")
+
+[node name="Items" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 0

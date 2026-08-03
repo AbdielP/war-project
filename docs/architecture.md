@@ -35,7 +35,8 @@ Base de toda unidad seleccionable. Tiene `CollisionShape2D` + `SelectionIndicato
 
 | Método | Descripción |
 |--------|-------------|
-| `set_selected(bool)` | Muestra/oculta SelectionIndicator |
+| `set_selected(bool)` | Marca/desmarca por selección. Ver "Indicador" abajo |
+| `set_targeted(bool)` | Marca/desmarca por estar bajo ataque. Lo llama `SelectionManager`, no la unidad misma |
 | `is_player_controlled()` | ¿Obedece órdenes del jugador? Sólo `PLAYER` — las aliadas las mueve la IA |
 | `is_hostile_to(other)` | ¿Se disparan? Delega en `Team.are_hostile()` |
 | `get_display_name()` | unit_name si existe, sino tr(unit_type.display_name) |
@@ -44,7 +45,9 @@ Base de toda unidad seleccionable. Tiene `CollisionShape2D` + `SelectionIndicato
 | `get_weapons()` | `Array[WeaponType]`: cañón + un arma por tipo colgado, sin repetir |
 | `get_default_weapon()` | La principal del loadout; el cañón sólo si va desarmada |
 | `set_active_weapon(w)` | Con qué ataca. Emite `active_weapon_changed` |
-| `receive_move_order(Vector2)` | **Virtual vacío** — sobreescribir en subclases |
+| `receive_move_order(Vector2)` | **Virtual** — cancela `attack_target` (`super()`) y las subclases resuelven el cómo |
+| `receive_attack_order(Unit)` | **Virtual** — llama `set_attack_target()`; las subclases resuelven cómo acercarse y disparar |
+| `set_attack_target(Unit)` | Único sitio que toca `attack_target`. Ver nota sobre objetos liberados abajo |
 
 Estado de armamento: `weapon_loadout` (qué lleva) y `active_weapon` (con qué ataca). El
 arma activa vive aquí y no en el HUD porque el panel se reconstruye en cada selección.
@@ -52,9 +55,26 @@ Sale puesta la principal del loadout — desde `_ready()` para unidades del mapa
 `set_weapon_loadout()` al armarlas, porque el arma que hubiera puede no estar en el
 armamento nuevo.
 
+**Indicador visual (`_selection_indicator`):** se ve si `_selected` **o** `_targeted` es
+verdadero — dos motivos distintos para el mismo dibujo. `_selected` lo pone
+`SelectionManager` al elegir la unidad; `_targeted` lo pone también `SelectionManager`,
+pero sobre la unidad que está siendo atacada por la unidad seleccionada. **Es una vista de
+la selección, no un hecho propio de la unidad:** por eso vive como estado privado de
+`Unit` pero lo escribe siempre `SelectionManager`, nunca la unidad misma. Se apaga y
+enciende junto con el resto del HUD al deseleccionar/reseleccionar, aunque el ataque en
+curso no se interrumpa.
+
+**`attack_target` y objetos liberados:** un `Unit` liberado (`queue_free`) se compara
+`== null` como verdadero. `set_attack_target()` normaliza antes de comparar — si el
+objetivo anterior ya no es válido, el cambio se deja pasar aunque el nuevo valor también
+sea `null` — porque si no, la muerte del objetivo nunca dispararía
+`attack_target_changed` y el HUD se quedaría mostrando un ataque que ya terminó.
+`SelectionManager._mark_target()` tiene la misma trampa resuelta igual.
+
 | Señal | Cuándo |
 |-------|--------|
 | `active_weapon_changed(weapon)` | Cambió el arma seleccionada |
+| `attack_target_changed(target)` | Cambió a quién ataca (orden nueva, movió, o el objetivo murió) |
 
 Señales opcionales (no en la base, implementadas por subclases que las necesiten):
 - `order_fulfilled` — la unidad llegó al destino
@@ -124,7 +144,8 @@ extends Camera2D   class_name PanCamera
 ```
 | Señal | Cuándo |
 |-------|--------|
-| `clicked(world_position: Vector2)` | Click sin arrastre (umbral 6px) |
+| `clicked(world_position: Vector2)` | Click/tap sin arrastre (umbral 6px) |
+| `long_pressed(world_position: Vector2)` | Pulsación mantenida sin arrastrar (`long_press_time`, 0,5 s). Equivalente táctil del click derecho: en móvil no hay segundo botón |
 
 | Variable | Descripción |
 |----------|-------------|
@@ -133,6 +154,10 @@ extends Camera2D   class_name PanCamera
 - Pan: click+arrastre izquierdo. Al empezar el arrastre, `follow_target = null`.
 - Límites auto-calculados en `_ready()` desde todos los `TileMapLayer` de la escena.
 - `SelectionManager` asigna `follow_target = _selected_unit` en `_select()`.
+- **`long_pressed` se dispara sin soltar el botón**, como cualquier menú contextual
+  táctil — el aviso llega con el dedo/botón aún apoyado. Al soltar después de que ya se
+  disparó, no cuenta como `clicked`: si contara, el menú se abriría y una orden le
+  llegaría encima en el mismo gesto.
 
 ---
 
@@ -141,34 +166,53 @@ extends Camera2D   class_name PanCamera
 extends Node2D
 ```
 NodePaths exportados: `camera_path`, `hud_path` → resueltos con `get_node()` en `_ready()`.
+Coordina selección, órdenes de movimiento y de ataque, el marcador de destino y el menú
+contextual. Es el único lugar donde se decide qué significa cada gesto de entrada.
 
-**Flujo de input:**
+**Flujo de input — el mismo gesto en PC y táctil, sin ramas por plataforma:**
 ```
-click izquierdo → PanCamera.clicked → _on_camera_clicked(pos)
-  └─ unidad bajo cursor → _select(unit)
-  └─ sin unidad + hay seleccionada → _issue_move_order(pos)
-  └─ misma unidad seleccionada → _select(null)
+click izquierdo / tap → PanCamera.clicked → _on_camera_clicked(pos)
+  └─ unidad bajo cursor:
+       └─ puedo atacarla (propia seleccionada + hostil) → _issue_attack_order(unit)
+       └─ es la ya seleccionada → _select(null)
+       └─ si no → _select(unit)
+  └─ sin unidad + hay propia seleccionada → _issue_move_order(pos)
 
-click derecho + unidad seleccionada → _issue_move_order(pos)
-ESC → _select(null)
+click derecho / pulsación mantenida → PanCamera.long_pressed → _on_context_requested(pos)
+  └─ unidad ajena bajo cursor → _hud.open_target_menu(unit, can_attack)
+  └─ si no, y hay propia seleccionada → _issue_move_order(pos)
+
+HUD.attack_requested (del menú) → _issue_attack_order(target)
+ESC → cierra el menú + _select(null)
 HUD.deselect_requested → _select(null)
 ```
+
+**`_can_attack(target)`:** propia seleccionada, controlada por el jugador, y hostil al
+objetivo. Se comprueba dos veces por diseño — al ofrecer la opción en el menú y otra vez
+al ejecutarla — porque la selección puede cambiar entre una cosa y la otra.
 
 **`_find_unit_at(pos)`:** Query `PhysicsPointQueryParameters2D` con `collide_with_areas=true, collide_with_bodies=false`. Devuelve la primer `Unit` bajo el cursor o null — si esa unidad tiene `squad != null`, devuelve `unit.squad.leader` en su lugar (click en cualquier integrante de un escuadrón selecciona al líder, no al que se clickeó).
 
 **`_select(unit)`:**
 1. Llama `set_selected(false/true)` en la unidad anterior/nueva
-2. Actualiza HUD: `show_selected_unit` / `clear_selected_unit`
-3. Asigna `_camera.follow_target`
-4. Muestra MoveMarker solo si hay orden activa para la unidad seleccionada
+2. Desconecta/conecta `attack_target_changed` de la unidad para seguir su recuadro de objetivo (`_mark_target`)
+3. Actualiza HUD: `show_selected_unit` / `clear_selected_unit`
+4. Asigna `_camera.follow_target`
 
-**`_issue_move_order(target)`:**
-1. Desconecta señal anterior si existe
-2. Llama `_selected_unit.receive_move_order(target)`
-3. Posiciona y muestra `_move_marker`
-4. Si la unidad tiene `order_fulfilled`, conecta `_on_order_fulfilled` con `CONNECT_ONE_SHOT`
+**`_mark_target(target)`:** enciende/apaga `set_targeted()` en la unidad marcada como
+objetivo de la selección actual. Ver la nota de `Unit` sobre objetos liberados — tiene la
+misma trampa resuelta con la misma regla.
 
-**`_on_order_fulfilled`:** Oculta el marcador, limpia `_order_unit`.
+**`_issue_move_order(target)`:** portero único de "el enemigo no recibe órdenes"
+(`is_player_controlled()`) — cubre tanto el click derecho como el izquierdo en vacío, así
+que basta un solo `if`. Reasigna `_order_unit`, llama `receive_move_order`, planta el
+`_move_marker` y conecta `order_fulfilled` con `CONNECT_ONE_SHOT` si la unidad la tiene.
+
+**`_issue_attack_order(target)`:** vuelve a comprobar `_can_attack` (ver arriba) y llama
+`receive_attack_order`.
+
+**`_on_order_fulfilled`:** limpia `_order_unit`. El marcador **no se oculta** — se queda
+donde se pidió el punto, como referencia de vuelo.
 
 ---
 
@@ -176,9 +220,34 @@ HUD.deselect_requested → _select(null)
 ```
 extends Node2D
 ```
-Creado dinámicamente por SelectionManager en `_ready()`, añadido a la escena raíz.
-Dibuja: círculo (radio 8) + cruz, color accent con 85% alpha.
+Creado dinámicamente por SelectionManager en `_ready()`, añadido a `current_scene` de
+forma diferida (`.call_deferred()` — en `_ready()` la escena todavía se está montando y
+Godot rechaza el `add_child` directo). Dibuja: círculo (radio 8) + cruz, color accent con
+85% alpha. Persiste tras cumplirse la orden — no se oculta solo.
 **IMPORTANTE:** llama `queue_redraw()` en `NOTIFICATION_VISIBILITY_CHANGED` — sin esto `_draw()` no se ejecuta al hacer `show()`.
+
+---
+
+### `TargetMenu` — `ui/hud/target_menu/target_menu.gd`
+```
+extends PanelContainer
+```
+Menú contextual sobre una unidad ajena: Atacar (si se puede) / Información / Cerrar. Se
+abre con click derecho en PC o **pulsación mantenida** en táctil — el click/tap izquierdo
+queda libre para atacar directamente, que es la acción frecuente.
+
+| Método / Señal | Descripción |
+|---|---|
+| `open(target, screen_position, can_attack)` | Reconstruye las opciones. `can_attack` lo decide quien llama — el menú no sabe si hay selección propia ni hostilidad |
+| `close()` | |
+| `current_target()` | |
+| `attack_requested(target)` | El jugador tocó "Atacar" |
+| `info_requested(target)` | El jugador tocó "Información" — hoy `HUD` lo traduce en seleccionar la unidad |
+
+Se coloca junto a la unidad con un offset, siempre dentro de pantalla (`clampf` contra
+`get_viewport_rect().size` menos su propio tamaño) — pegado a un borde se saldría y
+dejaría opciones inalcanzables. Como el tamaño no es fiable hasta que el contenedor se
+recoloca, `open()` espera un `process_frame` antes de posicionarse.
 
 ---
 
@@ -310,6 +379,28 @@ completo y en un barrido de 16 órdenes.
 menor que el radio de curvatura del óvalo (`semi_x²/semi_y` en el punto más cerrado).
 Si el avión es demasiado rápido para el óvalo, vuela por fuera.
 
+#### `ChaseBehavior` — `chase_behavior.gd`
+Decide **a dónde** va cuando persigue a alguien: detrás del objetivo, corrigiendo el
+rumbo mientras éste se mueve. **Hermano de `OrbitBehavior`**, no una rama dentro de él —
+los dos le dan puntos móviles al mismo `PlaneController`, y por eso nunca deben procesar
+a la vez; quien recibe la orden (`Av8bHarrier`) es quien para uno al arrancar el otro.
+No dispara ni sabe de armas: sólo lleva el avión hasta el objetivo.
+
+| Señal | Cuándo |
+|-------|--------|
+| `target_lost` | El objetivo dejó de ser válido (murió). Se apaga a sí mismo **antes** de emitirla, para que quien escuche pueda darle otra orden al avión sin que este nodo se la pise en el frame siguiente |
+
+| Export | Default |
+|--------|---------|
+| `pilot_path` | `../PlaneController` |
+
+**API:** `pursue(target: Unit)`, `stop()`.
+
+`pursue()` usa `set_target()` del piloto (no `update_target()`): es un destino nuevo, así
+que el avión tiene que replantear desde cero hacia qué lado vira. Mientras persigue,
+cada frame llama `update_target(target.global_position)` — corrige el punto sin
+replantear el viraje ya comprometido, igual que `OrbitBehavior` con el óvalo.
+
 ---
 
 ### Armamento — `core/weapon/`
@@ -410,7 +501,8 @@ hasta que tenga comportamiento**.
 
 ### `AV-8B Harrier II` — `core/unit/av8b_harrier/`
 
-**`av8b_harrier.gd`:** sólo identidad y ruteo de órdenes. No pilota.
+**`av8b_harrier.gd`:** sólo identidad y ruteo de órdenes. No pilota. Arbitra cuál de los
+dos comportamientos de vuelo manda — `orbit` y `chase` nunca procesan a la vez.
 ```
 extends Unit
 ```
@@ -419,12 +511,24 @@ extends Unit
 | `order_fulfilled` | Llegó al punto ordenado (reenvía `OrbitBehavior.center_reached`) |
 
 **Escena:** `Sprite2D`, `CollisionShape2D`, `SelectionIndicator`, `PlaneController`,
-`OrbitBehavior`, `Hardpoints` (`HardpointRack` con 10 `Marker2D`: `L1`, `L2a`, `L2c`,
-`L3a`, `L3c` y sus simétricos `R`). `z_index = 10` en el raíz.
+`OrbitBehavior`, `ChaseBehavior`, `Hardpoints` (`HardpointRack` con 10 `Marker2D`: `L1`,
+`L2a`, `L2c`, `L3a`, `L3c` y sus simétricos `R`). `z_index = 10` en el raíz.
 
 **API:**
 - `start_flight(orbit_center, initial_speed)` — la cubierta le cede el control
-- `receive_move_order(target)` — delega en `orbit.orbit_at(target)`
+- `receive_move_order(target)` — para `chase`, delega en `orbit.orbit_at(target)`
+- `receive_attack_order(target)` — para `orbit`, delega en `chase.pursue(target)`
+
+**`_on_target_lost()`** (conectado a `chase.target_lost`): el objetivo murió en pleno
+vuelo. El avión no puede pararse en seco, así que orbita **donde llegó**
+(`orbit.orbit_at(global_position)`), no donde estaba el enemigo — seguir volando hasta un
+punto vacío se vería como que no se enteró. No hace falta guardar esa posición aparte:
+`ChaseBehavior` avisa *antes* de dejar de procesar, así que `global_position` en ese
+instante ya es "aquí estoy ahora".
+
+No hay comportamiento definido para "cuando el avión llega junto al objetivo": con
+lógica de disparo de verdad, nunca llega — dispara antes o se acerca sólo lo justo para
+cañón/arma corta. Se deja sin resolver a propósito hasta que exista esa lógica.
 
 ---
 
@@ -437,11 +541,17 @@ extends CanvasLayer   class_name HUD
 | Señal | Cuándo |
 |-------|--------|
 | `deselect_requested` | Botón × presionado |
-| `unit_focus_requested(unit: Unit)` | Click en un cuadrito de `DeployedPanel` |
+| `unit_focus_requested(unit: Unit)` | Click en un cuadrito de `DeployedPanel`, o "Información" en `TargetMenu` |
+| `attack_requested(target: Unit)` | El jugador tocó "Atacar" en `TargetMenu` |
 
 API:
-- `show_selected_unit(unit: Unit)` — muestra panel + acciones + botón ×
-- `clear_selected_unit()` — oculta todo
+- `show_selected_unit(unit: Unit)` — muestra panel + acciones (si controla) + barra de armas (si controla) + botón ×; se suscribe a `attack_target_changed` de la unidad
+- `clear_selected_unit()` — oculta todo, incluido el aviso de ataque; se desuscribe
+- `open_target_menu(target, can_attack)` / `close_target_menu()` — delegan en `TargetMenu`, convirtiendo la posición mundo→pantalla con `get_global_transform_with_canvas()`
+
+`_on_attack_target_changed(target)` mantiene el `AttackLabel` ("Atacando: <nombre>") en
+sincronía con la unidad seleccionada — enganchado a su señal y no refrescado a mano,
+porque el objetivo puede cambiar sin que la selección cambie (el enemigo murió).
 
 Ruteo de acciones en `_on_action_pressed(name)`:
 ```gdscript
@@ -459,6 +569,9 @@ CanvasLayer (HUD)
 ├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=313
 ├── SelectionPanel   (PanelContainer) — offset_left=544, offset_top=349
 ├── DeployedPanel    (PanelContainer) — panel superior, unidades desplegadas
+├── WeaponBar        (HBoxContainer)  — offset (160,344)-(480,376), barra de armas
+├── AttackLabel      (Label)          — offset (160,332)-(480,343), "Atacando: X"
+├── TargetMenu       (PanelContainer) — menú contextual, se posiciona en runtime
 └── DeselButton      (Button)         — offset (526,351), visible=false, flat, text="×"
 ```
 
@@ -638,6 +751,31 @@ demás scripts y las llamadas de fuera fallan a compilar.
 `Unit` ya da identidad, selección, contorno y armamento. Un enemigo estático o un decorado
 seleccionable son escena + `UnitType`, nada más. Ver `T-14 Armata`.
 
+### Objetos liberados y comparación `== null`
+En Godot, un objeto liberado (`queue_free()`) se compara `== null` como verdadero. Un
+patrón como `if valor_actual == nuevo_valor: return` (guarda de "no hubo cambio") es
+peligroso si `valor_actual` puede haber muerto: tras la liberación, comparar contra otro
+`null` da `true` y la guarda se traga un cambio real — por ejemplo, que un ataque terminó
+porque el objetivo murió. Regla: la comparación de "sin cambios" sólo es de fiar si el
+valor **anterior** sigue siendo `is_instance_valid()`; si no, tratarlo como si ya fuera
+`null` y dejar pasar la actualización. Ver `Unit.set_attack_target()` y
+`SelectionManager._mark_target()`.
+
+### Comportamientos hermanos que comparten un actuador
+Cuando dos comportamientos distintos (p. ej. `OrbitBehavior` y `ChaseBehavior`) mueven al
+mismo actuador (`PlaneController`) dándole puntos, que no se sepan el uno al otro: cada
+uno sólo llama `set_target`/`update_target` sobre el piloto. Quien los posee (`Av8bHarrier`)
+es el árbitro — para uno explícitamente antes de arrancar el otro, porque si los dos
+procesan a la vez se pisan el objetivo cada frame.
+
+### El contexto desambigua el gesto, no un modo aparte
+Antes de añadir un modo o un gesto secundario para una acción nueva, comprobar si el
+contexto ya alcanza para distinguirla. Ejemplo: atacar no necesitó doble-tap ni un botón de
+"modo ataque" — con una unidad propia seleccionada, tocar a un hostil sólo puede
+significar "atacar", así que el mismo click/tap que selecciona ya sirve. Se reserva un
+gesto secundario (aquí, pulsación mantenida / click derecho) sólo para la acción que de
+verdad compite por el mismo gesto primario (inspeccionar vs. atacar).
+
 ---
 
 ## Paleta de colores (Resurrect64 en uso)
@@ -675,11 +813,15 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [x] Arma por defecto según el loadout — un avión armado no sale seleccionando el cañón
 - [x] Bandos (`Team`): jugador/aliado/enemigo, color en el contorno, enemigo seleccionable pero no controlable ni listado en la UI del jugador
 - [x] Primer enemigo en el mapa: T-14 Armata (estático, sin IA)
+- [x] Atacar: click/tap sobre un enemigo con unidad propia seleccionada, o "Atacar" en `TargetMenu`. `ChaseBehavior` persigue el objetivo; al morir el objetivo, el Harrier orbita donde llegó
+- [x] Menú contextual (`TargetMenu`) sobre unidad ajena: click derecho en PC, pulsación mantenida en táctil (`PanCamera.long_pressed`)
+- [x] Indicador visual del objetivo bajo ataque (recuadro rojo, reutiliza `SelectionIndicator`) y aviso "Atacando: X" en el HUD — ambos ligados a la selección, no al enemigo
 
 ### Pendiente
-- [ ] Disparar: `Unit.active_weapon` ya dice con qué, falta el ataque en sí
+- [ ] Disparar de verdad: hay objetivo (`attack_target`) y persecución, falta el disparo, el daño y la munición
 - [ ] Cadena de repliegue al agotarse un arma (necesita munición consumible, que no existe)
 - [ ] Elección de arma por distancia en combate aéreo (sistema de dogfight, sin planear)
+- [ ] Comportamiento del avión al llegar junto al objetivo — sin resolver a propósito, se decide cuando exista el disparo
 - [ ] Vuelo en formación (aviones del mismo escuadrón)
 - [ ] Animación del elevador (placeholder `elevator_cycle_time` ya existe)
 - [ ] Misiones funcionales: SEAD/CAP/CAS tienen UI, sin comportamiento de IA

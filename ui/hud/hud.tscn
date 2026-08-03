@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" path="res://ui/hud/hangar_window/hangar_window.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://ui/hud/deployed_panel/deployed_panel.tscn" id="6"]
 [ext_resource type="PackedScene" path="res://ui/hud/weapon_bar/weapon_bar.tscn" id="7"]
+[ext_resource type="PackedScene" path="res://ui/hud/target_menu/target_menu.tscn" id="8"]
 
 [node name="HUD" type="CanvasLayer" unique_id=1219806315]
 script = ExtResource("0")
@@ -43,6 +44,20 @@ offset_right = 640.0
 offset_bottom = 24.0
 
 [node name="WeaponBar" parent="." instance=ExtResource("7")]
+
+[node name="AttackLabel" type="Label" parent="."]
+visible = false
+offset_left = 160.0
+offset_top = 332.0
+offset_right = 480.0
+offset_bottom = 343.0
+theme_override_colors/font_color = Color(0.9098039, 0.23137255, 0.23137255, 1)
+theme_override_font_sizes/font_size = 8
+horizontal_alignment = 1
+vertical_alignment = 1
+clip_text = true
+
+[node name="TargetMenu" parent="." instance=ExtResource("8")]
 
 [node name="DeselButton" type="Button" parent="."]
 visible = false

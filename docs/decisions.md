@@ -2,6 +2,38 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-03 (5)
+
+### Atacar: mismo gesto que seleccionar, desambiguado por el contexto
+Con una unidad propia seleccionada, click izquierdo (o tap) sobre un enemigo lo ataca en vez de seleccionarlo. No hace falta un gesto aparte ni doble tap: el contexto ya alcanza — "tengo algo mío seleccionado y hay un hostil debajo" sólo puede significar una cosa. Esto sigue la misma regla ya escrita para el input: *el contexto determina la acción, sin separar gestos por plataforma.*
+
+**Costo aceptado:** con algo propio seleccionado, ya no se puede simplemente mirar a un enemigo con el click izquierdo — clickearlo ataca. Para inspeccionar sin atacar se usa el menú contextual (ver abajo). Atacar es la acción frecuente; mirar es la rara, y se resuelve con un gesto secundario en vez de complicar el primario.
+
+**El menú contextual resuelve inspección + ataque sin sacrificar agilidad.** `click derecho` (PC) o **pulsación mantenida** (táctil, `PanCamera.long_pressed`, 0,5 s por defecto) abren un menú junto a la unidad con Atacar / Información / Cerrar. Se dispara sin soltar el botón, como cualquier menú contextual táctil; soltar después de que ya se disparó no cuenta como click, o el menú se abriría y acto seguido llegaría una orden encima. "Información" hoy es sólo seleccionarla —es lo único que hay que ver de una unidad—, y ese es el único punto que hay que tocar cuando exista una ficha de verdad.
+
+**El menú no decide si puede atacar; sólo pregunta y muestra la opción si le dicen que sí.** La condición real (`_can_attack`) vive en `SelectionManager` y se vuelve a comprobar al ejecutar la orden, no sólo al ofrecerla — la selección pudo cambiar entre que se abrió el menú y que se tocó "Atacar".
+
+**El objetivo es un dato de la unidad (`Unit.attack_target`), no del HUD ni de la orden.** Moverse cancela el ataque en curso — compiten por el mismo destino —, y perder el objetivo (murió) es harina de otro costal: cada tipo de unidad decide qué hacer, porque un tanque y un avión no reaccionan igual. Por eso `receive_attack_order()` es virtual, igual que `receive_move_order()`.
+
+**El vuelo de intercepción es un componente nuevo (`ChaseBehavior`), hermano de `OrbitBehavior`**, no una rama de código dentro de él. Los dos comportamientos existentes reutilizados sin cambios: le dan puntos móviles al mismo `PlaneController`, que no sabe si está orbitando o persiguiendo. `Av8bHarrier` es quien arbitra cuál manda — nunca corren a la vez, se paran explícitamente el uno al otro.
+
+**Qué hace el Harrier al quedarse sin objetivo en pleno viaje (usuario): orbita donde llegó, no donde estaba el enemigo.** Seguir volando hasta un punto vacío se vería como que no se enteró. Esto no necesitó una posición guardada aparte: `ChaseBehavior` avisa (`target_lost`) *antes* de dejar de procesar, así que `global_position` en ese instante ya es "donde está el avión ahora".
+
+**Por qué no se hizo nada para "cuando llega" (usuario):** con lógica de ataque de verdad el avión nunca llega — dispara antes, o se acerca lo justo para cañón/arma corta. Programar un comportamiento de llegada ahora sería trabajo que se tira en cuanto exista el disparo.
+
+Verificado en headless: los cuatro cruces de quién puede atacar a quién; click izquierdo sobre el enemigo fija objetivo sin cambiar la selección; el menú abre sólo sobre unidades ajenas y no sobre mapa vacío; una orden de movimiento cancela el ataque; al morir el objetivo el avión pasa a orbitar a 0 px de donde estaba en ese instante (con el enemigo a 506 px de ahí). Confirmado por el usuario en el editor: funciona bien.
+
+### Recuadro de objetivo y aviso "Atacando: X": el estado es de la selección, no de la unidad
+El enemigo bajo ataque se marca reutilizando `SelectionIndicator` (mismo dibujo que la selección, color del bando de quien lo mira — un enemigo apuntado sale en rojo) y el HUD muestra `Atacando: <nombre>` sobre la barra de armas.
+
+**Primer intento, descartado tras que el usuario lo probara:** guardar `_targeted_by` como contador en la propia `Unit`, pensando en que varias unidades podrían apuntar al mismo blanco. Bug reportado: al deseleccionar la unidad propia, el recuadro rojo del enemigo se quedaba encendido — debía irse junto con el resto de la UI y volver si el ataque seguía al reseleccionar.
+
+**La causa era conceptual, no un olvido de un `if`:** el recuadro no es un hecho sobre el enemigo ("me están atacando"), es una vista de lo que el jugador tiene seleccionado ahora mismo ("esto es lo que está mirando"). Por eso la marca la posee y gestiona `SelectionManager` —el mismo sitio que ya gestiona `set_selected()`—, enganchada a `attack_target_changed` de la unidad seleccionada, y se apaga/enciende exactamente cuando se apaga/enciende el resto de la UI de esa unidad. `Unit` sólo expone `set_targeted(bool)`; no sabe ni le importa quién ni cuántos la estén marcando.
+
+**Bug de Godot encontrado de paso, con impacto real (el aviso se quedaba pegado tras morir el objetivo):** un objeto liberado (`queue_free`) se compara `== null` como verdadero. `set_attack_target(null)` comprobaba `attack_target == target` y, tras la muerte del enemigo, eso ya daba `true` — "no hay cambio" — así que ni reasignaba ni emitía la señal, y el HUD nunca se enteraba de que el ataque había terminado. Ocurría en dos sitios con la misma forma (`Unit.set_attack_target` y `SelectionManager._mark_target`). Arreglado con la misma regla en los dos: la comparación de "no hubo cambio" sólo es de fiar si el valor **anterior** sigue vivo (`is_instance_valid`); si murió, se trata como si ya fuera `null` y se deja pasar el cambio aunque el nuevo valor también sea `null`.
+
+Verificado en headless con la secuencia completa: atacar (recuadro + aviso) → deseleccionar (ambos se apagan, el ataque sigue en curso) → reseleccionar (ambos vuelven) → seleccionar al enemigo (su propio recuadro por selección) → ordenar movimiento (ambos se apagan) → volver a atacar (recuadro vuelve) → morir el objetivo (aviso se apaga). Confirmado por el usuario tras el arreglo.
+
 ## 2026-08-03 (4)
 
 ### Bandos: identidad en `Team`, decisiones en quien las toma

@@ -8,12 +8,17 @@ class_name Unit
 @export var team: Team.Side = Team.Side.PLAYER
 
 signal active_weapon_changed(weapon: WeaponType)
+signal attack_target_changed(target: Unit)
 
 var squad: Squad = null  # null = unidad suelta, sin escuadrón
 var weapon_loadout: WeaponLoadout = null  # null = unidad desarmada
 var active_weapon: WeaponType = null  # con qué ataca ahora mismo
+var attack_target: Unit = null  # a quién ataca; null = a nadie
 
 @onready var _selection_indicator: Node2D = $SelectionIndicator
+
+var _selected := false
+var _targeted := false
 
 
 func _ready() -> void:
@@ -26,7 +31,21 @@ func _ready() -> void:
 
 
 func set_selected(value: bool) -> void:
-	_selection_indicator.visible = value
+	_selected = value
+	_refresh_indicator()
+
+
+## Marcarla como el objetivo que se está mostrando. Es una vista de lo que hay
+## seleccionado, no un estado de la unidad: quien la marca es `SelectionManager`
+## y la apaga al deseleccionar. Se dibuja con el color de su propio bando, así
+## que un enemigo apuntado sale en rojo.
+func set_targeted(value: bool) -> void:
+	_targeted = value
+	_refresh_indicator()
+
+
+func _refresh_indicator() -> void:
+	_selection_indicator.visible = _selected or _targeted
 
 
 ## ¿Obedece órdenes del jugador? Las aliadas son de su bando pero las mueve la
@@ -94,5 +113,28 @@ func set_active_weapon(weapon: WeaponType) -> void:
 	active_weapon_changed.emit(weapon)
 
 
+## Moverse a un punto cancela el ataque en curso: son órdenes que compiten por
+## el mismo destino. Las subclases que se mueven llaman a `super()` y luego
+## resuelven el cómo.
 func receive_move_order(_target: Vector2) -> void:
-	pass
+	set_attack_target(null)
+
+
+## Atacar a otra unidad. Acercarse, apuntar y disparar dependen del arma y del
+## tipo de unidad — un tanque y un avión no lo hacen igual —, así que aquí sólo
+## se registra a quién. El cómo lo resuelve cada subclase.
+func receive_attack_order(target: Unit) -> void:
+	set_attack_target(target)
+
+
+## Único sitio que toca `attack_target`: avisar tiene que pasar siempre, venga
+## de una orden o de que el objetivo desapareció.
+func set_attack_target(target: Unit) -> void:
+	# Un objeto liberado se compara igual a `null`, así que la salida temprana
+	# sólo es de fiar entre objetivos vivos: si el anterior murió hay que dejar
+	# pasar el cambio aunque los dos "parezcan" nulos, o nadie se entera de que
+	# el ataque terminó.
+	if is_instance_valid(attack_target) and attack_target == target:
+		return
+	attack_target = target if is_instance_valid(target) else null
+	attack_target_changed.emit(attack_target)

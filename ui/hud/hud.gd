@@ -27,8 +27,10 @@ func _ready() -> void:
 func show_selected_unit(unit: Unit) -> void:
 	_current_unit = unit
 	_selection_panel.show_unit(unit.get_display_name())
-	_actions_panel.show_actions(unit.get_actions())
-	_weapon_bar.show_weapons(unit)
+	_actions_panel.show_actions(unit.get_actions() if unit.is_player_controlled() else [])
+	# Del enemigo se ve qué es, no se le cambia el arma. `show_weapons(null)`
+	# esconde la barra, así que no hace falta repetir la condición.
+	_weapon_bar.show_weapons(unit if unit.is_player_controlled() else null)
 	_desel_btn.show()
 
 

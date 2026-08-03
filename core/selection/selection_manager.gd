@@ -73,6 +73,11 @@ func _select(unit: Unit) -> void:
 func _issue_move_order(target: Vector2) -> void:
 	if _selected_unit == null:
 		return
+	# Único portero de las órdenes: cubre el click derecho y el izquierdo en
+	# vacío. Sin esto, ordenar a un enemigo no lo movía pero sí plantaba el
+	# marcador, y parecía que había obedecido.
+	if not _selected_unit.is_player_controlled():
+		return
 	# Desconectar señal anterior si existía
 	if _order_unit != null and is_instance_valid(_order_unit) and _order_unit.has_signal("order_fulfilled"):
 		if _order_unit.order_fulfilled.is_connected(_on_order_fulfilled):

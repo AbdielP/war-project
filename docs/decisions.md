@@ -2,6 +2,33 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-03 (4)
+
+### Bandos: identidad en `Team`, decisiones en quien las toma
+El juego tendrá tres bandos —jugador (azul `#8fd3ff`), aliados por IA (verde `#a8ca58`) y enemigos (rojo `#e83b3b`)—, así que hacía falta el concepto antes de meter el primer enemigo.
+
+`core/team/team.gd` guarda **sólo identidad de bando**: el enum `Side`, el color de cada uno y `are_hostile()`. No decide quién manda a quién ni quién puede disparar a quién; eso lo consultan el HUD, la selección y la IA, pero lo aplican ellos. Un `Team` que además decidiera esas cosas acabaría siendo el sitio donde vive medio juego.
+
+**El bando va en la instancia (`Unit.team`), no en el `UnitType`:** el mismo T-14 puede ser enemigo en una misión y aliado en otra. El tipo describe el modelo, no de quién es.
+
+**Dos preguntas distintas, no una:**
+- `is_player_controlled()` — ¿obedece órdenes del jugador? Sólo `PLAYER`. Las aliadas son de su bando pero las mueve la IA.
+- `is_hostile_to(other)` — ¿se disparan? Delega en `Team.are_hostile()`.
+
+Seleccionar no depende de ninguna de las dos: cualquier unidad se puede seleccionar, para ver qué es o para atacarla.
+
+**Un solo portero por regla.** El bloqueo de órdenes está dentro de `SelectionManager._issue_move_order()`, que es por donde pasan tanto el click derecho como el izquierdo en vacío — antes, ordenar a un enemigo no lo movía (`receive_move_order` es virtual vacío) pero sí plantaba el marcador de destino, y parecía que había obedecido. El HUD pasa `null` a `WeaponBar` para las unidades ajenas en vez de repetir la condición dentro de la barra.
+
+**El panel de desplegadas filtra por bando:** los grupos (`unit_air`/`unit_ground`/`unit_maritime`) dicen de qué tipo es la unidad, no de quién es. Sin el filtro, cualquier enemigo terrestre se colaba en el inventario del jugador. Muestra sólo `PLAYER`, no las aliadas IA.
+
+`SelectionIndicator` pasó de tener el color en una constante a recibirlo de `Unit` según el bando.
+
+**El T-14 no lleva script.** `Unit` ya da contorno, nombre y selección, y `receive_move_order()` vacío significa que no se mueve. Un enemigo estático no necesita nada más — cuando tenga IA, tendrá script.
+
+Verificado en headless: contorno rojo en el tanque y azul en el Harrier; los cuatro cruces de hostilidad (incluido PLAYER↔ALLY = no hostiles); con el enemigo seleccionado la orden no planta marcador y con el Wasp sí; el enemigo no aparece en el panel de desplegadas ni le sale barra de armas ni panel de acciones. Confirmado en el editor por el usuario: se ve, se subraya en rojo y no se puede mover; las unidades propias siguen saliendo en el panel.
+
+**Detalle de GDScript:** las firmas de `Team` usan `Team.Side` y no `Side` a secas. Dentro del propio archivo, GDScript trata el enum local como un tipo distinto del que ven los demás scripts, y las llamadas desde fuera fallan a compilar con "argument should be Side but is Team.Side".
+
 ## 2026-08-03 (3)
 
 ### Barra de armas: el arma activa vive en la unidad, no en el HUD

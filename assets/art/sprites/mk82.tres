@@ -1,6 +1,6 @@
-[gd_resource type="AtlasTexture" load_steps=2 format=3]
+[gd_resource type="AtlasTexture" format=3 uid="uid://b7jnu3vrjdatq"]
 
-[ext_resource type="Texture2D" path="res://assets/art/sprites/Jet_bombs_missiles.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://ub8017fbx3ue" path="res://assets/art/sprites/Jet_bombs_missiles.png" id="1"]
 
 [resource]
 resource_name = "Mk-82"

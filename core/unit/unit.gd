@@ -3,6 +3,9 @@ class_name Unit
 
 @export var unit_type: UnitType
 @export var unit_name: String = ""
+## Bando. En la instancia y no en el `UnitType` a propósito: el mismo modelo
+## puede ser enemigo en una misión y aliado en otra.
+@export var team: Team.Side = Team.Side.PLAYER
 
 signal active_weapon_changed(weapon: WeaponType)
 
@@ -15,6 +18,7 @@ var active_weapon: WeaponType = null  # con qué ataca ahora mismo
 
 func _ready() -> void:
 	_selection_indicator.visible = false
+	_selection_indicator.color = Team.color(team)
 	# Una unidad puesta a mano en el mapa nunca pasa por set_weapon_loadout,
 	# pero si tiene cañón ya puede atacar con él.
 	if active_weapon == null:
@@ -23,6 +27,17 @@ func _ready() -> void:
 
 func set_selected(value: bool) -> void:
 	_selection_indicator.visible = value
+
+
+## ¿Obedece órdenes del jugador? Las aliadas son de su bando pero las mueve la
+## IA, así que tampoco. Seleccionar es otra cosa: cualquier unidad se puede
+## seleccionar para ver qué es o para atacarla.
+func is_player_controlled() -> bool:
+	return team == Team.Side.PLAYER
+
+
+func is_hostile_to(other: Unit) -> bool:
+	return other != null and Team.are_hostile(team, other.team)
 
 
 func get_display_name() -> String:

@@ -30,11 +30,14 @@ Base de toda unidad seleccionable. Tiene `CollisionShape2D` + `SelectionIndicato
 |--------|------|-----|
 | `unit_type` | UnitType | Resource compartido por tipo |
 | `unit_name` | String | Nombre propio de instancia (sin traducción) |
+| `team` | Team.Side | Bando. En la **instancia**, no en el `UnitType`: el mismo modelo puede ser enemigo en una misión y aliado en otra. Por defecto `PLAYER` |
 | `squad` | Squad | No exportado. `null` = unidad suelta. Asignado por quien despliega en grupo (ver `Squad` más abajo) |
 
 | Método | Descripción |
 |--------|-------------|
 | `set_selected(bool)` | Muestra/oculta SelectionIndicator |
+| `is_player_controlled()` | ¿Obedece órdenes del jugador? Sólo `PLAYER` — las aliadas las mueve la IA |
+| `is_hostile_to(other)` | ¿Se disparan? Delega en `Team.are_hostile()` |
 | `get_display_name()` | unit_name si existe, sino tr(unit_type.display_name) |
 | `get_actions()` | PackedStringArray desde unit_type.actions |
 | `set_weapon_loadout(loadout)` | Arma la unidad y la dibuja si tiene `HardpointRack` |
@@ -57,6 +60,29 @@ Señales opcionales (no en la base, implementadas por subclases que las necesite
 - `order_fulfilled` — la unidad llegó al destino
 
 SelectionManager usa `has_signal()` antes de conectar — no acoplamiento directo.
+
+---
+
+### `Team` — `core/team/team.gd`
+```
+extends RefCounted   class_name Team
+```
+**Sólo identidad de bando**: quién es de quién y de qué color se pinta. No decide quién
+manda a las unidades ni quién dispara a quién — eso lo consultan el HUD, la selección y
+la IA, pero lo aplican ellos.
+
+| Miembro | Descripción |
+|---|---|
+| `enum Side { PLAYER, ALLY, ENEMY }` | `ALLY` es del lado del jugador pero la mueve la IA |
+| `color(side) → Color` | Azul `#8fd3ff` / verde `#a8ca58` / rojo `#e83b3b` (Resurrect64) |
+| `are_hostile(a, b) → bool` | Hoy: hostiles si exactamente uno es `ENEMY` |
+
+Las firmas usan `Team.Side` y no `Side` a secas: dentro del propio archivo GDScript
+trata el enum local como un tipo distinto del que ven los demás, y las llamadas de fuera
+no compilan.
+
+El día que haya varias facciones enfrentadas entre sí, `are_hostile()` es el único sitio
+que cambia.
 
 ---
 
@@ -86,7 +112,9 @@ Resource `.tres` compartido entre todas las instancias del mismo tipo (ej. `lhd_
 ```
 extends Node2D
 ```
-Dibuja contorno de selección en `_draw()`. Export `size: Vector2`. Color accent `#8fd3ff`.
+Dibuja contorno de selección en `_draw()`. Exports `size: Vector2` y `color: Color` — el
+color lo pone `Unit` en `_ready()` desde `Team.color(team)`, así que el contorno delata el
+bando: azul propio, verde aliado, rojo enemigo. El valor exportado sólo se ve en el editor.
 
 ---
 
@@ -368,6 +396,18 @@ Ver `docs/decisions.md` (2026-08-02) para las opciones de arte.
 
 ---
 
+### `T-14 Armata` — `core/unit/t14_armata/`
+
+Tanque enemigo. **Sin script**: instancia de `unit.tscn` con `unit_type` y `team = ENEMY`,
+en el grupo `unit_ground`. `Unit` ya le da contorno, nombre y selección, y
+`receive_move_order()` virtual vacío significa que no se mueve. Tendrá script cuando
+tenga IA.
+
+Sirve de patrón para cualquier unidad estática: **una unidad no necesita script propio
+hasta que tenga comportamiento**.
+
+---
+
 ### `AV-8B Harrier II` — `core/unit/av8b_harrier/`
 
 **`av8b_harrier.gd`:** sólo identidad y ruteo de órdenes. No pilota.
@@ -583,6 +623,21 @@ Drag en `TitleBar.gui_input`. Ver `HangarWindow` como referencia.
 ### _draw() con visibilidad
 Si usas `_draw()` en un nodo que puede ocultarse/mostrarse, llamar `queue_redraw()` en `NOTIFICATION_VISIBILITY_CHANGED`.
 
+### Un solo portero por regla
+Cuando una regla tenga varias vías de entrada, ponerla en el punto por donde pasan todas,
+no en cada una. Ejemplo: "el enemigo no recibe órdenes" vive dentro de
+`SelectionManager._issue_move_order()`, que cubre el click derecho y el izquierdo en vacío.
+Repetirla en cada llamador es donde aparecen las incoherencias.
+
+### Enum de una clase con `class_name`
+Declarar las firmas con el nombre cualificado (`Team.Side`, no `Side`) aunque estés dentro
+del propio archivo. GDScript trata el enum local como un tipo distinto del que ven los
+demás scripts y las llamadas de fuera fallan a compilar.
+
+### Una unidad no necesita script hasta que tenga comportamiento
+`Unit` ya da identidad, selección, contorno y armamento. Un enemigo estático o un decorado
+seleccionable son escena + `UnitType`, nada más. Ver `T-14 Armata`.
+
 ---
 
 ## Paleta de colores (Resurrect64 en uso)
@@ -592,6 +647,10 @@ Si usas `_draw()` en un nodo que puede ocultarse/mostrarse, llamar `queue_redraw
 | Fondo paneles | `#313638` | `Color(0.192, 0.212, 0.220)` |
 | Texto/borde | `#ab947a` | `Color(0.671, 0.580, 0.478)` |
 | Accent/selección | `#8fd3ff` | `Color(0.561, 0.827, 1.0)` |
+| Bando aliado (IA) | `#a8ca58` | `Color(0.659, 0.792, 0.345)` |
+| Bando enemigo | `#e83b3b` | `Color(0.910, 0.231, 0.231)` |
+
+Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo accent del HUD.
 
 ---
 
@@ -614,6 +673,8 @@ Si usas `_draw()` en un nodo que puede ocultarse/mostrarse, llamar `queue_redraw
 - [x] Las configuraciones de armamento del hangar salen de `PlayerFleet._available_weapons`; las no armables no se ofrecen
 - [x] `WeaponBar`: elegir arma activa al seleccionar un avión (cañón siempre presente)
 - [x] Arma por defecto según el loadout — un avión armado no sale seleccionando el cañón
+- [x] Bandos (`Team`): jugador/aliado/enemigo, color en el contorno, enemigo seleccionable pero no controlable ni listado en la UI del jugador
+- [x] Primer enemigo en el mapa: T-14 Armata (estático, sin IA)
 
 ### Pendiente
 - [ ] Disparar: `Unit.active_weapon` ya dice con qué, falta el ataque en sí
@@ -629,4 +690,5 @@ Si usas `_draw()` en un nodo que puede ocultarse/mostrarse, llamar `queue_redraw
 - [ ] Minimapa interactivo (placeholder existe, lógica pendiente de definir)
 - [ ] Mecánicas de ataque/combate
 - [ ] Unidades enemigas
-- [ ] Menú de opciones al clickear unidad enemiga
+- [ ] Menú de opciones al clickear unidad enemiga (ya se selecciona; falta el menú)
+- [ ] IA de unidades enemigas y aliadas (`Team.Side.ALLY` existe pero nadie la mueve)

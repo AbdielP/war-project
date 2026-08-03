@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://le4hfnagnxy3"]
+
+[ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
+[ext_resource type="Texture2D" uid="uid://n8wc8q78lhvy" path="res://assets/art/sprites/T14_Tank.png" id="2"]
+[ext_resource type="Resource" path="res://core/unit/t14_armata/t14_armata_type.tres" id="3"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(27, 36)
+
+[node name="T14Armata" unique_id=411269865 groups=["unit_ground"] instance=ExtResource("1")]
+unit_type = ExtResource("3")
+team = 2
+
+[node name="Sprite2D" parent="." index="0"]
+texture = ExtResource("2")
+
+[node name="CollisionShape2D" parent="." index="1"]
+position = Vector2(-2.5, -2)
+shape = SubResource("RectangleShape2D_1")
+
+[node name="SelectionIndicator" parent="." index="2"]
+size = Vector2(28, 36)

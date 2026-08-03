@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://ee4bxicqku18" path="res://ui/hud/hud.tscn" id="3_h2yge"]
 [ext_resource type="PackedScene" path="res://core/camera/pan_camera.tscn" id="4_1bvp3"]
 [ext_resource type="PackedScene" path="res://core/selection/selection_manager.tscn" id="5_iy4v0"]
+[ext_resource type="PackedScene" path="res://core/unit/t14_armata/t14_armata.tscn" id="6_7mycd"]
 
 [node name="Node2D" type="Node2D" unique_id=2086690703]
 
@@ -22,3 +23,6 @@ position = Vector2(1110, 519)
 [node name="SelectionManager" parent="." unique_id=145672822 instance=ExtResource("5_iy4v0")]
 camera_path = NodePath("../PanCamera")
 hud_path = NodePath("../HUD")
+
+[node name="T-14 Dummy" parent="." unique_id=2135934965 instance=ExtResource("6_7mycd")]
+position = Vector2(265, 225)

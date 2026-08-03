@@ -78,6 +78,10 @@ func _refresh() -> void:
 			if not is_instance_valid(node):
 				continue
 			var unit := node as Unit
+			# El panel es el inventario desplegado del jugador. Los grupos
+			# dicen de qué tipo es la unidad, no de quién es.
+			if not unit.is_player_controlled():
+				continue
 			if unit.squad != null:
 				if unit.squad in seen_squads:
 					continue

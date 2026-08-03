@@ -31,6 +31,10 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay. Mec�
 
 
 # PENDIENTES:
+- [ ] Como atacar a los enemigo?
+	- Con unidad seleccionada y click al enemigo.
+	- Por minimapa
+	- Desde el deslpiegue de una unidad aerea o terrestre?
 - [ ] Sistema de ataque de avión.
 	- Cada misil y cada bomba tendrá su mecánica... allí el reto
 - [x] Las armas disponibles en el layout para armar un avión tienen que venir de una lista de "disponibles" al igual que los aviones. el jugador debe ir desbloqueando armas.

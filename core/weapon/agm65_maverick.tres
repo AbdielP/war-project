@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="WeaponType" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="WeaponType" format=3 uid="uid://be3fm1vlu26vl"]
 
-[ext_resource type="Script" path="res://core/weapon/weapon_type.gd" id="1"]
-[ext_resource type="Texture2D" path="res://assets/art/sprites/agm65_maverick.tres" id="2"]
+[ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://b8qv2c2umn0wp" path="res://assets/art/sprites/agm65_maverick.tres" id="2"]
 
 [resource]
 script = ExtResource("1")

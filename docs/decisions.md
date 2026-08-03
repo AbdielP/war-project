@@ -23,6 +23,17 @@ Con una unidad propia seleccionada, click izquierdo (o tap) sobre un enemigo lo 
 
 Verificado en headless: los cuatro cruces de quién puede atacar a quién; click izquierdo sobre el enemigo fija objetivo sin cambiar la selección; el menú abre sólo sobre unidades ajenas y no sobre mapa vacío; una orden de movimiento cancela el ataque; al morir el objetivo el avión pasa a orbitar a 0 px de donde estaba en ese instante (con el enemigo a 506 px de ahí). Confirmado por el usuario en el editor: funciona bien.
 
+### El circuito de espera es para aviones sin órdenes, no un paso obligatorio del despegue
+Bug reportado: dar una orden de ataque mientras el avión seguía en cubierta marcaba el objetivo pero, al despegar, el avión se iba a dar vueltas al portaaviones y lo ignoraba.
+
+`start_flight()` llamaba siempre a `_orbit_around(portaaviones)`, que para `chase` antes de arrancar `orbit`. La orden sí se había registrado (`attack_target` quedaba puesto, por eso el enemigo salía marcado); lo que la pisaba era el propio despegue.
+
+**El circuito de espera es lo que hace un avión que *no tiene* órdenes.** Ejecutarlo incondicionalmente al soltar el avión trataba "recién despegado" como sinónimo de "sin órdenes", y no lo son: la cubierta tarda en soltarlo y el jugador puede haber decidido algo en ese rato. Ahora `start_flight()` mira si ya hay objetivo y, si lo hay, arranca persiguiéndolo.
+
+Aplica igual a las órdenes de **movimiento** dadas en cubierta, que tenían el mismo problema. Ahí no hizo falta reordenar nada: el destino ya está puesto en el piloto desde `orbit_at()`, sólo había que **no pisarlo**. `OrbitBehavior.has_pending_order()` (`_running and _approaching`) es lo que permite preguntarlo sin duplicar el punto ordenado en otra variable.
+
+Verificado en headless, los tres caminos: orden de ataque en cubierta → sale persiguiendo (`orbit` parado, destino a 0 px del enemigo); orden de movimiento en cubierta → sale hacia el punto (destino a 0 px del punto, `chase` parado); sin orden → circuito alrededor del portaaviones como siempre. Seguido a lo largo de 1200 frames, los dos primeros convergen: el que se movió entra en `arrive_radius` (39 px) y pasa a orbitar ahí; el atacante llega a 49 px y sigue persiguiendo.
+
 ### Recuadro de objetivo y aviso "Atacando: X": el estado es de la selección, no de la unidad
 El enemigo bajo ataque se marca reutilizando `SelectionIndicator` (mismo dibujo que la selección, color del bando de quien lo mira — un enemigo apuntado sale en rojo) y el HUD muestra `Atacando: <nombre>` sobre la barra de armas.
 

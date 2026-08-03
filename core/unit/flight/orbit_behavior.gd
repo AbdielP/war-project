@@ -77,6 +77,12 @@ func orbit_at(pos: Vector2) -> void:
 	set_process(true)
 
 
+## ¿Está yendo a un punto que ordenó el jugador? Sirve para que quien suelte al
+## avión de cubierta no le pise una orden que ya tenía.
+func has_pending_order() -> bool:
+	return _running and _approaching
+
+
 func stop() -> void:
 	_running = false
 	set_process(false)

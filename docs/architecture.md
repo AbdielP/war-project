@@ -354,7 +354,11 @@ Decide **a dónde** va cuando no hay órdenes: vueltas alrededor de un centro.
 | `pilot_path` | `../PlaneController` |
 
 **API:** `orbit_around(node)` (centro móvil, el barco), `orbit_at(pos)` (orden del
-jugador: va al punto y luego orbita ahí), `stop()`.
+jugador: va al punto y luego orbita ahí), `has_pending_order()`, `stop()`.
+
+`has_pending_order()` = está yendo a un punto que ordenó el jugador. Lo consulta
+`Av8bHarrier.start_flight()` para no pisar una orden dada mientras el avión estaba en
+cubierta — evita duplicar el punto ordenado en otra variable sólo para poder preguntarlo.
 
 **El óvalo no es un riel.** Se mantiene una fase propia (`_phase`) que avanza sola
 cada frame al ritmo al que vuela el avión, y el punto de esa fase sobre la elipse es
@@ -515,7 +519,7 @@ extends Unit
 `L2a`, `L2c`, `L3a`, `L3c` y sus simétricos `R`). `z_index = 10` en el raíz.
 
 **API:**
-- `start_flight(orbit_center, initial_speed)` — la cubierta le cede el control
+- `start_flight(orbit_center, initial_speed)` — la cubierta le cede el control. **Sólo entra al circuito de espera si no tiene órdenes**: si hay `attack_target` sale persiguiéndolo, y si `orbit.has_pending_order()` no toca nada (el destino ya está puesto en el piloto). El circuito es lo que hace un avión sin órdenes, y el jugador pudo darle una mientras estaba en cubierta
 - `receive_move_order(target)` — para `chase`, delega en `orbit.orbit_at(target)`
 - `receive_attack_order(target)` — para `orbit`, delega en `chase.pursue(target)`
 
@@ -822,6 +826,7 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [ ] Cadena de repliegue al agotarse un arma (necesita munición consumible, que no existe)
 - [ ] Elección de arma por distancia en combate aéreo (sistema de dogfight, sin planear)
 - [ ] Comportamiento del avión al llegar junto al objetivo — sin resolver a propósito, se decide cuando exista el disparo
+- [ ] Distinción arma aire-aire / aire-tierra: hoy cualquier arma se puede seleccionar contra cualquier objetivo (no se puede atacar un tanque con un Sidewinder)
 - [ ] Vuelo en formación (aviones del mismo escuadrón)
 - [ ] Animación del elevador (placeholder `elevator_cycle_time` ya existe)
 - [ ] Misiones funcionales: SEAD/CAP/CAS tienen UI, sin comportamiento de IA

@@ -15,13 +15,20 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay. Mec�
 3. F6 para correr solo la escena actual
 
 ## Controles (build actual)
-| Acción | PC |
-|--------|----|
-| Pan de cámara | Click izq + arrastre |
-| Seleccionar unidad | Click izq sobre unidad |
-| Deseleccionar | Escape / botón × |
-| Dar orden de movimiento | Click der, o click izq en espacio vacío con unidad seleccionada |
-| Centrar cámara en unidad | Click en card del panel superior |
+
+Un mismo gesto significa cosas distintas según lo que haya debajo — no hay modos ni
+gestos separados por plataforma.
+
+| Acción | PC | Táctil |
+|--------|----|--------|
+| Pan de cámara | Click izq + arrastre | Arrastre |
+| Seleccionar unidad | Click izq sobre unidad | Tap sobre unidad |
+| Deseleccionar | Escape / botón × | Botón × |
+| Dar orden de movimiento | Click der, o click izq en espacio vacío con unidad seleccionada | Tap en espacio vacío con unidad seleccionada |
+| **Atacar** | Click izq sobre un enemigo, con unidad propia seleccionada | Tap sobre un enemigo, con unidad propia seleccionada |
+| **Menú de unidad ajena** (atacar / info) | Click der sobre la unidad | Mantener pulsado sobre la unidad |
+| Elegir arma activa | Click en la barra inferior | Tap en la barra inferior |
+| Centrar cámara en unidad | Click en card del panel superior | Tap en card del panel superior |
 
 ## Documentación
 - `docs/GDD.md` — diseño del juego, mecánicas, unidades
@@ -32,11 +39,12 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay. Mec�
 
 # PENDIENTES:
 - [ ] Como atacar a los enemigo?
-	- Con unidad seleccionada y click al enemigo.
+	- [X] Con unidad seleccionada y click al enemigo.
 	- Por minimapa
 	- Desde el deslpiegue de una unidad aerea o terrestre?
 - [ ] Sistema de ataque de avión.
-	- Cada misil y cada bomba tendrá su mecánica... allí el reto
+	- [ ] Cada misil y cada bomba tendrá su mecánica... allí el reto
+	- [ ] Hacer distinción entre armas aereas y terrestres. no puedes atacar un tanque con un sidewinder
 - [x] Las armas disponibles en el layout para armar un avión tienen que venir de una lista de "disponibles" al igual que los aviones. el jugador debe ir desbloqueando armas.
 - No desplegar aviones si hay otro vuelo en pista. puede ir subiendo al elevador, eso es todo.
 - [ ] Limitar a 2 el vuelo en escuadrón?, Las unidades desplegadas como escuadron deben navegar/desplazarce siguiendo al lider.

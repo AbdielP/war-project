@@ -22,9 +22,18 @@ func _ready() -> void:
 
 
 ## El portaaviones cede el control cuando el avión ya está en el aire.
+##
+## El circuito de espera es lo que hace un avión SIN órdenes. Si le dieron una
+## mientras estaba en cubierta, al soltarlo hay que cumplirla: mandarlo a dar
+## vueltas al barco sería ignorarla.
 func start_flight(orbit_center: Node2D, initial_speed: float = -1.0) -> void:
 	pilot.enable(initial_speed)
-	_orbit_around(orbit_center)
+	if is_instance_valid(attack_target):
+		receive_attack_order(attack_target)
+	elif not orbit.has_pending_order():
+		# Si ya iba hacia un punto ordenado, el destino sigue puesto en el
+		# piloto: basta con no tocarlo, ahora que puede volar.
+		_orbit_around(orbit_center)
 
 
 func receive_move_order(target: Vector2) -> void:

@@ -7,6 +7,15 @@ extends Node2D
 @export var post_bow_distance: float = 80.0
 @export var climb_duration: float = 2.5
 
+## Escala a la que sale el avión de cubierta; sube hasta 1.0 al despegar para
+## simular que gana altura. En 1.0 el efecto queda apagado.
+##
+## Ojo con los valores fraccionarios: rompen el pixel art de los detalles
+## finos (el cuerpo de un AIM-9 mide 1px, a 0.7 no se puede dibujar y el
+## motor lo reparte entre dos columnas). Por eso está en 1.0 por defecto,
+## en línea con la regla de escala entera del proyecto.
+@export var spawn_scale: float = 1.0
+
 # Elevator1 → TP2 primero, luego TP1. Elevator2 → TP4 primero, luego TP3.
 const _ELEVATOR_SLOTS: Array = [[1, 0], [3, 2]]
 # Waypoint intermedio por slot: TP2 pasa por TP1, TP4 pasa por TP3. -1 = directo.
@@ -35,7 +44,8 @@ func _hand_over_control(unit: Node2D) -> void:
 		unit.start_flight(get_parent(), takeoff_speed)
 
 
-func request_deploy(scene: PackedScene, squad: Squad = null) -> bool:
+func request_deploy(scene: PackedScene, squad: Squad = null,
+		weapon_loadout: WeaponLoadout = null) -> bool:
 	var elev_idx: int = _elevator_idx % _elevators.size()
 	var slot := _next_slot_for_elevator(elev_idx)
 	if slot == -1:
@@ -51,6 +61,7 @@ func request_deploy(scene: PackedScene, squad: Squad = null) -> bool:
 		"spawn_pos": elevator.global_position,
 		"spawn_rot": elevator.global_rotation,
 		"squad": squad,
+		"weapon_loadout": weapon_loadout,
 	})
 	_process_queue(elev_idx)
 	return true
@@ -74,13 +85,15 @@ func _process_queue(elev_idx: int) -> void:
 	get_tree().current_scene.add_child(unit)
 	unit.global_position = job["spawn_pos"]
 	unit.global_rotation = job["spawn_rot"]
-	unit.scale = Vector2(0.7, 0.7)
+	unit.scale = Vector2.ONE * spawn_scale
 	var slot: int = job["slot"]
-	var squad: Squad = job["squad"]
-	if squad != null:
-		var u := unit as Unit
-		u.squad = squad
-		squad.add(u, slot)
+	var u := unit as Unit
+	if u != null:
+		u.set_weapon_loadout(job["weapon_loadout"])
+		var squad: Squad = job["squad"]
+		if squad != null:
+			u.squad = squad
+			squad.add(u, slot)
 	unit.tree_exited.connect(func() -> void:
 		_occupied[slot] = false
 		_units[slot] = null
@@ -169,11 +182,16 @@ func _launch_next(order: Array) -> void:
 	)
 
 
+## Sube la escala de `spawn_scale` a 1.0 en tres saltos. Si el avión ya sale
+## a 1.0 no hay nada que animar.
 func _scale_climb(unit: Node2D) -> void:
-	var steps: Array[float] = [0.8, 0.9, 1.0]
-	var interval: float = climb_duration / float(steps.size())
+	if is_equal_approx(spawn_scale, 1.0):
+		return
+	const STEPS := 3
+	var interval: float = climb_duration / float(STEPS)
 	var tw := unit.create_tween()
-	for s: float in steps:
+	for i in STEPS:
+		var s: float = lerpf(spawn_scale, 1.0, float(i + 1) / float(STEPS))
 		tw.tween_interval(interval)
 		tw.tween_callback(func() -> void:
 			if is_instance_valid(unit):

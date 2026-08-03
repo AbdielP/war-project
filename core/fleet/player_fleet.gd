@@ -1,7 +1,11 @@
 extends Node
 
+const _HarrierLoadouts := preload("res://core/unit/av8b_harrier/av8b_harrier_loadouts.gd")
+
 # Inventario de misión: qué unidades tiene cargadas cada barco.
 # Por ahora hardcodeado. El puerto lo llenará cuando exista.
+# `weapon_loadouts` son las configuraciones de armamento que ofrece esa
+# aeronave; las define cada modelo en su propia carpeta.
 var _loadouts: Dictionary = {
 	"LHD Wasp": [
 		{
@@ -9,6 +13,7 @@ var _loadouts: Dictionary = {
 			"scene": preload("res://core/unit/av8b_harrier/av8b_harrier.tscn"),
 			"total": 6,
 			"deployed": 0,
+			"weapon_loadouts": _HarrierLoadouts.build(),
 		}
 	]
 }

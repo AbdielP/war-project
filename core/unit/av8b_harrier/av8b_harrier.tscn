@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://b3c08xr25m8lk" path="res://core/unit/av8b_harrier/av8b_harrier.gd" id="4"]
 [ext_resource type="Script" uid="uid://c1s3dnfi6aan1" path="res://core/unit/flight/plane_controller.gd" id="5"]
 [ext_resource type="Script" uid="uid://d3s0jasumaqvv" path="res://core/unit/flight/orbit_behavior.gd" id="6"]
+[ext_resource type="Script" uid="uid://bim4jv2yqqy6a" path="res://core/weapon/hardpoint_rack.gd" id="7"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(28, 32)
@@ -30,3 +31,36 @@ release_deg = 20.0
 
 [node name="OrbitBehavior" type="Node" parent="." index="4" unique_id=1582074282]
 script = ExtResource("6")
+
+[node name="Hardpoints" type="Node2D" parent="." index="5" unique_id=1787461106]
+script = ExtResource("7")
+
+[node name="L1" type="Marker2D" parent="Hardpoints" index="0" unique_id=1824358855]
+position = Vector2(-15, -4)
+
+[node name="L2a" type="Marker2D" parent="Hardpoints" index="1" unique_id=1496681346]
+position = Vector2(-12, -2)
+
+[node name="L2c" type="Marker2D" parent="Hardpoints" index="2" unique_id=23834640]
+position = Vector2(-10, -2)
+
+[node name="L3a" type="Marker2D" parent="Hardpoints" index="3" unique_id=198166047]
+position = Vector2(-8, 2)
+
+[node name="L3c" type="Marker2D" parent="Hardpoints" index="4" unique_id=1410086896]
+position = Vector2(-6, 2)
+
+[node name="R3c" type="Marker2D" parent="Hardpoints" index="5" unique_id=1285170254]
+position = Vector2(6, 2)
+
+[node name="R3a" type="Marker2D" parent="Hardpoints" index="6" unique_id=1963995778]
+position = Vector2(8, 2)
+
+[node name="R2c" type="Marker2D" parent="Hardpoints" index="7" unique_id=1694305615]
+position = Vector2(11, -2)
+
+[node name="R2a" type="Marker2D" parent="Hardpoints" index="8" unique_id=1965320155]
+position = Vector2(13, -2)
+
+[node name="R1" type="Marker2D" parent="Hardpoints" index="9" unique_id=554350331]
+position = Vector2(15, -4)

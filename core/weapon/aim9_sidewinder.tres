@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="WeaponType" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://core/weapon/weapon_type.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/art/sprites/aim9_sidewinder.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "AIM-9 Sidewinder"
+icon = ExtResource("2")

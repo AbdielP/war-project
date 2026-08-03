@@ -2,6 +2,29 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-02
+
+### Armamento visible en el Harrier: el dato se queda, el dibujado está a prueba
+Se implementó armamento por misión: se elige un loadout en el hangar y el avión sale con las armas colgadas de puntos de anclaje (`Marker2D`) en las alas.
+
+**El dato funciona. El dibujado no convence** y puede echarse atrás sin tocar lo demás.
+
+Por qué no convence, medido sobre los PNG y no supuesto: las armas del atlas miden **10–14 px de largo** (el AIM-120, 14) y la cuerda del ala donde cuelgan mide **10 px**. Dibujadas encima sobresalen siempre; dibujadas debajo desaparecen, porque el ala es opaca justo ahí (opaca de la fila 19 a la 28 en la columna de `L2a`, y el arma ocupa de la 16 a la 27: sobreviven 3 px). Además los cuerpos de 1–3 px de ancho hierven al rotar el avión en vuelo.
+
+Se descartó por el camino que fuera un problema de capas o de escala. `z_index` hacía exactamente lo que debía. La escala fraccionaria del despegue (0.7 → 0.8 → 0.9) sí agravaba el pixel art y se dejó apagada tras un parámetro (`FlightDeck.spawn_scale`, 1.0 = apagado, 0.7 = comportamiento anterior), pero no era la causa.
+
+Opciones sobre la mesa, sin decidir: (1) redibujar las armas más cortas y gruesas (6–8 px de largo, 2–3 px de cuerpo) para que quepan dentro de la silueta del ala; (2) no dibujar armas y dejar el loadout sólo como dato de HUD y combate; (3) un sprite del Harrier por preset — viable si el daño se resuelve como capa superpuesta y no como variante del sprite base, porque las capas se suman y los sprites base se multiplican.
+
+**Cómo echar atrás sólo el dibujado** (el loadout sigue vivo como dato para HUD y combate):
+- borrar `core/weapon/hardpoint_rack.gd`
+- borrar los cinco `AtlasTexture` de `assets/art/sprites/`: `aim9_sidewinder.tres`, `aim120_amraam.tres`, `agm65_maverick.tres`, `mk82.tres`, `gbu54.tres`
+- borrar el nodo `Hardpoints` y sus `Marker2D` de `core/unit/av8b_harrier/av8b_harrier.tscn`
+- quitar de `Unit.set_weapon_loadout()` el bucle que busca el `HardpointRack` (la unidad sigue guardando su `weapon_loadout`)
+
+**Cómo echar atrás el sistema entero**, además de lo anterior: borrar la carpeta `core/weapon/` y `core/unit/av8b_harrier/av8b_harrier_loadouts.gd`, y revertir los retoques de `unit.gd`, `flight_deck.gd` (parámetro `weapon_loadout` de `request_deploy`), `player_fleet.gd` (clave `weapon_loadouts`) y `hangar_window.gd` (los botones de misión volverían a una lista fija).
+
+`assets/art/sprites/Jet_bombs_missiles.png` no se borra en ningún caso: sirve para iconos de HUD aunque no se dibujen armas en el avión.
+
 ## 2026-08-01 (4)
 
 ### El amague al virar era un `atan2` indeterminado en el centro del óvalo, no un parámetro mal puesto

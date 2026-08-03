@@ -4,33 +4,15 @@ const _COLOR_TEXT   := Color(0.6705882, 0.5803922, 0.4784314)
 const _COLOR_ACCENT := Color(0.56078434, 0.827451, 1.0)
 const _COLOR_MUTED  := Color(0.6705882, 0.5803922, 0.4784314, 0.4)
 const _COLOR_BG     := Color(0.19215686, 0.21176471, 0.21960784)
-const _MISSIONS := ["CAS / Antitanque", "Bombardeo", "Caza / Interceptor"]
 
-# loadout fijo por tipo de misión: se muestra debajo de los botones al elegir una.
-const _LOADOUTS := {
-	"CAS / Antitanque": [
-		{"name": "AGM-65 Maverick", "qty": 2},
-		{"name": "GBU-54 JDAM", "qty": 2},
-		{"name": "AIM-9 Sidewinder", "qty": 2},
-	],
-	"Bombardeo": [
-		{"name": "Mk-82 500lb", "qty": 6},
-		{"name": "AIM-9 Sidewinder", "qty": 2},
-	],
-	"Caza / Interceptor": [
-		{"name": "AIM-120 AMRAAM", "qty": 4},
-		{"name": "AIM-9 Sidewinder", "qty": 2},
-	],
-}
-
-var _dragging          := false
-var _drag_offset       := Vector2.ZERO
-var _ship              : Node2D   = null
-var _selected_entry    : Dictionary = {}
-var _selected_unit_btn : Button   = null
-var _quantity          := 1
-var _selected_mission  := ""
-var _mission_buttons   : Array[Button] = []
+var _dragging            := false
+var _drag_offset         := Vector2.ZERO
+var _ship                : Node2D        = null
+var _selected_entry      : Dictionary    = {}
+var _selected_unit_btn   : Button        = null
+var _quantity            := 1
+var _selected_loadout    : WeaponLoadout = null
+var _mission_buttons     : Array[Button] = []
 
 @onready var _title_bar   : HBoxContainer = $VBoxContainer/TitleBar
 @onready var _close_btn   : Button        = $VBoxContainer/TitleBar/CloseButton
@@ -58,7 +40,6 @@ func _ready() -> void:
 	_deploy_btn.add_theme_color_override("font_color", _COLOR_ACCENT)
 	for slot in _loadout_list.get_children():
 		_loadout_slots.append(slot as Label)
-	_build_mission_buttons()
 
 
 func open(ship: Node2D) -> void:
@@ -66,11 +47,10 @@ func open(ship: Node2D) -> void:
 	_selected_entry    = {}
 	_selected_unit_btn = null
 	_quantity          = 1
-	_selected_mission  = ""
 	_count_lbl.text    = "1"
 	_minus_btn.disabled = true
 	_plus_btn.disabled  = false
-	_update_mission_display()
+	_rebuild_mission_buttons()
 	_refresh_unit_list()
 	show()
 	move_to_front()
@@ -108,6 +88,8 @@ func _on_unit_selected(entry: Dictionary, btn: Button) -> void:
 	_selected_entry = entry
 	_quantity = 1
 	_update_quantity()
+	# Cada aeronave ofrece sus propias misiones: la fila se rehace al elegirla.
+	_rebuild_mission_buttons()
 
 
 # ── cantidad ─────────────────────────────────────────────────────────────────
@@ -133,31 +115,42 @@ func _update_quantity() -> void:
 
 # ── misión ───────────────────────────────────────────────────────────────────
 
-func _build_mission_buttons() -> void:
-	for mission in _MISSIONS:
+func _rebuild_mission_buttons() -> void:
+	for child in _mission_row.get_children():
+		_mission_row.remove_child(child)
+		child.queue_free()
+	_mission_buttons.clear()
+	_selected_loadout = null
+
+	for loadout: WeaponLoadout in _selected_entry.get("weapon_loadouts", []):
 		var btn := Button.new()
-		btn.text = mission
+		btn.text = tr(loadout.display_name)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_style_unit_btn(btn, false)
-		btn.pressed.connect(_on_mission_pressed.bind(mission))
+		btn.pressed.connect(_on_mission_pressed.bind(loadout, btn))
 		_mission_row.add_child(btn)
 		_mission_buttons.append(btn)
 
-
-func _on_mission_pressed(mission: String) -> void:
-	_selected_mission = mission
-	_update_mission_display()
+	_update_loadout_display()
 
 
-func _update_mission_display() -> void:
-	for btn in _mission_buttons:
-		_style_unit_btn(btn, btn.text == _selected_mission)
-	var weapons: Array = _LOADOUTS.get(_selected_mission, [])
+func _on_mission_pressed(loadout: WeaponLoadout, btn: Button) -> void:
+	_selected_loadout = loadout
+	for other in _mission_buttons:
+		_style_unit_btn(other, other == btn)
+	_update_loadout_display()
+
+
+## Lista el armamento del loadout elegido. Las cantidades salen del propio
+## loadout, no de una tabla aparte, así que siempre coinciden con lo que se
+## le cuelga al avión.
+func _update_loadout_display() -> void:
+	var mounts: Array = _selected_loadout.mounts if _selected_loadout != null else []
 	for i in _loadout_slots.size():
 		var slot := _loadout_slots[i]
-		if i < weapons.size():
-			var weapon: Dictionary = weapons[i]
-			slot.text = "%dx %s" % [weapon["qty"], weapon["name"]]
+		if i < mounts.size():
+			var mount: WeaponMount = mounts[i]
+			slot.text = "%dx %s" % [mount.total(), tr(mount.weapon.display_name)]
 		else:
 			slot.text = ""
 
@@ -165,14 +158,14 @@ func _update_mission_display() -> void:
 # ── despliegue ───────────────────────────────────────────────────────────────
 
 func _on_deploy() -> void:
-	if _selected_entry.is_empty() or _selected_mission.is_empty():
+	if _selected_entry.is_empty() or _selected_loadout == null:
 		return
 	var flight_deck: Node = _ship.get_node("FlightDeck")
 	var squad: Squad = Squad.new() if _quantity > 1 else null
 	for i in _quantity:
 		if not PlayerFleet.try_deploy(_selected_entry):
 			break
-		if not flight_deck.request_deploy(_selected_entry["scene"], squad):
+		if not flight_deck.request_deploy(_selected_entry["scene"], squad, _selected_loadout):
 			PlayerFleet.recall(_selected_entry)
 			break
 	_selected_entry    = {}
@@ -180,6 +173,7 @@ func _on_deploy() -> void:
 	_quantity          = 1
 	_update_quantity()
 	_refresh_unit_list()
+	_rebuild_mission_buttons()
 
 
 # ── drag ─────────────────────────────────────────────────────────────────────

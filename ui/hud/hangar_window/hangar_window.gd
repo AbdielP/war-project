@@ -4,7 +4,24 @@ const _COLOR_TEXT   := Color(0.6705882, 0.5803922, 0.4784314)
 const _COLOR_ACCENT := Color(0.56078434, 0.827451, 1.0)
 const _COLOR_MUTED  := Color(0.6705882, 0.5803922, 0.4784314, 0.4)
 const _COLOR_BG     := Color(0.19215686, 0.21176471, 0.21960784)
-const _MISSIONS     := ["SEAD", "CAP", "CAS"]
+const _MISSIONS := ["CAS / Antitanque", "Bombardeo", "Caza / Interceptor"]
+
+# loadout fijo por tipo de misión: se muestra debajo de los botones al elegir una.
+const _LOADOUTS := {
+	"CAS / Antitanque": [
+		{"name": "AGM-65 Maverick", "qty": 2},
+		{"name": "GBU-54 JDAM", "qty": 2},
+		{"name": "AIM-9 Sidewinder", "qty": 2},
+	],
+	"Bombardeo": [
+		{"name": "Mk-82 500lb", "qty": 6},
+		{"name": "AIM-9 Sidewinder", "qty": 2},
+	],
+	"Caza / Interceptor": [
+		{"name": "AIM-120 AMRAAM", "qty": 4},
+		{"name": "AIM-9 Sidewinder", "qty": 2},
+	],
+}
 
 var _dragging          := false
 var _drag_offset       := Vector2.ZERO
@@ -21,8 +38,11 @@ var _mission_buttons   : Array[Button] = []
 @onready var _minus_btn   : Button        = $VBoxContainer/QuantityRow/MinusBtn
 @onready var _count_lbl   : Label         = $VBoxContainer/QuantityRow/CountLabel
 @onready var _plus_btn    : Button        = $VBoxContainer/QuantityRow/PlusBtn
-@onready var _mission_row : HBoxContainer = $VBoxContainer/MissionRow
-@onready var _deploy_btn  : Button        = $VBoxContainer/DeployBtn
+@onready var _mission_row  : HBoxContainer = $VBoxContainer/MissionRow
+@onready var _loadout_list : VBoxContainer = $VBoxContainer/LoadoutList
+@onready var _deploy_btn   : Button        = $VBoxContainer/DeployBtn
+
+var _loadout_slots: Array[Label] = []
 
 
 func _ready() -> void:
@@ -36,6 +56,8 @@ func _ready() -> void:
 	_style_flat(_plus_btn)
 	_style_flat(_deploy_btn)
 	_deploy_btn.add_theme_color_override("font_color", _COLOR_ACCENT)
+	for slot in _loadout_list.get_children():
+		_loadout_slots.append(slot as Label)
 	_build_mission_buttons()
 
 
@@ -116,7 +138,7 @@ func _build_mission_buttons() -> void:
 		var btn := Button.new()
 		btn.text = mission
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_style_flat(btn)
+		_style_unit_btn(btn, false)
 		btn.pressed.connect(_on_mission_pressed.bind(mission))
 		_mission_row.add_child(btn)
 		_mission_buttons.append(btn)
@@ -129,8 +151,15 @@ func _on_mission_pressed(mission: String) -> void:
 
 func _update_mission_display() -> void:
 	for btn in _mission_buttons:
-		var c := _COLOR_ACCENT if btn.text == _selected_mission else _COLOR_TEXT
-		btn.add_theme_color_override("font_color", c)
+		_style_unit_btn(btn, btn.text == _selected_mission)
+	var weapons: Array = _LOADOUTS.get(_selected_mission, [])
+	for i in _loadout_slots.size():
+		var slot := _loadout_slots[i]
+		if i < weapons.size():
+			var weapon: Dictionary = weapons[i]
+			slot.text = "%dx %s" % [weapon["qty"], weapon["name"]]
+		else:
+			slot.text = ""
 
 
 # ── despliegue ───────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://ui/hud/actions_panel/actions_panel.tscn" id="4"]
 [ext_resource type="PackedScene" path="res://ui/hud/hangar_window/hangar_window.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://ui/hud/deployed_panel/deployed_panel.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://ui/hud/weapon_bar/weapon_bar.tscn" id="7"]
 
 [node name="HUD" type="CanvasLayer" unique_id=1219806315]
 script = ExtResource("0")
@@ -40,6 +41,8 @@ offset_left = 0.0
 offset_top = 0.0
 offset_right = 640.0
 offset_bottom = 24.0
+
+[node name="WeaponBar" parent="." instance=ExtResource("7")]
 
 [node name="DeselButton" type="Button" parent="."]
 visible = false

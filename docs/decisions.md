@@ -2,6 +2,38 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-03 (3)
+
+### Barra de armas: el arma activa vive en la unidad, no en el HUD
+Al seleccionar un avión aparece abajo al centro una fila de botones cuadrados (34×34), uno por arma, para elegir con cuál ataca. El no seleccionado se apaga a alpha 0.45 (`WeaponBar._DIM_ALPHA`).
+
+**El estado vive en `Unit.active_weapon`**, no en el panel: el HUD se destruye y se reconstruye con cada selección, y el arma elegida tiene que sobrevivir a eso. `WeaponBar` sólo muestra y emite `weapon_selected`; no sabe qué es disparar.
+
+**Qué armas salen** — `Unit.get_weapons()`: el cañón primero y después un botón por *tipo* colgado. Un tipo montado en dos estaciones da un botón, no dos (el Caza/Interceptor lleva AIM-120 en central e interna).
+
+**El cañón es un `UnitType.cannon` exportado**, no un caso especial del HUD. Va siempre y no ocupa estación, así que no puede salir del loadout; ponerlo como `preload` dentro de la barra habría metido un arma del Harrier dentro del HUD. El Wasp lo deja vacío y por eso no le sale barra.
+
+**Nombre corto en campo propio (`WeaponType.short_name`)** en vez de recortar `display_name` por el primer espacio. En el botón caben ~6 caracteres; recortar funciona con los cinco nombres actuales por casualidad, y un arma futura saldría cortada donde no toca.
+
+Sin badge de cantidad: no hay consumo de munición todavía, así que el número nunca bajaría.
+
+**El botón no recorta el texto (`clip_text` desactivado):** si un nombre no cabe, el botón se ensancha. Se probó al revés primero — a `font_size` 8 y botón de 32×32 quedaban 28 px útiles y "AGM-65" ocupa 31, así que salía en pantalla como "AGM-6" y no lo detectó nadie hasta verlo. Un botón que se deforma avisa; uno que corta en silencio, no. El tamaño actual (34×34, `font_size` 7) se eligió midiendo: el nombre más ancho ocupa 27 px sobre 30 útiles.
+
+Verificado en headless: `[CAÑÓN, AGM-65, GBU-54, AIM-9]` para CAS, `[CAÑÓN, Mk-82, AIM-9]` para Bombardeo, `[CAÑÓN, AIM120, AIM-9]` para Caza (AIM-120 sin duplicar); el Wasp da lista vacía y la barra se oculta; pulsar un botón cambia `active_weapon`. Fila de 136 px con cuatro armas en un hueco de 320.
+
+### El arma por defecto la decide el loadout, no la barra
+Un avión armado con AGM-65 no debe salir seleccionando el cañón. `WeaponLoadout.get_default_weapon()` dice con cuál sale y `Unit.get_default_weapon()` cae al cañón sólo si va desarmado.
+
+`default_weapon` es un tercer parámetro **opcional** de `WeaponLoadout`: vacío = la primera montada. No se rellenó en ninguno de los tres presets porque en los tres la principal ya es la primera declarada (AGM-65, Mk-82, AIM-120; el AIM-9 de autodefensa va último).
+
+**Por qué un campo y no sólo la convención "la primera":** el orden de declaración ya gobierna el orden de los botones y el de la lista del hangar. Reordenar por estética cambiaría el arma por defecto sin que nadie se entere — el mismo tipo de fallo silencioso que el texto recortado de arriba. El campo lo desacopla; que sea opcional evita tener que rellenarlo donde el orden ya es el correcto.
+
+**Salvaguarda:** si `default_weapon` apunta a un arma que no está montada (cambiaron los mounts y nadie actualizó el campo), cae a la primera en vez de dejar al avión con un arma que no lleva.
+
+Fuera de alcance por ahora, y por la misma razón en los dos casos — la mecánica de la que dependen no existe: cadena de repliegue cuando un arma se agota (necesita munición consumible) y elección por distancia en combate aéreo (necesita el sistema de dogfight, que no está ni planeado).
+
+Verificado en headless: CAS → AGM-65, Bombardeo → Mk-82, Caza → AIM-120, sin armamento → CAÑÓN; un default explícito distinto del primero se respeta; uno que apunta a un arma no montada cae a la primera.
+
 ## 2026-08-03 (2)
 
 ### El armamento del hangar sale de una lista de disponibles, no de una lista fija

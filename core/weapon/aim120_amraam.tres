@@ -6,4 +6,5 @@
 [resource]
 script = ExtResource("1")
 display_name = "AIM-120 AMRAAM"
+short_name = "AIM120"
 icon = ExtResource("2")

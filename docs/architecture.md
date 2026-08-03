@@ -37,7 +37,21 @@ Base de toda unidad seleccionable. Tiene `CollisionShape2D` + `SelectionIndicato
 | `set_selected(bool)` | Muestra/oculta SelectionIndicator |
 | `get_display_name()` | unit_name si existe, sino tr(unit_type.display_name) |
 | `get_actions()` | PackedStringArray desde unit_type.actions |
+| `set_weapon_loadout(loadout)` | Arma la unidad y la dibuja si tiene `HardpointRack` |
+| `get_weapons()` | `Array[WeaponType]`: cañón + un arma por tipo colgado, sin repetir |
+| `get_default_weapon()` | La principal del loadout; el cañón sólo si va desarmada |
+| `set_active_weapon(w)` | Con qué ataca. Emite `active_weapon_changed` |
 | `receive_move_order(Vector2)` | **Virtual vacío** — sobreescribir en subclases |
+
+Estado de armamento: `weapon_loadout` (qué lleva) y `active_weapon` (con qué ataca). El
+arma activa vive aquí y no en el HUD porque el panel se reconstruye en cada selección.
+Sale puesta la principal del loadout — desde `_ready()` para unidades del mapa, y desde
+`set_weapon_loadout()` al armarlas, porque el arma que hubiera puede no estar en el
+armamento nuevo.
+
+| Señal | Cuándo |
+|-------|--------|
+| `active_weapon_changed(weapon)` | Cambió el arma seleccionada |
 
 Señales opcionales (no en la base, implementadas por subclases que las necesiten):
 - `order_fulfilled` — la unidad llegó al destino
@@ -64,6 +78,7 @@ Resource `.tres` compartido entre todas las instancias del mismo tipo (ej. `lhd_
 |--------|------|
 | `display_name` | String (clave de traducción) |
 | `actions` | PackedStringArray (ej. `["Hangar"]`) |
+| `cannon` | WeaponType — arma fija, va siempre y no ocupa estación. Vacío = sin cañón |
 
 ---
 
@@ -282,7 +297,11 @@ icono no se desincronizan entre misiones.
 | Export | Tipo |
 |--------|------|
 | `display_name` | String |
+| `short_name` | String — para los botones de `WeaponBar`, donde caben ~6 caracteres |
 | `icon` | Texture2D (`AtlasTexture` sobre `Jet_bombs_missiles.png`) |
+
+`get_short_name()` cae al nombre largo si el corto está vacío. El cañón
+(`gau12_cannon.tres`) es un `WeaponType` más, sin icono: no cuelga de ninguna estación.
 
 **`WeaponMount`** (`weapon_mount.gd`, `extends RefCounted`) — un tipo de arma sobre un
 grupo de estaciones simétricas. `weapon: WeaponType`, `stations: PackedStringArray`
@@ -293,9 +312,16 @@ todas las estaciones del grupo.
 aunque en pantalla quepa una sola.
 
 **`WeaponLoadout`** (`weapon_loadout.gd`, `extends RefCounted`) — el armamento completo
-de una salida: `display_name` + `mounts: Array[WeaponMount]`. Única fuente de verdad —
-el HUD saca de aquí el resumen y el `HardpointRack` los sprites, así que no hay dos
-cifras que puedan discrepar.
+de una salida: `display_name` + `mounts: Array[WeaponMount]` + `default_weapon`. Única
+fuente de verdad — el HUD saca de aquí el resumen y el `HardpointRack` los sprites, así
+que no hay dos cifras que puedan discrepar.
+
+`get_default_weapon()` → con qué arma sale seleccionado el avión. `default_weapon` es
+**opcional** (tercer parámetro del `_init`): vacío = la primera montada. Existe para que
+la principal no dependa del orden de declaración, que también manda el orden de los
+botones y el de la lista del hangar. Si apunta a un arma que no está montada, cae a la
+primera. Ninguno de los tres presets del Harrier lo rellena: en los tres la principal ya
+es la primera.
 
 **`HardpointRack`** (`hardpoint_rack.gd`, `extends Node2D`) — lo único que sabe dibujar
 armas. No conoce misiones ni unidades: recibe un `WeaponLoadout` y lo representa
@@ -441,6 +467,31 @@ Un cuadrito (`Button`, 30×14px) por unidad suelta o por **escuadrón**: si `uni
 
 ---
 
+### `WeaponBar` — `ui/hud/weapon_bar/weapon_bar.gd`
+```
+extends HBoxContainer
+```
+Fila de botones cuadrados (34×34, `font_size` 7) abajo al centro (`x` 160–480, `y` 344–376
+— hueco libre entre el minimapa y los paneles de la derecha). Uno por arma de la unidad
+seleccionada, para elegir con cuál ataca.
+
+**Sin `clip_text`:** un nombre que no cabe ensancha el botón en vez de perder letras en
+silencio. El tamaño salió de medir con `Font.get_string_size()` — el nombre más ancho
+("AGM-65") ocupa 27 px sobre 30 útiles.
+
+| Método / Señal | Descripción |
+|---|---|
+| `show_weapons(unit)` | Reconstruye los botones. Se oculta sola si la unidad no tiene armas |
+| `set_active(weapon)` | Repinta sin reconstruir |
+| `clear()` | Vacía y oculta |
+| `weapon_selected(weapon)` | El jugador pulsó un arma |
+
+El activo va a alpha 1.0, el resto a `_DIM_ALPHA` (0.45). **No guarda estado**: la fuente
+de verdad es `Unit.active_weapon`, porque la barra se reconstruye en cada selección.
+`HUD` hace de intermediario — recibe `weapon_selected` y llama a `Unit.set_active_weapon()`.
+
+---
+
 ### `EventLog` — `ui/hud/event_log/event_log.gd`
 ```
 extends PanelContainer
@@ -560,8 +611,14 @@ Si usas `_draw()` en un nodo que puede ocultarse/mostrarse, llamar `queue_redraw
 - [x] Escuadrones agrupan en un solo cuadrito con badge `xN` en `DeployedPanel`, click enfoca al líder
 - [x] Armamento por misión: se elige loadout en el hangar y el avión sale con las armas colgadas de los `Marker2D` de las alas (`HardpointRack`)
 - [x] Capas de dibujado por `z_index`: la capa la lleva el raíz de la unidad, las piezas de dentro usan 0/1/2
+- [x] Las configuraciones de armamento del hangar salen de `PlayerFleet._available_weapons`; las no armables no se ofrecen
+- [x] `WeaponBar`: elegir arma activa al seleccionar un avión (cañón siempre presente)
+- [x] Arma por defecto según el loadout — un avión armado no sale seleccionando el cañón
 
 ### Pendiente
+- [ ] Disparar: `Unit.active_weapon` ya dice con qué, falta el ataque en sí
+- [ ] Cadena de repliegue al agotarse un arma (necesita munición consumible, que no existe)
+- [ ] Elección de arma por distancia en combate aéreo (sistema de dogfight, sin planear)
 - [ ] Vuelo en formación (aviones del mismo escuadrón)
 - [ ] Animación del elevador (placeholder `elevator_cycle_time` ya existe)
 - [ ] Misiones funcionales: SEAD/CAP/CAS tienen UI, sin comportamiento de IA

@@ -6,4 +6,5 @@
 [resource]
 script = ExtResource("1")
 display_name = "AIM-9 Sidewinder"
+short_name = "AIM-9"
 icon = ExtResource("2")

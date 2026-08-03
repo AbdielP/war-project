@@ -6,4 +6,5 @@
 [resource]
 script = ExtResource("1")
 display_name = "GBU-54 JDAM"
+short_name = "GBU-54"
 icon = ExtResource("2")

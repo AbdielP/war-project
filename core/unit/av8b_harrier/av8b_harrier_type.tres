@@ -1,8 +1,10 @@
-[gd_resource type="Resource" script_class="UnitType" format=3]
+[gd_resource type="Resource" script_class="UnitType" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://core/unit/unit_type.gd" id="1"]
+[ext_resource type="Resource" path="res://core/weapon/gau12_cannon.tres" id="2"]
 
 [resource]
 script = ExtResource("1")
 display_name = "AV-8B Harrier II"
 actions = []
+cannon = ExtResource("2")

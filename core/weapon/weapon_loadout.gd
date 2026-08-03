@@ -8,11 +8,33 @@ class_name WeaponLoadout
 
 var display_name: String
 var mounts: Array[WeaponMount] = []
+## Arma con la que sale seleccionado el avión. Opcional: vacío = la primera
+## montada. Sirve para que la principal no dependa del orden de declaración,
+## que también manda el orden de los botones y de la lista del hangar.
+var default_weapon: WeaponType = null
 
 
-func _init(p_display_name: String = "", p_mounts: Array = []) -> void:
+func _init(p_display_name: String = "", p_mounts: Array = [],
+		p_default_weapon: WeaponType = null) -> void:
 	display_name = p_display_name
 	mounts.assign(p_mounts)
+	default_weapon = p_default_weapon
+
+
+## Con qué arma sale el avión. Nunca el cañón si lleva algo colgado: quien
+## arma un jet con AGM-65 no quiere que ataque a tiros.
+##
+## Si `default_weapon` apunta a un arma que no está montada — porque cambiaron
+## los mounts y nadie actualizó el campo — cae a la primera en vez de dejar al
+## avión con un arma que no lleva.
+func get_default_weapon() -> WeaponType:
+	if mounts.is_empty():
+		return null
+	if default_weapon != null:
+		for mount in mounts:
+			if mount.weapon == default_weapon:
+				return default_weapon
+	return mounts[0].weapon
 
 
 ## ¿Se puede armar esta configuración con las armas que tiene el jugador?

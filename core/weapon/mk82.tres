@@ -6,4 +6,5 @@
 [resource]
 script = ExtResource("1")
 display_name = "Mk-82 500lb"
+short_name = "Mk-82"
 icon = ExtResource("2")

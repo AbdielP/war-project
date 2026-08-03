@@ -6,4 +6,5 @@
 [resource]
 script = ExtResource("1")
 display_name = "AGM-65 Maverick"
+short_name = "AGM-65"
 icon = ExtResource("2")

@@ -30,6 +30,20 @@ gestos separados por plataforma.
 | Elegir arma activa | Click en la barra inferior | Tap en la barra inferior |
 | Centrar cámara en unidad | Click en card del panel superior | Tap en card del panel superior |
 
+## Dónde se ajusta el combate
+
+Todo por inspector, sin tocar código. Está separado a propósito: lo que el arma **hace**
+va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil.
+
+| Qué | Dónde |
+|-----|-------|
+| Alcance, arco de tiro, daño, radio de explosión, andanada, recarga | `core/weapon/<arma>.tres` |
+| Velocidad, radio de giro, combustible, espoleta del misil | `core/weapon/agm65_missile.tscn` (nodo raíz) |
+| Velocidad de crucero y viraje del avión | nodo `PlaneController` de `av8b_harrier.tscn` |
+| Velocidad de ataque y distancias de las pasadas | nodo `AttackRun` de `av8b_harrier.tscn` |
+| Circuito de espera (tamaño del óvalo) | nodo `OrbitBehavior` de `av8b_harrier.tscn` |
+| Resistencia de cada unidad | `<unidad>_type.tres` → `max_health` |
+
 ## Documentación
 - `docs/GDD.md` — diseño del juego, mecánicas, unidades
 - `docs/decisions.md` — bitácora de decisiones técnicas
@@ -38,6 +52,13 @@ gestos separados por plataforma.
 
 
 # PENDIENTES:
+- Bugs y mejoras lanzamiento de AGM-65
+	- El avión sale de la pantalla intentando atacar, eso no debería ocurrir, debe maniobrar dentro del juego...
+		- Siempre falla el misil al tratar de re tomar el ataque? parece que si.
+	- Sigue intentando atacar aún cuando se quedó sin arma. supongo que es por que no tenemos mas logicas de armas aún.
+- [ ] El contador de impacto debería ser visible siempre sobre la unidad? de ese modo puedo saber si está siendo atacado mientras uso otra unidad.
+- [ ] Pausar y play
+- [ ] Diferentes zooms
 - [ ] Como atacar a los enemigo?
 	- [X] Con unidad seleccionada y click al enemigo.
 	- Por minimapa

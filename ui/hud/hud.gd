@@ -14,6 +14,11 @@ signal attack_requested(target: Unit)
 @onready var _weapon_bar: HBoxContainer = $WeaponBar
 @onready var _target_menu: PanelContainer = $TargetMenu
 @onready var _attack_label: Label = $AttackLabel
+@onready var _impact_timer: Label = $ImpactTimer
+
+## Dónde se pone la cuenta atrás respecto al objetivo, en píxeles de pantalla:
+## arriba y un poco a la derecha, para no taparlo ni pisar su recuadro.
+const _IMPACT_OFFSET := Vector2(10.0, -14.0)
 
 var _current_unit: Unit = null
 
@@ -32,6 +37,25 @@ func _ready() -> void:
 	_desel_btn.pressed.connect(func() -> void: deselect_requested.emit())
 
 
+## La cuenta atrás vive con la selección, igual que el recuadro del objetivo:
+## es lo que está disparando la unidad que miras, no un adorno del mapa. Si
+## deseleccionas, desaparece; al volver a seleccionarla, vuelve.
+func _process(_delta: float) -> void:
+	var target := _current_unit.attack_target if is_instance_valid(_current_unit) else null
+	if not is_instance_valid(target):
+		_impact_timer.hide()
+		return
+	var eta := _current_unit.get_time_to_impact()
+	if eta < 0.0:
+		# No hay nada en el aire: entre disparo y disparo no se cuenta nada.
+		_impact_timer.hide()
+		return
+	_impact_timer.text = "%.1f" % eta
+	_impact_timer.position = target.get_global_transform_with_canvas().origin \
+		+ _IMPACT_OFFSET
+	_impact_timer.show()
+
+
 func show_selected_unit(unit: Unit) -> void:
 	_disconnect_current()
 	_current_unit = unit
@@ -43,6 +67,7 @@ func show_selected_unit(unit: Unit) -> void:
 	# El objetivo puede cambiar sin tocar la selección — si muere, por ejemplo —,
 	# así que el aviso se engancha a la unidad en vez de refrescarse a mano.
 	unit.attack_target_changed.connect(_on_attack_target_changed)
+	unit.ammo_changed.connect(_on_ammo_changed)
 	_on_attack_target_changed(unit.attack_target)
 	_desel_btn.show()
 
@@ -66,6 +91,7 @@ func clear_selected_unit() -> void:
 	_actions_panel.clear()
 	_weapon_bar.clear()
 	_attack_label.hide()
+	_impact_timer.hide()
 	_desel_btn.hide()
 
 
@@ -77,11 +103,17 @@ func _on_attack_target_changed(target: Unit) -> void:
 		_attack_label.hide()
 
 
+func _on_ammo_changed(_weapon: WeaponType, _remaining: int) -> void:
+	_weapon_bar.refresh_ammo()
+
+
 func _disconnect_current() -> void:
 	if not is_instance_valid(_current_unit):
 		return
 	if _current_unit.attack_target_changed.is_connected(_on_attack_target_changed):
 		_current_unit.attack_target_changed.disconnect(_on_attack_target_changed)
+	if _current_unit.ammo_changed.is_connected(_on_ammo_changed):
+		_current_unit.ammo_changed.disconnect(_on_ammo_changed)
 
 
 func _on_action_pressed(action_name: String) -> void:

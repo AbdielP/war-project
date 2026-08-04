@@ -1,6 +1,11 @@
 extends Area2D
 class_name Unit
 
+## Grupo al que pertenece toda unidad, del bando que sea. Quien tenga que
+## barrer el mapa — una explosión buscando a quién alcanzar — mira aquí en vez
+## de recorrer el árbol entero.
+const GROUP := &"units"
+
 @export var unit_type: UnitType
 @export var unit_name: String = ""
 ## Bando. En la instancia y no en el `UnitType` a propósito: el mismo modelo
@@ -8,12 +13,20 @@ class_name Unit
 @export var team: Team.Side = Team.Side.PLAYER
 
 signal active_weapon_changed(weapon: WeaponType)
+## Se gastó munición de un arma. `remaining` es lo que queda, -1 si es
+## ilimitada. Lo escucha la barra de armas para no tener que preguntar cada
+## frame por algo que cambia de tarde en tarde.
+signal ammo_changed(weapon: WeaponType, remaining: int)
 signal attack_target_changed(target: Unit)
+## Se emite antes de quitarla del mapa, para que quien la estuviera siguiendo
+## se entere mientras todavía existe.
+signal died(unit: Unit)
 
 var squad: Squad = null  # null = unidad suelta, sin escuadrón
 var weapon_loadout: WeaponLoadout = null  # null = unidad desarmada
 var active_weapon: WeaponType = null  # con qué ataca ahora mismo
 var attack_target: Unit = null  # a quién ataca; null = a nadie
+var health: float = 0.0
 
 @onready var _selection_indicator: Node2D = $SelectionIndicator
 
@@ -22,6 +35,8 @@ var _targeted := false
 
 
 func _ready() -> void:
+	add_to_group(GROUP)
+	health = get_max_health()
 	_selection_indicator.visible = false
 	_selection_indicator.color = Team.color(team)
 	# Una unidad puesta a mano en el mapa nunca pasa por set_weapon_loadout,
@@ -59,6 +74,48 @@ func is_hostile_to(other: Unit) -> bool:
 	return other != null and Team.are_hostile(team, other.team)
 
 
+## En qué medio se mueve: decide qué armas pueden atacarla.
+func get_domain() -> UnitType.Domain:
+	return unit_type.domain if unit_type else UnitType.Domain.SURFACE
+
+
+func get_max_health() -> float:
+	return unit_type.max_health if unit_type else 100.0
+
+
+func is_alive() -> bool:
+	return health > 0.0
+
+
+## Encajar daño. Morir la borra del mapa; quien la tuviera apuntada se entera
+## por `died` o porque su referencia deja de ser válida.
+func take_damage(amount: float) -> void:
+	if amount <= 0.0 or not is_alive():
+		return
+	health = maxf(0.0, health - amount)
+	if health <= 0.0:
+		died.emit(self)
+		queue_free()
+
+
+## Hacia dónde mira, en radianes de mundo. Es de dónde sale el armamento y
+## hacia dónde apunta al lanzarlo. Por defecto la rotación del nodo; las
+## unidades cuyo arte no apunta hacia adelante lo corrigen aquí.
+func get_facing() -> float:
+	return global_rotation
+
+
+## Lo que se lleva el armamento al soltarse. Una unidad quieta no le da nada.
+func get_velocity() -> Vector2:
+	return Vector2.ZERO
+
+
+## Segundos hasta que impacte lo que tenga disparado, o -1 si no tiene nada en
+## el aire. Las unidades armadas lo delegan en su sistema de armas.
+func get_time_to_impact() -> float:
+	return -1.0
+
+
 func get_display_name() -> String:
 	if unit_name != "":
 		return unit_name
@@ -71,14 +128,44 @@ func get_actions() -> PackedStringArray:
 
 ## Arma la unidad. Las unidades sin HardpointRack lo guardan igual: llevar
 ## armamento y saber dibujarlo son cosas distintas.
+##
+## Se queda con una COPIA: lo que llega es la configuración del catálogo, que
+## comparten todas las unidades del mismo modelo. Si no se clonara, gastar un
+## misil aquí se lo quitaría a los demás aviones de la flota y no volvería
+## nunca. Clonar aquí y no en quien llama es lo que hace que no se pueda
+## olvidar.
 func set_weapon_loadout(value: WeaponLoadout) -> void:
-	weapon_loadout = value
+	weapon_loadout = value.clone() if value != null else null
 	for child in get_children():
 		var rack := child as HardpointRack
 		if rack != null:
-			rack.apply_loadout(value)
+			rack.apply_loadout(weapon_loadout)
 	# El arma activa que hubiera puede no estar en el armamento nuevo.
 	set_active_weapon(get_default_weapon())
+
+
+## Cuántas quedan de esa arma. El cañón no cuelga de ninguna estación: por
+## ahora no se gasta.
+func get_ammo(weapon: WeaponType) -> int:
+	if weapon == null:
+		return 0
+	if unit_type != null and weapon == unit_type.cannon:
+		return -1  # sin límite
+	return weapon_loadout.ammo_of(weapon) if weapon_loadout != null else 0
+
+
+func has_ammo(weapon: WeaponType) -> bool:
+	return get_ammo(weapon) != 0
+
+
+## Descuenta una. Devuelve si había con qué disparar.
+func spend_ammo(weapon: WeaponType) -> bool:
+	if get_ammo(weapon) == -1:
+		return true
+	if weapon_loadout == null or not weapon_loadout.spend(weapon):
+		return false
+	ammo_changed.emit(weapon, get_ammo(weapon))
+	return true
 
 
 ## Con qué arma sale seleccionada la unidad: la principal de su armamento y,

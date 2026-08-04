@@ -2,9 +2,18 @@
 
 [ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://b8qv2c2umn0wp" path="res://assets/art/sprites/agm65_maverick.tres" id="2"]
+[ext_resource type="PackedScene" path="res://core/weapon/agm65_missile.tscn" id="3"]
 
 [resource]
 script = ExtResource("1")
 display_name = "AGM-65 Maverick"
 short_name = "AGM-65"
 icon = ExtResource("2")
+targets = 2
+min_range = 300.0
+max_range = 1000.0
+firing_arc_deg = 25.0
+damage = 120.0
+blast_radius = 20.0
+projectile_scene = ExtResource("3")
+reload_time = 1.5

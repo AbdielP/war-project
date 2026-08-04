@@ -129,10 +129,7 @@ func _issue_move_order(target: Vector2) -> void:
 	# marcador, y parecía que había obedecido.
 	if not _selected_unit.is_player_controlled():
 		return
-	# Desconectar señal anterior si existía
-	if _order_unit != null and is_instance_valid(_order_unit) and _order_unit.has_signal("order_fulfilled"):
-		if _order_unit.order_fulfilled.is_connected(_on_order_fulfilled):
-			_order_unit.order_fulfilled.disconnect(_on_order_fulfilled)
+	_forget_order_unit()
 	_order_unit = _selected_unit
 	_selected_unit.receive_move_order(target)
 	_move_marker.global_position = target
@@ -148,9 +145,27 @@ func _issue_attack_order(target: Unit) -> void:
 	if not _can_attack(target):
 		return
 	_selected_unit.receive_attack_order(target)
+	# Atacar cancela la orden de movimiento, así que su marcador ya no señala
+	# nada: dejarlo puesto haría creer que el avión sigue yendo a ese punto.
+	_clear_move_order()
 
 
 func _on_order_fulfilled() -> void:
 	# El marcador se queda donde está: sirve de referencia para ver dónde
 	# se pidió el punto y cómo lo voló el avión.
 	_order_unit = null
+
+
+## Retira la orden de movimiento en curso: el marcador y el aviso de que se
+## cumplió. Lo llama quien la sustituye por otra cosa.
+func _clear_move_order() -> void:
+	_forget_order_unit()
+	_order_unit = null
+	_move_marker.hide()
+
+
+func _forget_order_unit() -> void:
+	if _order_unit != null and is_instance_valid(_order_unit) \
+			and _order_unit.has_signal("order_fulfilled"):
+		if _order_unit.order_fulfilled.is_connected(_on_order_fulfilled):
+			_order_unit.order_fulfilled.disconnect(_on_order_fulfilled)

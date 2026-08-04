@@ -6,3 +6,5 @@
 script = ExtResource("1")
 display_name = "T-14 Armata"
 actions = []
+domain = 1
+max_health = 100.0

@@ -12,10 +12,20 @@ class_name HardpointRack
 ##
 ## Si una estación lleva más armas de las que tiene markers se dibujan solo
 ## las que caben: a 48x48 la cantidad exacta no se lee, el tipo de carga sí.
+## Por eso el rack NO es el contador de munición — de eso sabe el loadout —,
+## sino de dónde sale cada arma y qué se ve todavía colgado.
+
+const _WEAPON_META := &"weapon"
+
+var _loadout: WeaponLoadout = null
+## Lado del último lanzamiento: -1 izquierda, +1 derecha, 0 aún ninguno.
+var _last_side: int = 0
 
 
 func apply_loadout(loadout: WeaponLoadout) -> void:
 	clear_weapons()
+	_loadout = loadout
+	_last_side = 0
 	if loadout == null:
 		return
 	for mount in loadout.mounts:
@@ -25,9 +35,25 @@ func apply_loadout(loadout: WeaponLoadout) -> void:
 
 func clear_weapons() -> void:
 	for marker in _all_markers():
-		for sprite in marker.get_children():
-			marker.remove_child(sprite)
-			sprite.queue_free()
+		_empty(marker)
+
+
+## Suelta un arma de ese tipo y devuelve el punto del que salió, o null si no
+## cuelga de ninguna parte. Alterna alas: se vacía de fuera hacia dentro y de
+## un lado al otro, que es como se descarga un avión de verdad y además evita
+## que quede visiblemente descompensado a mitad de ataque.
+##
+## Descolgar el sprite y descontar munición son cosas distintas a propósito:
+## una estación puede llevar más armas de las que caben dibujadas, así que el
+## avión sigue teniendo con qué tirar aunque el ala ya se vea vacía.
+func release(weapon: WeaponType) -> Marker2D:
+	var loaded := _markers_loaded_with(weapon)
+	if not loaded.is_empty():
+		var marker := _pick_alternating(loaded)
+		_empty(marker)
+		return marker
+	var stations := _markers_for(weapon)
+	return _pick_alternating(stations) if not stations.is_empty() else null
 
 
 func _mount_on_station(mount: WeaponMount, station: String) -> void:
@@ -45,7 +71,54 @@ func _mount_on_station(mount: WeaponMount, station: String) -> void:
 func _make_sprite(weapon: WeaponType) -> Sprite2D:
 	var sprite := Sprite2D.new()
 	sprite.texture = weapon.icon
+	# Marcado con su tipo para poder descolgar el arma correcta más tarde: el
+	# sprite es lo único que queda de ella una vez montada.
+	sprite.set_meta(_WEAPON_META, weapon)
 	return sprite
+
+
+func _empty(marker: Marker2D) -> void:
+	for sprite in marker.get_children():
+		marker.remove_child(sprite)
+		sprite.queue_free()
+
+
+## De los candidatos, uno del lado contrario al último lanzamiento y, dentro
+## de ese lado, el más externo. Si no queda nada de ese lado vale cualquiera.
+func _pick_alternating(markers: Array[Marker2D]) -> Marker2D:
+	var wanted := -_last_side
+	var best: Marker2D = null
+	var fallback: Marker2D = null
+	for marker in markers:
+		if fallback == null or absf(marker.position.x) > absf(fallback.position.x):
+			fallback = marker
+		if wanted != 0 and int(signf(marker.position.x)) == wanted:
+			if best == null or absf(marker.position.x) > absf(best.position.x):
+				best = marker
+	var pick: Marker2D = best if best != null else fallback
+	_last_side = int(signf(pick.position.x))
+	return pick
+
+
+func _markers_loaded_with(weapon: WeaponType) -> Array[Marker2D]:
+	var markers: Array[Marker2D] = []
+	for marker in _all_markers():
+		for child in marker.get_children():
+			if child.get_meta(_WEAPON_META, null) == weapon:
+				markers.append(marker)
+				break
+	return markers
+
+
+## Todos los markers de las estaciones que llevan ese arma, cuelgue o no algo
+## de ellos ahora mismo.
+func _markers_for(weapon: WeaponType) -> Array[Marker2D]:
+	var markers: Array[Marker2D] = []
+	if _loadout == null:
+		return markers
+	for station in _loadout.stations_of(weapon):
+		markers.append_array(_markers_of(station))
+	return markers
 
 
 func _all_markers() -> Array[Marker2D]:

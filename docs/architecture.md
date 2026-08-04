@@ -41,13 +41,36 @@ Base de toda unidad seleccionable. Tiene `CollisionShape2D` + `SelectionIndicato
 | `is_hostile_to(other)` | ¿Se disparan? Delega en `Team.are_hostile()` |
 | `get_display_name()` | unit_name si existe, sino tr(unit_type.display_name) |
 | `get_actions()` | PackedStringArray desde unit_type.actions |
-| `set_weapon_loadout(loadout)` | Arma la unidad y la dibuja si tiene `HardpointRack` |
+| `set_weapon_loadout(loadout)` | Arma la unidad **con una copia** (ver abajo) y la dibuja si tiene `HardpointRack` |
 | `get_weapons()` | `Array[WeaponType]`: cañón + un arma por tipo colgado, sin repetir |
 | `get_default_weapon()` | La principal del loadout; el cañón sólo si va desarmada |
 | `set_active_weapon(w)` | Con qué ataca. Emite `active_weapon_changed` |
+| `get_ammo(w)` / `has_ammo(w)` | Lo que queda. **−1 = ilimitada** (el cañón no cuelga de estación) |
+| `spend_ammo(w)` | Descuenta una y emite `ammo_changed`. `false` si no había |
+| `get_domain()` | `UnitType.Domain` — en qué medio se mueve; decide qué armas pueden atacarla |
+| `get_max_health()` / `is_alive()` | Resistencia |
+| `take_damage(float)` | Encaja daño. Al llegar a 0 emite `died` y `queue_free()` |
+| `get_facing()` | **Virtual** — rumbo real en radianes. De ahí sale el armamento. Por defecto `global_rotation` |
+| `get_velocity()` | **Virtual** — lo que se lleva el arma al soltarse. Por defecto cero |
+| `get_time_to_impact()` | **Virtual** — segundos hasta que llegue lo que tenga disparado, −1 si nada |
 | `receive_move_order(Vector2)` | **Virtual** — cancela `attack_target` (`super()`) y las subclases resuelven el cómo |
 | `receive_attack_order(Unit)` | **Virtual** — llama `set_attack_target()`; las subclases resuelven cómo acercarse y disparar |
 | `set_attack_target(Unit)` | Único sitio que toca `attack_target`. Ver nota sobre objetos liberados abajo |
+
+| Señal | Cuándo |
+|-------|--------|
+| `active_weapon_changed(weapon)` | Cambió el arma seleccionada |
+| `attack_target_changed(target)` | Cambió a quién ataca (`null` = a nadie) |
+| `ammo_changed(weapon, remaining)` | Se gastó munición. Lo escucha `WeaponBar` |
+| `died(unit)` | Antes de quitarla del mapa, mientras todavía existe |
+
+Toda unidad se añade al grupo `Unit.GROUP` (`&"units"`) en `_ready()`: es donde mira una
+explosión para saber a quién alcanza, en vez de recorrer el árbol entero.
+
+**El loadout se clona al armar.** Lo que llega es el catálogo de `PlayerFleet`, compartido
+por todas las unidades del mismo modelo; la munición es estado de *esa* salida. Clonar
+aquí y no en quien llama es lo que hace que no se pueda olvidar — sin esto, gastar un
+misil se lo quitaría a los demás aviones de la flota y no volvería nunca.
 
 Estado de armamento: `weapon_loadout` (qué lleva) y `active_weapon` (con qué ataca). El
 arma activa vive aquí y no en el HUD porque el panel se reconstruye en cada selección.
@@ -125,6 +148,11 @@ Resource `.tres` compartido entre todas las instancias del mismo tipo (ej. `lhd_
 | `display_name` | String (clave de traducción) |
 | `actions` | PackedStringArray (ej. `["Hangar"]`) |
 | `cannon` | WeaponType — arma fija, va siempre y no ocupa estación. Vacío = sin cañón |
+| `domain` | `Domain` (AIR / SURFACE) — en qué medio se mueve. Decide qué armas pueden atacarla |
+| `max_health` | float — Harrier 60, T-14 100. Un AGM-65 pega 120 |
+
+El enum `Domain` se declara aquí y las firmas del propio archivo lo escriben
+`UnitType.Domain` — ver el patrón "Enum de una clase con `class_name`".
 
 ---
 
@@ -208,11 +236,14 @@ misma trampa resuelta con la misma regla.
 que basta un solo `if`. Reasigna `_order_unit`, llama `receive_move_order`, planta el
 `_move_marker` y conecta `order_fulfilled` con `CONNECT_ONE_SHOT` si la unidad la tiene.
 
-**`_issue_attack_order(target)`:** vuelve a comprobar `_can_attack` (ver arriba) y llama
-`receive_attack_order`.
+**`_issue_attack_order(target)`:** vuelve a comprobar `_can_attack` (ver arriba), llama
+`receive_attack_order` y **retira el marcador de destino** (`_clear_move_order()`):
+atacar cancela la orden de movimiento, así que su marcador ya no señala nada y dejarlo
+puesto hace creer que el avión sigue yendo a ese punto.
 
-**`_on_order_fulfilled`:** limpia `_order_unit`. El marcador **no se oculta** — se queda
-donde se pidió el punto, como referencia de vuelo.
+**`_on_order_fulfilled`:** limpia `_order_unit`. Al **cumplirse** la orden el marcador
+**no se oculta** — se queda donde se pidió el punto, como referencia de vuelo. Sólo
+desaparece si otra orden lo sustituye.
 
 ---
 
@@ -320,7 +351,12 @@ Mueve al nodo padre desde `_physics_process`. Arranca inactivo.
 | Navegación | `arrive_radius` (40), `flyby_capture`, `sprite_offset_deg` (−90) |
 | Alabeo | `bank_sprite_path` (opcional, `AnimatedSprite2D` de 5 frames) |
 
-**API:** `enable(initial_speed)`, `disable()`, `set_target(pos)`, `update_target(pos)`, `clear_target()`, `current_turn_rate()`, `min_turn_radius()`.
+**API:** `enable(initial_speed)`, `disable()`, `set_target(pos)`, `update_target(pos)`, `clear_target()`, `set_speed_limit(v)`, `clear_speed_limit()`, `current_turn_rate()`, `min_turn_radius()`.
+
+**`speed_limit`** es un techo temporal (0 = sin límite) que nunca baja de `min_speed` —
+un avión no puede pararse. El piloto sólo obedece: quién y cuándo lo pone es de quien
+manda al avión (hoy `AttackRunBehavior`, que frena al entrar en alcance). Se limpia solo
+en `enable()` y `disable()`.
 
 `set_target` replantea el viraje desde cero; `update_target` corrige el punto
 sin soltar el compromiso en curso — para objetivos que se mueven.
@@ -383,27 +419,47 @@ completo y en un barrido de 16 órdenes.
 menor que el radio de curvatura del óvalo (`semi_x²/semi_y` en el punto más cerrado).
 Si el avión es demasiado rápido para el óvalo, vuela por fuera.
 
-#### `ChaseBehavior` — `chase_behavior.gd`
-Decide **a dónde** va cuando persigue a alguien: detrás del objetivo, corrigiendo el
-rumbo mientras éste se mueve. **Hermano de `OrbitBehavior`**, no una rama dentro de él —
-los dos le dan puntos móviles al mismo `PlaneController`, y por eso nunca deben procesar
-a la vez; quien recibe la orden (`Av8bHarrier`) es quien para uno al arrancar el otro.
-No dispara ni sabe de armas: sólo lleva el avión hasta el objetivo.
+#### `AttackRunBehavior` — `attack_run_behavior.gd`
+Decide **a dónde** va cuando ataca a alguien. Sustituyó a `ChaseBehavior` (perseguir sin
+más): un avión armado no se pega al blanco, hace pasadas. **Hermano de `OrbitBehavior`**,
+no una rama dentro de él — los dos le dan puntos móviles al mismo `PlaneController`, y
+por eso nunca deben procesar a la vez; quien recibe la orden (`Av8bHarrier`) es quien
+para uno al arrancar el otro.
+
+**Quien manda aquí es el arma**, pero este nodo **no sabe de armas**: recibe la
+envolvente ya resuelta. Ciclo de dos fases:
+
+| Fase | Qué hace | Cuándo cambia |
+|------|----------|---------------|
+| `INGRESS` | Encara el blanco, corrigiendo el punto cada frame | Al llegar a `min_range × break_off_margin`, o al disparar (`break_off()`) |
+| `EGRESS` | Se aleja recto hacia un punto de fuga fijado al romper | Al alcanzar la distancia de reencare |
 
 | Señal | Cuándo |
 |-------|--------|
 | `target_lost` | El objetivo dejó de ser válido (murió). Se apaga a sí mismo **antes** de emitirla, para que quien escuche pueda darle otra orden al avión sin que este nodo se la pise en el frame siguiente |
 
-| Export | Default |
-|--------|---------|
-| `pilot_path` | `../PlaneController` |
+| Export | Default | Uso |
+|--------|---------|-----|
+| `attack_speed` | 90 | Velocidad mientras está dentro del alcance. El piloto nunca baja de su `min_speed`; lo brusco del frenado es su `acceleration` |
+| `break_off_margin` | 1.2 | Corta la pasada ese % antes del alcance mínimo |
+| `reengage_fraction` | 0.85 | Fracción del alcance máximo a la que vuelve a encarar |
+| `separation_gain` | 1.15 | Separación mínima al romper, relativa a **dónde** rompió |
+| `egress_overshoot` | 1.3 | Cuánto más allá del reencare apunta el punto de fuga |
+| `pilot_path` | `../PlaneController` | |
 
-**API:** `pursue(target: Unit)`, `stop()`.
+**API:** `engage(target, min_range, max_range)`, `set_envelope(min, max)`, `break_off()`, `stop()`.
 
-`pursue()` usa `set_target()` del piloto (no `update_target()`): es un destino nuevo, así
-que el avión tiene que replantear desde cero hacia qué lado vira. Mientras persigue,
-cada frame llama `update_target(target.global_position)` — corrige el punto sin
-replantear el viraje ya comprometido, igual que `OrbitBehavior` con el óvalo.
+`engage()` y cada reencare usan `set_target()` del piloto (destino nuevo, replantea el
+viraje desde cero); dentro de INGRESS se corrige con `update_target()` sin soltar el
+compromiso, igual que `OrbitBehavior` con el óvalo.
+
+**`separation_gain` existe por un bug real:** romper justo en el borde del alcance máximo
+no servía de nada, porque la condición de reencarar ya estaba cumplida en el mismo frame
+y el avión seguía metiéndose. La separación tiene que ser relativa a dónde se rompió, no
+sólo al alcance del arma.
+
+**`max_range` a 0** (unidad sin arma) = se comporta como el viejo perseguir: va derecho,
+que es lo único sensato sin envolvente que respetar.
 
 ---
 
@@ -417,27 +473,49 @@ arma. Existe un `.tres` por tipo (`aim9_sidewinder`, `aim120_amraam`, `agm65_mav
 `mk82`, `gbu54`) y los loadouts lo referencian en vez de copiarlo, así el nombre y el
 icono no se desincronizan entre misiones.
 
-| Export | Tipo |
-|--------|------|
-| `display_name` | String |
-| `short_name` | String — para los botones de `WeaponBar`, donde caben ~6 caracteres |
-| `icon` | Texture2D (`AtlasTexture` sobre `Jet_bombs_missiles.png`) |
+| Grupo | Export | Uso |
+|-------|--------|-----|
+| — | `display_name` | String |
+| — | `short_name` | Para los botones de `WeaponBar`, donde caben ~6 caracteres |
+| — | `icon` | Texture2D (`AtlasTexture` sobre `Jet_bombs_missiles.png`) |
+| Objetivos | `targets` | Flags Aire / Superficie. Contra qué sirve |
+| Alcance | `min_range`, `max_range` | Envolvente de tiro. Debajo del mínimo el arma aún no se estabilizó; encima del máximo se queda sin combustible |
+| Alcance | `firing_arc_deg` | Cuánto puede estar el blanco fuera del morro para poder tirar |
+| Daño | `damage`, `blast_radius` | 0 de radio = sólo daña lo que toca |
+| Lanzamiento | `projectile_scene` | Qué se instancia al disparar |
+| Lanzamiento | `salvo_size` | 1 = de una en una; **0 = todo lo que quede** |
+| Lanzamiento | `salvo_spread` | Radio de dispersión del punto de apuntado de cada arma de la andanada |
+| Lanzamiento | `reload_time` | Segundos entre andanadas |
 
-`get_short_name()` cae al nombre largo si el corto está vacío. El cañón
-(`gau12_cannon.tres`) es un `WeaponType` más, sin icono: no cuelga de ninguna estación.
+`get_short_name()` cae al nombre largo si el corto está vacío.
+`can_engage_domain(domain)` e `in_range(distance)` responden las dos preguntas que hace
+`WeaponSystem` antes de disparar. El cañón (`gau12_cannon.tres`) es un `WeaponType` más,
+sin icono ni `projectile_scene`: no cuelga de ninguna estación y aún no dispara nada.
+
+**Las cifras de combate están aquí y las de vuelo en la escena del proyectil.** Así la
+misma escena de misil sirve para dos armas con pegada distinta, y la cifra que se
+enseñaría en el hangar es exactamente la que se aplica. Valores del AGM-65: superficie,
+300–1000 px, arco 25°, daño 120, radio 20, de uno en uno, recarga 1,5 s.
 
 **`WeaponMount`** (`weapon_mount.gd`, `extends RefCounted`) — un tipo de arma sobre un
 grupo de estaciones simétricas. `weapon: WeaponType`, `stations: PackedStringArray`
-(ids como `"L2"`, `"R2"` — no nombres de marker), `per_station: int`. `total()` suma
-todas las estaciones del grupo.
+(ids como `"L2"`, `"R2"` — no nombres de marker), `per_station: int`, `remaining: int`.
+`total()` suma todas las estaciones del grupo; `spend()` descuenta una; `clone()` da una
+copia cargada al completo.
 
 `per_station` es **dato de munición, no de dibujo**: una estación con 3 Mk-82 lleva 3
-aunque en pantalla quepa una sola.
+aunque en pantalla quepa una sola. `remaining` es estado de **una salida concreta**, no
+del catálogo — por eso los loadouts se clonan antes de colgarlos de un avión.
 
 **`WeaponLoadout`** (`weapon_loadout.gd`, `extends RefCounted`) — el armamento completo
 de una salida: `display_name` + `mounts: Array[WeaponMount]` + `default_weapon`. Única
 fuente de verdad — el HUD saca de aquí el resumen y el `HardpointRack` los sprites, así
 que no hay dos cifras que puedan discrepar.
+
+**El mismo objeto hace de dos cosas según quién lo tenga:** en `PlayerFleet` es un
+CATÁLOGO —qué configuraciones existen— y en un avión es su carga real con la munición
+que le queda. Son incompatibles, así que `Unit.set_weapon_loadout()` guarda un `clone()`.
+`ammo_of(w)`, `spend(w)` y `stations_of(w)` completan la API de munición.
 
 `get_default_weapon()` → con qué arma sale seleccionado el avión. `default_weapon` es
 **opcional** (tercer parámetro del `_init`): vacío = la primera montada. Existe para que
@@ -454,6 +532,15 @@ colgando `Sprite2D` de los `Marker2D` hijos.
 |--------|-------------|
 | `apply_loadout(loadout)` | Limpia y vuelve a colgar todo. `null` = desarmado |
 | `clear_weapons()` | Borra los sprites colgados |
+| `release(weapon)` | Descuelga una y devuelve el `Marker2D` del que salió, o `null` |
+
+`release()` **alterna alas** y se vacía de fuera hacia dentro: como se descarga un avión
+de verdad, y para que no quede visiblemente descompensado a mitad de ataque. Cada sprite
+lleva su `WeaponType` en un `set_meta`, que es lo único que queda del arma una vez
+montada. Si ya no hay sprite que descolgar —la estación llevaba más de las que caben
+dibujadas— devuelve igualmente un marker de esa estación: **descolgar el sprite y
+descontar munición son cosas distintas**, y el avión sigue teniendo con qué tirar aunque
+el ala se vea vacía.
 
 El nombre del marker empieza por el id de su estación — `L2a`, `L2b`, `L2c` son la
 estación `L2`. **Mover, añadir o borrar markers en la escena cambia lo que se dibuja
@@ -489,6 +576,88 @@ las armas del Harrier (10) se ven sobre la cubierta del Wasp (1) mientras rueda.
 ala donde cuelgan mide 10 px, así que sobresalen de la silueta. Medido, no supuesto.
 Ver `docs/decisions.md` (2026-08-02) para las opciones de arte.
 
+#### `Projectile` — `projectile.gd`
+```
+extends Node2D   class_name Projectile
+```
+Lo que sale del arma, sea lo que sea. Aquí está sólo lo que **todos** comparten: de
+dónde salieron, a qué apuntan y qué pasa al explotar. Cómo vuelan lo pone cada subclase.
+
+| Miembro | Descripción |
+|---------|-------------|
+| `launch(shooter, muzzle, at, weapon, aim_offset)` | **Virtual.** Las subclases llaman `super()` y arrancan su vuelo |
+| `detonate()` | Reparte daño, emite `detonated(where)` y se libera |
+| `time_to_impact()` | Segundos al ritmo actual, −1 si no se puede saber |
+| `get_speed()` | **Virtual** — px/s. Cada tipo sabe la suya |
+| `direct_hit_radius` | Export. Por debajo, daño completo |
+
+`muzzle` es la estación del ala, no el centro del avión. `aim_offset` desvía el punto de
+impacto: es lo que convierte una andanada en un área batida. `_aim_point` guarda el
+último sitio donde se vio al blanco — si muere a mitad de vuelo el proyectil no se
+entera y sigue hasta ahí.
+
+**El daño en área no distingue bandos** —una explosión no lo hace—, salvo a quien
+disparó: sale hacia adelante y nunca debería alcanzarse, pero si la geometría se tuerce,
+un avión suicidándose con su propia arma se lee como un bug y no como fuego amigo. Cae
+linealmente de `damage` en el centro a 0 en `blast_radius`.
+
+#### `GuidedMissile` — `guided_missile.gd` (`extends Projectile`)
+Misil contra un blanco ya designado — el `attack_target` de la unidad. Dispara y olvida.
+Escena: `agm65_missile.tscn` (`z_index` 9: por debajo del avión, que va en 10, y por
+encima del suelo y los tanques).
+
+Cuatro fases, y el orden importa para que se lea como un misil y no como una bala
+teledirigida: **separación** (cae del ala sin motor, con la inercia del avión) →
+**ignición** → **crucero guiado** (proporcional) → **sin combustible** (recto, frenando).
+
+| Grupo | Exports |
+|-------|---------|
+| Separación | `separation_time` (0.25), `launch_speed` (40), `separation_drag` |
+| Vuelo | `cruise_speed` (300), `acceleration`, `boost_time`, `min_turn_radius` (90), `nav_gain` (3.5), `fuel_time` (2.5), `coast_drag`, `max_lifetime` |
+| Estabilización | `wobble_amount_deg`, `wobble_hz`, `wobble_decay` |
+| Espoleta | `proximity_radius` (12) |
+| Arte | `sprite_offset_deg` (−90) |
+
+**El giro se limita por RADIO, no por grados por segundo.** Es la diferencia entre un
+misil y un misil invencible: cuanto más rápido va, más ancho vira, así que existe una
+geometría en la que no llega. En grados/s pasaría lo contrario — a más velocidad, giros
+más cerrados — y no habría forma de escapársele.
+
+**Espoleta por máximo acercamiento:** detona cuando la distancia deja de bajar y empieza
+a subir, estando dentro de `proximity_radius`. Así existen los roces en vez de matar
+siempre que llegue cerca.
+
+| Señal | Para qué |
+|-------|----------|
+| `motor_ignited` | Sprite de fuego, estela de humo |
+| `fuel_spent` | Apagar la estela |
+| `detonated(where)` | Explosión (heredada de `Projectile`) |
+
+Los enganches de efectos existen; **no hay arte de explosión, humo, sombra ni caída**.
+
+#### `WeaponSystem` — `weapon_system.gd`
+```
+extends Node   class_name WeaponSystem
+```
+Decide **cuándo** se dispara. Tercer hermano de `OrbitBehavior` y `AttackRunBehavior`:
+ellos llevan el avión hasta el blanco, éste comprueba si desde aquí se puede tirar. No
+decide a quién se ataca (eso es la orden, y vive en `Unit`) ni cómo vuela lo que dispara.
+
+| Miembro | Descripción |
+|---------|-------------|
+| `can_fire_at(target)` | Arma válida contra ese dominio, munición, distancia y ángulo |
+| `time_to_impact()` | La primera de sus armas en llegar, −1 si no tiene nada volando |
+| `set_active(bool)` | Encender/apagar. Arranca encendido |
+| `fired(weapon)` | Señal. La escucha el vuelo para romper el ataque |
+| `rack_path` | Export, `../Hardpoints` |
+
+**No dispara mientras tenga algo suyo en el aire.** De ahí sale solo el "si no muere,
+lanza el otro": se lanza, se espera a que explote, y si el blanco sigue vivo sale el
+siguiente. Nadie escribió "reevaluar tras el impacto".
+
+**No comprueba hostilidad**: el portero de a-quién-se-ataca es `SelectionManager` /
+`Unit.receive_attack_order`. Ver "Un solo portero por regla".
+
 ---
 
 ### `T-14 Armata` — `core/unit/t14_armata/`
@@ -506,7 +675,9 @@ hasta que tenga comportamiento**.
 ### `AV-8B Harrier II` — `core/unit/av8b_harrier/`
 
 **`av8b_harrier.gd`:** sólo identidad y ruteo de órdenes. No pilota. Arbitra cuál de los
-dos comportamientos de vuelo manda — `orbit` y `chase` nunca procesan a la vez.
+dos comportamientos de vuelo manda — `orbit` y `attack` nunca procesan a la vez — y
+**traduce el arma activa a la envolvente de tiro** que el vuelo debe respetar: el
+comportamiento no sabe de armas y el arma no sabe de vuelo.
 ```
 extends Unit
 ```
@@ -515,24 +686,33 @@ extends Unit
 | `order_fulfilled` | Llegó al punto ordenado (reenvía `OrbitBehavior.center_reached`) |
 
 **Escena:** `Sprite2D`, `CollisionShape2D`, `SelectionIndicator`, `PlaneController`,
-`OrbitBehavior`, `ChaseBehavior`, `Hardpoints` (`HardpointRack` con 10 `Marker2D`: `L1`,
-`L2a`, `L2c`, `L3a`, `L3c` y sus simétricos `R`). `z_index = 10` en el raíz.
+`OrbitBehavior`, `AttackRun` (`AttackRunBehavior`), `WeaponSystem`, `Hardpoints`
+(`HardpointRack` con 10 `Marker2D`: `L1`, `L2a`, `L2c`, `L3a`, `L3c` y sus simétricos
+`R`). `z_index = 10` en el raíz.
 
 **API:**
-- `start_flight(orbit_center, initial_speed)` — la cubierta le cede el control. **Sólo entra al circuito de espera si no tiene órdenes**: si hay `attack_target` sale persiguiéndolo, y si `orbit.has_pending_order()` no toca nada (el destino ya está puesto en el piloto). El circuito es lo que hace un avión sin órdenes, y el jugador pudo darle una mientras estaba en cubierta
-- `receive_move_order(target)` — para `chase`, delega en `orbit.orbit_at(target)`
-- `receive_attack_order(target)` — para `orbit`, delega en `chase.pursue(target)`
+- `start_flight(orbit_center, initial_speed)` — la cubierta le cede el control y enciende el armamento. **Sólo entra al circuito de espera si no tiene órdenes**: si hay `attack_target` sale a por él, y si `orbit.has_pending_order()` no toca nada (el destino ya está puesto en el piloto). El circuito es lo que hace un avión sin órdenes, y el jugador pudo darle una mientras estaba en cubierta
+- `receive_move_order(target)` — para `attack`, delega en `orbit.orbit_at(target)`
+- `receive_attack_order(target)` — para `orbit`, delega en `attack.engage(target, min, max)`
+- `get_facing()` / `get_velocity()` — el rumbo **real** del piloto, no la rotación del nodo: el arte apunta a +Y y el armamento heredaría el desfase, saliendo disparado de lado
+- `get_time_to_impact()` — delega en `weapons`
 
-**`_on_target_lost()`** (conectado a `chase.target_lost`): el objetivo murió en pleno
+**Armamento apagado en cubierta:** un avión que ya tiene la orden no dispara desde el
+barco. Lo enciende `start_flight()`.
+
+**Disparar rompe el ataque:** `weapons.fired` → `attack.break_off()`. Y
+`active_weapon_changed` → `attack.set_envelope(...)`, porque cambiar de arma en pleno
+ataque cambia a qué distancia hay que volar.
+
+**`_on_target_lost()`** (conectado a `attack.target_lost`): el objetivo murió en pleno
 vuelo. El avión no puede pararse en seco, así que orbita **donde llegó**
 (`orbit.orbit_at(global_position)`), no donde estaba el enemigo — seguir volando hasta un
 punto vacío se vería como que no se enteró. No hace falta guardar esa posición aparte:
-`ChaseBehavior` avisa *antes* de dejar de procesar, así que `global_position` en ese
+el comportamiento avisa *antes* de dejar de procesar, así que `global_position` en ese
 instante ya es "aquí estoy ahora".
 
-No hay comportamiento definido para "cuando el avión llega junto al objetivo": con
-lógica de disparo de verdad, nunca llega — dispara antes o se acerca sólo lo justo para
-cañón/arma corta. Se deja sin resolver a propósito hasta que exista esa lógica.
+**Sin munición sigue haciendo pasadas** sobre el blanco, sin disparar. Pendiente decidir
+qué debería hacer.
 
 ---
 
@@ -556,6 +736,17 @@ API:
 `_on_attack_target_changed(target)` mantiene el `AttackLabel` ("Atacando: <nombre>") en
 sincronía con la unidad seleccionada — enganchado a su señal y no refrescado a mano,
 porque el objetivo puede cambiar sin que la selección cambie (el enemigo murió).
+`_on_ammo_changed(...)` hace lo propio con la barra de armas.
+
+**`ImpactTimer` — cuenta atrás de impacto.** `Label` rojo (`font_size` 7) que se coloca
+sobre el objetivo, 10 px a la derecha y 14 arriba, con `get_global_transform_with_canvas()`.
+Se refresca en `_process` preguntando `Unit.get_time_to_impact()`.
+
+**Vive con la selección**, igual que el recuadro del objetivo: es lo que está disparando
+la unidad que miras, no un adorno del mapa. Se va al deseleccionar y vuelve al
+reseleccionar. Sin nada en el aire (entre disparo y disparo) no muestra nada. Es una
+estimación honesta —distancia entre velocidad actual—, no un cronómetro: si el arma aún
+acelera o el blanco maniobra, la cifra se corrige sola.
 
 Ruteo de acciones en `_on_action_pressed(name)`:
 ```gdscript
@@ -640,12 +831,23 @@ silencio. El tamaño salió de medir con `Font.get_string_size()` — el nombre 
 |---|---|
 | `show_weapons(unit)` | Reconstruye los botones. Se oculta sola si la unidad no tiene armas |
 | `set_active(weapon)` | Repinta sin reconstruir |
+| `refresh_ammo()` | Repinta al gastarse munición |
 | `clear()` | Vacía y oculta |
 | `weapon_selected(weapon)` | El jugador pulsó un arma |
 
-El activo va a alpha 1.0, el resto a `_DIM_ALPHA` (0.45). **No guarda estado**: la fuente
-de verdad es `Unit.active_weapon`, porque la barra se reconstruye en cada selección.
-`HUD` hace de intermediario — recibe `weapon_selected` y llama a `Unit.set_active_weapon()`.
+Tres estados, para distinguir de un vistazo "no elegida" de "no disponible": activo a
+alpha 1.0, no seleccionado a `_DIM_ALPHA` (0.45) y **agotado** a `_EMPTY_ALPHA` (0.22)
+con `disabled = true` — elegir un arma que ya no está armaría un ataque que nunca sale.
+
+Cada botón lleva la munición restante en un `Label` hijo anclado abajo a la derecha
+(`font_size` 6, `MOUSE_FILTER_IGNORE` para no comerse los clicks). Va por dentro y no en
+el texto porque el nombre ya ocupa el ancho entero. El cañón no muestra número: su
+munición es −1, ilimitada.
+
+Se entera por `Unit.ammo_changed` en vez de preguntar cada frame por algo que cambia de
+tarde en tarde. **No guarda estado de selección**: la fuente de verdad es
+`Unit.active_weapon`, porque la barra se reconstruye en cada selección. `HUD` hace de
+intermediario — recibe `weapon_selected` y llama a `Unit.set_active_weapon()`.
 
 ---
 
@@ -765,12 +967,48 @@ valor **anterior** sigue siendo `is_instance_valid()`; si no, tratarlo como si y
 `null` y dejar pasar la actualización. Ver `Unit.set_attack_target()` y
 `SelectionManager._mark_target()`.
 
+**La otra cara del mismo fallo: *usar* la referencia, no compararla.** Una lista de
+objetos vivos que se limpia en un proceso (física) y se lee en otro (`_process`) tiene un
+hueco en el que la referencia sigue en la lista y ya no vale nada; leerla o convertirla
+revienta. Regla: `is_instance_valid()` antes de tocar cualquier elemento de una lista que
+no se limpia en el mismo sitio donde se lee. Ver `WeaponSystem.time_to_impact()`.
+
 ### Comportamientos hermanos que comparten un actuador
-Cuando dos comportamientos distintos (p. ej. `OrbitBehavior` y `ChaseBehavior`) mueven al
-mismo actuador (`PlaneController`) dándole puntos, que no se sepan el uno al otro: cada
+Cuando dos comportamientos distintos (p. ej. `OrbitBehavior` y `AttackRunBehavior`) mueven
+al mismo actuador (`PlaneController`) dándole puntos, que no se sepan el uno al otro: cada
 uno sólo llama `set_target`/`update_target` sobre el piloto. Quien los posee (`Av8bHarrier`)
 es el árbitro — para uno explícitamente antes de arrancar el otro, porque si los dos
 procesan a la vez se pisan el objetivo cada frame.
+
+El actuador tampoco decide límites: `set_speed_limit()` lo pone quien manda al avión, no
+el piloto. El piloto sabe volar; **cuándo** hay que ir despacio es de quien da la orden.
+
+### Catálogo y estado no pueden ser el mismo objeto
+`WeaponLoadout` describe una configuración (catálogo, compartido) y también la carga real
+de un avión con su munición (estado, de esa salida). Son incompatibles: descontar sobre el
+catálogo se lo quita a todas las unidades del modelo, para siempre. Quien recibe el objeto
+se queda con un `clone()`, y **clonar en el receptor y no en quien llama** es lo que hace
+que no se pueda olvidar. Aplica a cualquier resource compartido que gane estado mutable.
+
+### El dato manda sobre el comportamiento
+El arma declara su envolvente (`min_range`, `max_range`, `firing_arc_deg`) y el vuelo se
+organiza alrededor de ella; el comportamiento no conoce armas y el arma no conoce vuelo.
+Quien los junta es la unidad, que traduce una a otra y rehace las distancias si el dato
+cambia a mitad de acción. Lo mismo con `salvo_size` / `salvo_spread`: "de uno en uno" o
+"toda la carga con dispersión" es un número en un `.tres`, no una rama de código.
+
+### Limitar la maniobra por radio, no por velocidad angular
+Un móvil con tope de grados por segundo gira **más cerrado** cuanto más rápido va, que es
+al revés que la física y produce proyectiles imposibles de esquivar. Con tope de radio de
+giro, la velocidad angular disponible sale de dividir velocidad entre radio: más rápido,
+más abierto, y existe una geometría en la que no llega. Ver `GuidedMissile.min_turn_radius`.
+
+### El fallo sale de la simulación, no de un dado
+Nada de tirar una probabilidad al final para decidir si un arma acierta: es invisible para
+el jugador, que no puede leer en pantalla por qué falló. Los mecanismos son físicos —
+combustible finito, alcance mínimo, espoleta por máximo acercamiento (detonar cuando la
+distancia deja de bajar, no cuando baja de un umbral) — y las contramedidas futuras
+encajan como blancos falsos reales y degradación del guiado, no como un porcentaje.
 
 ### El contexto desambigua el gesto, no un modo aparte
 Antes de añadir un modo o un gesto secundario para una acción nueva, comprobar si el
@@ -817,17 +1055,25 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [x] Arma por defecto según el loadout — un avión armado no sale seleccionando el cañón
 - [x] Bandos (`Team`): jugador/aliado/enemigo, color en el contorno, enemigo seleccionable pero no controlable ni listado en la UI del jugador
 - [x] Primer enemigo en el mapa: T-14 Armata (estático, sin IA)
-- [x] Atacar: click/tap sobre un enemigo con unidad propia seleccionada, o "Atacar" en `TargetMenu`. `ChaseBehavior` persigue el objetivo; al morir el objetivo, el Harrier orbita donde llegó
+- [x] Atacar: click/tap sobre un enemigo con unidad propia seleccionada, o "Atacar" en `TargetMenu`; al morir el objetivo, el Harrier orbita donde llegó
 - [x] Menú contextual (`TargetMenu`) sobre unidad ajena: click derecho en PC, pulsación mantenida en táctil (`PanCamera.long_pressed`)
 - [x] Indicador visual del objetivo bajo ataque (recuadro rojo, reutiliza `SelectionIndicator`) y aviso "Atacando: X" en el HUD — ambos ligados a la selección, no al enemigo
+- [x] **Disparo real (AGM-65):** el arma sale de la estación del ala alternando lados, vuela por fases, guía hasta el blanco y detona. Munición consumible por avión
+- [x] Salud y daño con área (`Unit.take_damage`, señal `died`); un Maverick mata un T-14 de un impacto
+- [x] Dominios aire/superficie: un arma sólo se dispara contra lo que declara poder atacar
+- [x] **Pasadas de ataque (`AttackRunBehavior`):** el avión frena al entrar en alcance, dispara, rompe y se aleja sin meterse por debajo del alcance mínimo — el arma manda sobre el vuelo
+- [x] Cuenta atrás de impacto sobre el objetivo, ligada a la selección
+- [x] Botones de arma con munición restante, deshabilitados al agotarse
 
 ### Pendiente
-- [ ] Disparar de verdad: hay objetivo (`attack_target`) y persecución, falta el disparo, el daño y la munición
-- [ ] Cadena de repliegue al agotarse un arma (necesita munición consumible, que no existe)
+- [ ] Proyectil balístico para bombas (el mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`)
+- [ ] Cañón: hace falta resolver antes cómo dibujar una ráfaga sin instanciar un nodo por bala (impacto por cálculo + trazadoras)
+- [ ] Efectos: fuego, humo, explosión, sombra y caída. Los enganches existen (`motor_ignited`, `fuel_spent`, `detonated`), falta el arte
+- [ ] Contramedidas (bengalas, chaff, ECM) como blancos falsos y degradación del guiado
+- [ ] Qué hace el avión cuando se queda sin munición y el blanco sigue vivo (hoy sigue haciendo pasadas)
+- [ ] Cadena de repliegue de arma: usar la siguiente cuando se acaba una, cañón como último recurso
 - [ ] Elección de arma por distancia en combate aéreo (sistema de dogfight, sin planear)
-- [ ] Comportamiento del avión al llegar junto al objetivo — sin resolver a propósito, se decide cuando exista el disparo
-- [ ] Distinción arma aire-aire / aire-tierra: hoy cualquier arma se puede seleccionar contra cualquier objetivo (no se puede atacar un tanque con un Sidewinder)
-- [ ] Vuelo en formación (aviones del mismo escuadrón)
+- [ ] Vuelo en formación (aviones del mismo escuadrón) — hoy la orden sólo llega al líder
 - [ ] Animación del elevador (placeholder `elevator_cycle_time` ya existe)
 - [ ] Misiones funcionales: SEAD/CAP/CAS tienen UI, sin comportamiento de IA
 - [ ] Bloqueo por misión activa (no desplegar mientras escuadrón en vuelo)

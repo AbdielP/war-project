@@ -2,6 +2,76 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-04
+
+### El arma es dato; el proyectil, comportamiento
+Punto de partida: un script de misil escrito fuera del proyecto, sin contexto. Se aprovechó su estructura —fases de vuelo (separación del ala → ignición → aceleración → crucero → sin combustible), heredar la velocidad del lanzador, guiado proporcional, serpenteo inicial que se apaga solo, señales para los efectos— y se descartaron sus cifras y su modelo de maniobra.
+
+**Las cifras de combate viven en el `WeaponType` (`.tres`), el vuelo en la escena del proyectil.** Alcance mínimo y máximo, arco de tiro, daño, radio de explosión, tamaño de andanada, dispersión y recarga son del arma. Velocidad, radio de giro, combustible y espoleta son del proyectil. Así la misma escena de misil sirve para dos armas con pegada distinta, y la cifra que el jugador vería en el hangar es exactamente la que se aplica. Todo `@export`: se ajusta en el inspector sin tocar código.
+
+**`Projectile` como base y `GuidedMissile` encima.** En la base está lo que comparten todos —de dónde salieron, a qué apuntan, qué pasa al explotar y el reparto de daño en área—; en la subclase, cómo vuelan. La base existe porque el daño en área es idéntico para una bomba y para un misil, y porque quien dispara necesita un tipo común al que pedirle `launch()`.
+
+**Por qué el misil del script original era invencible: expresaba la maniobra en grados por segundo.** Eso hace que cuanto más rápido va, *más cerrado* gira — al revés que un misil real, y sin geometría en la que se le pueda escapar nada. Aquí el giro está limitado por **radio** (`min_turn_radius`), así que la velocidad angular disponible sale de dividir la velocidad entre ese radio: más rápido, más abierto.
+
+**El fallo sale de la simulación, no de un dado.** Nada de tirar una probabilidad al final: eso se siente arbitrario y el jugador no puede leer en pantalla por qué falló. Los mecanismos son (a) **combustible finito** — agotado, el misil sigue recto perdiendo velocidad, que es lo que castiga tirar desde demasiado lejos; (b) **espoleta por máximo acercamiento** — detona cuando la distancia deja de bajar y empieza a subir, así existen los roces en vez de matar siempre que llegue cerca; (c) el **alcance mínimo**, por debajo del cual el arma aún no se ha estabilizado. Las contramedidas futuras (bengalas, chaff, ECM) encajan aquí como blancos falsos reales y degradación del guiado, no como un porcentaje invisible — pero el AGM-65 no necesita nada de eso: va contra un blanco de superficie ya designado, que es exactamente el `attack_target` que ya existía.
+
+**Se empezó por el AGM-65 y no por el cañón** (propuesta inicial descartada por el usuario): el cañón exige resolver antes cómo dibujar mil balas sin instanciar mil nodos, y ese problema es de presentación, no de combate. El Maverick, en cambio, es dispara-y-olvida contra un blanco ya elegido: cierra el bucle completo —apuntar, disparar, impactar, dañar, morir— con lo mínimo.
+
+**Las armas salen de la estación del ala, de una en una y alternando lados.** El `HardpointRack` ya sabía qué cuelga de dónde; ahora también sabe descolgarlo (`release(weapon) → Marker2D`). Se vacía de fuera hacia dentro y de un lado al otro, como se descarga un avión de verdad y para que no quede visiblemente descompensado a mitad de ataque. **Descolgar el sprite y descontar munición son cosas distintas**: una estación puede llevar más armas de las que caben dibujadas, así que el avión sigue teniendo con qué tirar aunque el ala ya se vea vacía.
+
+**Cuántas salen a la vez es del arma, no del código:** `salvo_size` (1 = de una en una; 0 = todo lo que quede) y `salvo_spread`. El misil antitanque sale de uno en uno y espera a ver si hace falta el siguiente; una carga de bombas saldrá entera con dispersión para batir un área. El mecanismo está puesto; el proyectil balístico de las bombas, no.
+
+**"Si no muere, lanza el otro" no se programó como tal.** `WeaponSystem` no dispara mientras tenga algo suyo en el aire. De ahí sale solo: se lanza un misil, se espera a que explote, y si el blanco sigue vivo sale el siguiente. Nadie tuvo que escribir "reevaluar tras el impacto".
+
+Verificado en headless: primer disparo exactamente en el borde del alcance; vuelo de 1,4 s para 300 px con arranque a 140 px/s y aceleración hasta 300; sale alternando alas (derecha, luego izquierda); nunca hay dos misiles en el aire a la vez; con el blanco a 500 de vida encaja los dos (500 → 380 → 260) y al agotarse deja de tirar; no dispara desde cubierta aunque tenga la orden; con un arma aire-aire contra un blanco de superficie no dispara nada.
+
+### La munición es de la salida, no del catálogo
+Bug latente encontrado al implementar el gasto de munición: `PlayerFleet` construye los loadouts **una sola vez** y `FlightDeck` le pasa **esa misma instancia** a cada avión desplegado. Descontar sobre ella habría hecho que el segundo Harrier de la misión despegara con los misiles que gastó el primero, y que no se recuperaran nunca.
+
+**Un mismo objeto hacía de dos cosas incompatibles:** en `PlayerFleet` es un catálogo —qué configuraciones existen—, y en un avión es su carga real. Ahora `Unit.set_weapon_loadout()` se queda con un `clone()`. **Clonar ahí y no en quien llama** es lo que hace que no se pueda olvidar: quien arme una unidad no tiene que acordarse de nada.
+
+El contador (`WeaponMount.remaining`) vive en el loadout, no en el rack: el rack es una representación y ya podía discrepar por diseño (dibuja sólo las armas que caben).
+
+Verificado en headless: el avión gasta sus dos Maverick y el catálogo sigue en 2.
+
+### El arma manda sobre el vuelo: `AttackRunBehavior` sustituye a `ChaseBehavior`
+Tres bugs reportados por el usuario resultaron ser el mismo: el avión no frenaba al entrar en alcance, se metía por debajo del alcance mínimo hasta no poder disparar, y con un misil de largo alcance volaba derecho al blanco tirando por la borda su ventaja. Todos venían de que `ChaseBehavior` llevaba el avión *encima* del objetivo sin saber que había un arma.
+
+**Un avión armado no persigue: hace pasadas.** El comportamiento se reescribió como un ciclo de dos fases sobre la envolvente de tiro del arma — INGRESS (encara y aguanta hasta poco antes del alcance mínimo) y EGRESS (rompe, se aleja recto y vuelve a encarar cerca del alcance máximo). Se sustituyó en vez de añadir un comportamiento nuevo al lado: uno que persigue y otro que hace pasadas serían casi el mismo código.
+
+**El comportamiento no sabe de armas.** Recibe la envolvente ya resuelta (`engage(target, min, max)`); quien la traduce del arma activa es el Harrier, que también rehace las distancias si el jugador cambia de arma en pleno ataque. Con `max_range` a 0 —sin arma— se comporta como el viejo perseguir, que es lo único sensato cuando no hay envolvente que respetar.
+
+**Romper el ataque al disparar, no sólo al acercarse.** `WeaponSystem` emite `fired` y el avión rompe: seguir metiéndose hacia un blanco al que ya le mandaste un arma en camino no aporta nada, y la separación es justo lo que da sitio para recargar.
+
+**Frenar es un techo temporal de velocidad, no un modo del piloto.** `PlaneController.set_speed_limit()` obedece; quién y cuándo lo decide es de quien manda al avión. `attack_speed` es `@export` del comportamiento (90 por defecto): atacar se hace más despacio que desplazarse.
+
+**Bug encontrado probando, no reportado:** romper el ataque justo en el borde del alcance máximo no servía de nada — la condición de volver a encarar ya estaba cumplida en el mismo frame y el avión seguía metiéndose. La separación ahora es relativa a **dónde se rompió** (`separation_gain`), no sólo al alcance del arma.
+
+Verificado en headless con la envolvente real (300–1000): dispara a 1000, se aleja a 1152, reencara y dispara a 998; **distancia mínima en todo el ataque, 882 px** — nunca se acerca al mínimo del arma. Velocidad 90 dentro del alcance y 150 fuera. Al morir el objetivo se libera el límite y vuelve a orbitar.
+
+### Salud y daño: un número, sin blindaje
+`UnitType.max_health` y `Unit.health`, con `take_damage()` y señal `died`. Sin blindaje ni tipos de daño por ahora: el AGM-65 pega 120 y un tanque aguanta 100, así que muere de un impacto —como debe— pero la cifra ya significa algo para algo más grande. Si luego hacen falta penetración o resistencias, se añaden encima sin tocar nada más.
+
+El daño en área reparte desde el centro con caída lineal hasta el borde, y **no distingue bandos** —una explosión no lo hace—, salvo a quien disparó: sale hacia adelante y nunca debería alcanzarse, pero si la geometría se tuerce, un avión suicidándose con su propia arma se lee como un bug y no como fuego amigo.
+
+`UnitType.domain` (AIR / SURFACE) y `WeaponType.targets` (flags) resuelven el pendiente de "no puedes atacar un tanque con un Sidewinder": el arma declara contra qué sirve y el sistema de disparo no la usa contra lo que no toca.
+
+### Cuenta atrás de impacto y armas agotadas
+**La cuenta atrás vive con la selección**, como el recuadro del objetivo: es lo que está disparando la unidad que miras, no un adorno del mapa. Aparece sobre el objetivo al disparar (10 px a la derecha, 14 arriba), desaparece al impactar, y se va y vuelve con la selección. Es una estimación honesta —distancia entre velocidad actual— y no un cronómetro: si el arma aún acelera o el blanco maniobra, la cifra se corrige sola.
+
+**Los botones de arma llevan la cantidad y se deshabilitan al agotarse.** Un arma agotada apagada más que una simplemente no seleccionada, para distinguir de un vistazo "no elegida" de "no disponible". El cañón no muestra número porque no se gasta. La barra se entera por `Unit.ammo_changed` en vez de preguntar cada frame por algo que cambia de tarde en tarde.
+
+**El marcador de destino se retira al atacar:** la última orden manda, y dejarlo puesto hacía creer que el avión seguía yendo a ese punto.
+
+**Tercera aparición del mismo fallo de objetos liberados**, esta vez por la otra cara: no comparar con `null`, sino *usar* la referencia. El HUD pedía el tiempo restante desde `_process` y la lista de proyectiles en vuelo se limpia en el proceso de física; en el hueco entre que un misil explota y el sistema lo olvida, la referencia seguía en la lista y el cast reventaba.
+
+Verificado en headless: la cuenta atrás va de 5,3 s a 0,0 y se oculta al impactar, no aparece sin nada en el aire y desaparece al deseleccionar; los botones pasan de `AGM-65[2]` a `[1]` a `[0] agotada`.
+
+### Bug de órdenes en cubierta: no reproducido
+Reportado: dar orden de ataque antes de despegar y cancelarla con un click en el mapa dejaba al avión sin ir al punto. **No se reprodujo en 14 corridas** por el flujo real —despliegue por cubierta, órdenes pasando por `SelectionManager`— dando la orden en nueve momentos distintos del despegue y con el punto lejos y cerca. En todas cancela el ataque y vuela al punto.
+
+Hipótesis registrada, a confirmar: el circuito de espera tiene semiejes de 200×280 px, un óvalo de 400×560 en una pantalla de 640×384 — más alto que la pantalla. El avión llega al punto y se aleja hasta ~450 px orbitándolo, lo que en pantalla es indistinguible de "no fue y se quedó dando vueltas". Si se confirma, la corrección es reducir `semi_x`/`semi_y` del `OrbitBehavior`, no tocar las órdenes.
+
 ## 2026-08-03 (5)
 
 ### Atacar: mismo gesto que seleccionar, desambiguado por el contexto

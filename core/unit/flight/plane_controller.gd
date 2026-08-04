@@ -60,6 +60,10 @@ var turn_rate: float = 0.0
 var velocity: Vector2 = Vector2.ZERO
 var target: Vector2 = Vector2.ZERO
 var has_target: bool = false
+## Techo temporal de velocidad, en px/s. 0 = sin límite. Lo pone quien manda al
+## avión — atacar se hace más despacio que desplazarse —, no el piloto: aquí
+## sólo se obedece. Nunca baja de `min_speed`: un avión no puede pararse.
+var speed_limit: float = 0.0
 
 var _body: Node2D
 var _bank_sprite: AnimatedSprite2D
@@ -86,6 +90,7 @@ func enable(initial_speed: float = -1.0) -> void:
 	velocity = Vector2.RIGHT.rotated(heading) * speed
 	turn_rate = 0.0
 	_lock = 0
+	speed_limit = 0.0
 	set_physics_process(true)
 
 
@@ -93,6 +98,15 @@ func disable() -> void:
 	set_physics_process(false)
 	has_target = false
 	_lock = 0
+	speed_limit = 0.0
+
+
+func set_speed_limit(value: float) -> void:
+	speed_limit = maxf(0.0, value)
+
+
+func clear_speed_limit() -> void:
+	speed_limit = 0.0
 
 
 ## Destino nuevo: vuelve a decidir el lado del viraje desde cero.
@@ -178,6 +192,8 @@ func _physics_process(delta: float) -> void:
 	var wanted := max_speed
 	if brake_in_turns and has_target:
 		wanted = lerpf(min_speed, max_speed, clampf(1.0 - abs_err / 2.2, 0.0, 1.0))
+	if speed_limit > 0.0:
+		wanted = minf(wanted, speed_limit)
 	speed = clampf(move_toward(speed, wanted, acceleration * delta), min_speed, max_speed)
 
 	var thrust := Vector2.RIGHT.rotated(heading) * speed

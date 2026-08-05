@@ -3,4 +3,5 @@
 [ext_resource type="Script" path="res://core/camera/pan_camera.gd" id="1"]
 
 [node name="PanCamera" type="Camera2D"]
+process_mode = 3
 script = ExtResource("1")

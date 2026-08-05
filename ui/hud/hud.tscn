@@ -10,8 +10,10 @@
 [ext_resource type="PackedScene" path="res://ui/hud/weapon_bar/weapon_bar.tscn" id="7"]
 [ext_resource type="PackedScene" path="res://ui/hud/target_menu/target_menu.tscn" id="8"]
 [ext_resource type="PackedScene" path="res://ui/hud/zoom_controls/zoom_controls.tscn" id="9"]
+[ext_resource type="PackedScene" path="res://ui/hud/pause_button/pause_button.tscn" id="10"]
 
 [node name="HUD" type="CanvasLayer" unique_id=1219806315]
+process_mode = 3
 script = ExtResource("0")
 
 [node name="EventLog" parent="." unique_id=173143879 instance=ExtResource("1")]
@@ -67,6 +69,8 @@ theme_override_font_sizes/font_size = 7
 vertical_alignment = 1
 
 [node name="ZoomControls" parent="." instance=ExtResource("9")]
+
+[node name="PauseButton" parent="." instance=ExtResource("10")]
 
 [node name="TargetMenu" parent="." instance=ExtResource("8")]
 

@@ -1,0 +1,14 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/hud/pause_button/pause_button.gd" id="1"]
+
+[node name="PauseButton" type="Button"]
+custom_minimum_size = Vector2(14, 14)
+offset_left = 622.0
+offset_top = 66.0
+offset_right = 636.0
+offset_bottom = 80.0
+tooltip_text = "Pausa"
+theme_override_font_sizes/font_size = 8
+text = "||"
+script = ExtResource("1")

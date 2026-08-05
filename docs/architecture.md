@@ -839,7 +839,7 @@ Agregar casos aquí al implementar nuevas acciones.
 
 **Árbol de `hud.tscn`:**
 ```
-CanvasLayer (HUD)
+CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en pausa
 ├── EventLog         (PanelContainer) — offset (6,195)
 ├── Minimap          (PanelContainer) — offset (5,292) — placeholder
 ├── HangarWindow     (PanelContainer)
@@ -849,6 +849,7 @@ CanvasLayer (HUD)
 ├── WeaponBar        (HBoxContainer)  — offset (160,344)-(480,376), barra de armas
 ├── AttackLabel      (Label)          — offset (160,332)-(480,343), "Atacando: X"
 ├── ZoomControls     (VBoxContainer)  — offset (622,30)-(636,60), botones + / −
+├── PauseButton      (Button)         — offset (622,66)-(636,80), alterna la pausa
 ├── TargetMenu       (PanelContainer) — menú contextual, se posiciona en runtime
 └── DeselButton      (Button)         — offset (526,351), visible=false, flat, text="×"
 ```
@@ -949,6 +950,35 @@ criterio de `WeaponBar` con las armas agotadas: se distingue de un vistazo "pued
 puedes", y la fuente de verdad sigue estando en un solo sitio, la cámara.
 
 Para moverlos basta cambiar los `offset` del nodo en `hud.tscn`.
+
+---
+
+### `PauseButton` — `ui/hud/pause_button/pause_button.gd`
+```
+extends Button
+signal pause_toggled(paused: bool)
+```
+Alterna `get_tree().paused`. Botón de 14×14 debajo de `ZoomControls`, misma columna.
+`shortcut_key` es `@export` (por defecto `KEY_SPACE`; `KEY_NONE` lo desactiva) y se atiende
+en `_unhandled_key_input`, igual que el ESC de `SelectionManager` — sin inventar un recurso
+`Shortcut` para una sola tecla.
+
+**Enseña la acción disponible, no el estado:** corriendo `||`, pausado `>`. Y pausado se
+pinta en color de acento, porque con todo congelado no queda nada en pantalla que delate
+en qué estado está.
+
+**Sin cableado con nadie.** `paused` es estado del árbol, no de otro nodo: no hay a quién
+pedírselo ni a quién avisar, así que no pasa por `HUD` → `SelectionManager` como el zoom.
+`pause_toggled` existe para un aviso o un velo futuros; hoy no la escucha nadie.
+
+**Qué sigue vivo en pausa se declara con `process_mode = Always` en cada escena** —
+`hud.tscn`, `pan_camera.tscn`, `selection_manager.tscn` — y no con una lista dentro del
+botón: se ve en el inspector de cada nodo y una escena nueva decide por sí misma. Se puede
+panear, cambiar el zoom y **seleccionar** con la partida congelada; esto último hace una
+consulta al servidor de física, que no se está simulando, y se comprobó que responde.
+
+El hangar también responde en pausa: la orden se acepta pero el ciclo de cubierta no
+arranca hasta reanudar, porque `FlightDeck` sí es pausable.
 
 ---
 
@@ -1111,6 +1141,14 @@ combustible finito, alcance mínimo, espoleta por máximo acercamiento (detonar 
 distancia deja de bajar, no cuando baja de un umbral) — y las contramedidas futuras
 encajan como blancos falsos reales y degradación del guiado, no como un porcentaje.
 
+### Lo que sobrevive a la pausa lo declara cada escena
+`process_mode = Always` va en el nodo raíz de quien tenga que seguir funcionando con
+`get_tree().paused` — hoy `hud.tscn`, `pan_camera.tscn` y `selection_manager.tscn`. **No**
+una lista de excepciones dentro de quien pausa: así se ve en el inspector del propio nodo y
+una escena nueva decide por sí misma, sin que nadie tenga que acordarse de darla de alta.
+Regla de diseño detrás: una pausa que además congela la cámara sólo sirve para irse; la
+que deja mirar, medir y seleccionar es la que sirve para jugar y para depurar.
+
 ### El efecto escucha; la simulación no sabe que hay efecto
 Fuego, humo o explosión van en un nodo hijo que se conecta solo a las señales del padre en
 su `_ready()`, por duck-typing (`has_signal`). El padre no guarda referencia ni sabe si el
@@ -1182,6 +1220,7 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [x] Botones de arma con munición restante, deshabilitados al agotarse
 - [x] Fuego del propulsor del misil (`MissileExhaust`), enganchado a `motor_ignited` / `fuel_spent`
 - [x] Tres niveles de zoom (0,5x / 1x / 2x) con botones `+` / `−` en el HUD
+- [x] Pausa y play (botón + barra espaciadora); cámara, HUD y selección siguen vivos en pausa
 
 ### Pendiente
 - [ ] Proyectil balístico para bombas (el mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`)

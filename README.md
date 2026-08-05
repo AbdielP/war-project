@@ -30,11 +30,17 @@ gestos separados por plataforma.
 | Elegir arma activa | Click en la barra inferior | Tap en la barra inferior |
 | Centrar cámara en unidad | Click en card del panel superior | Tap en card del panel superior |
 | **Acercar / alejar** (0,5x / 1x / 2x) | Botones `+` y `−` del borde derecho | Igual |
+| **Pausa / play** | Barra espaciadora, o el botón bajo los de zoom | Botón bajo los de zoom |
 
 Los niveles de zoom se cambian en el nodo `PanCamera` → `zoom_levels` (y con cuál arranca,
 `default_zoom_level`). Conviene que sean potencias de dos: con filtro Nearest, cualquier
 factor intermedio descarta píxeles en un patrón irregular que hierve al mover la cámara.
-Los botones se mueven cambiando los `offset` del nodo `ZoomControls` en `hud.tscn`.
+Los botones se mueven cambiando los `offset` de `ZoomControls` y `PauseButton` en `hud.tscn`.
+
+**En pausa se puede seguir mirando:** la cámara, el HUD y la selección siguen vivos, así que
+puedes panear, cambiar el zoom y seleccionar unidades con la partida congelada. Lo decide
+el `process_mode = Always` de cada escena, no una lista en el código. La tecla del atajo se
+cambia en el nodo `PauseButton` → `shortcut_key` (`KEY_NONE` lo desactiva).
 
 ## Dónde se ajusta el combate
 
@@ -67,7 +73,7 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 	- Sigue intentando atacar aún cuando se quedó sin arma. supongo que es por que no tenemos mas logicas de armas aún.
 	- El avión vira demasiado brusco y enseguida al lanzar el misil. es un giro cerrado de carrito a control remoto cuando debe ser un giro controlado... que pasó con el derrape y las variables cool y excentricas del control del jet, no aplican acá?
 - [ ] El contador de impacto debería ser visible siempre sobre la unidad? de ese modo puedo saber si está siendo atacado mientras uso otra unidad.
-- [ ] Pausar y play
+- [X] Pausar y play
 - [X] Diferentes zooms !! El zoom al CV es muy grande
 - [ ] Como atacar a los enemigo?
 	- [X] Con unidad seleccionada y click al enemigo.

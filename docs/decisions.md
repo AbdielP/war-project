@@ -2,6 +2,23 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-04 (4)
+
+### Pausa: qué sigue vivo lo declara cada escena, no una lista en el código
+Un solo botón que alterna `get_tree().paused`, en el borde derecho bajo los de zoom, con la barra espaciadora como atajo (`shortcut_key`, exportado, `KEY_NONE` lo desactiva).
+
+**El botón enseña la acción disponible, no el estado.** Corriendo se ve `||` (púlsame para pausar) y pausado se ve `>`. Es lo que hace cualquier reproductor; enseñar el estado obliga a traducir mentalmente cuál de los dos símbolos significa qué. Como refuerzo, pausado se pinta en color de acento: con todo congelado no queda nada en pantalla que delate el estado.
+
+**Lo que sigue funcionando en pausa se declara con `process_mode = Always` en cada escena** —`hud.tscn`, `pan_camera.tscn`, `selection_manager.tscn`— y no con una lista de excepciones dentro del botón. Así se ve en el inspector de cada nodo, y una escena nueva decide por sí misma sin que nadie tenga que acordarse de añadirla a ningún sitio.
+
+**Se puede panear, cambiar el zoom y seleccionar con la partida congelada, a propósito.** Una pausa que además congela la cámara sólo sirve para irse a por un café; ésta sirve para *mirar* — que es justo lo que hace falta con el bug de las pasadas de ataque, donde la maniobra ocupa más que la pantalla. **La selección era lo que más podía romperse**: hace una consulta al servidor de física, que en pausa no se está simulando. Se comprobó explícitamente y responde.
+
+**Sin cableado con nadie.** `paused` es estado del árbol, no de otro nodo: no hay a quién pedírselo ni a quién avisar, así que el botón lo toca directo en vez de pasar por `HUD` → `SelectionManager` como hace el zoom. Queda una señal `pause_toggled` sin oyentes, para un aviso en el registro o un velo el día que se quieran.
+
+**Consecuencia aceptada:** el hangar también responde en pausa. Desplegar con la partida congelada acepta la orden pero el ciclo de cubierta no arranca hasta reanudar, porque `FlightDeck` sí es pausable. No se bloqueó: el caso raro no justifica una excepción.
+
+Verificado en headless sobre `main.tscn`: botón y espacio alternan y el símbolo cambia; con un Harrier en vuelo real, corriendo avanza 44 px en 20 frames de física y pausado se mueve 0,000; el zoom responde y el mapa se panea con todo parado; se puede seleccionar una unidad en pausa; y al reanudar el avión sigue desde donde estaba. Confirmado por el usuario en el editor.
+
 ## 2026-08-04 (3)
 
 ### Zoom: tres niveles fijos en potencias de dos, y el mapa táctico se queda con el resto

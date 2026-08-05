@@ -5,6 +5,8 @@ signal deselect_requested
 signal unit_focus_requested(unit: Unit)
 ## El jugador eligió "Atacar" en el menú de una unidad ajena.
 signal attack_requested(target: Unit)
+## Pidió acercar (+1) o alejar (−1). El HUD no conoce la cámara: reenvía y ya.
+signal zoom_change_requested(step: int)
 
 @onready var _selection_panel: PanelContainer = $SelectionPanel
 @onready var _actions_panel: PanelContainer = $ActionsPanel
@@ -15,6 +17,7 @@ signal attack_requested(target: Unit)
 @onready var _target_menu: PanelContainer = $TargetMenu
 @onready var _attack_label: Label = $AttackLabel
 @onready var _impact_timer: Label = $ImpactTimer
+@onready var _zoom_controls: VBoxContainer = $ZoomControls
 
 ## Dónde se pone la cuenta atrás respecto al objetivo, en píxeles de pantalla:
 ## arriba y un poco a la derecha, para no taparlo ni pisar su recuadro.
@@ -35,6 +38,14 @@ func _ready() -> void:
 	_desel_btn.add_theme_color_override("font_hover_color", Color(0.56078434, 0.827451, 1.0))
 	_desel_btn.add_theme_color_override("font_pressed_color", Color(0.56078434, 0.827451, 1.0))
 	_desel_btn.pressed.connect(func() -> void: deselect_requested.emit())
+	_zoom_controls.zoom_change_requested.connect(
+			func(step: int) -> void: zoom_change_requested.emit(step))
+
+
+## Hasta dónde puede seguir acercándose o alejándose. Se lo dice quien tiene la
+## cámara delante — el HUD no la conoce.
+func set_zoom_state(level: int, count: int) -> void:
+	_zoom_controls.set_state(level, count)
 
 
 ## La cuenta atrás vive con la selección, igual que el recuadro del objetivo:

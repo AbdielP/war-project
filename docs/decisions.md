@@ -2,6 +2,23 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-04 (3)
+
+### Zoom: tres niveles fijos en potencias de dos, y el mapa táctico se queda con el resto
+Tres niveles —0,5x, 1x y 2x— con dos botones de 14×14 en el borde derecho, bajo el panel de desplegadas. El de en medio es el de siempre; 2x para mirar una unidad de cerca y 0,5x para leer la zona a su alrededor.
+
+**Potencias de dos, y no una escala continua ni un 0,75.** Con filtro Nearest, un factor de 0,5 descarta exactamente uno de cada dos píxeles del mundo; cualquier factor intermedio descarta un patrón irregular que hierve en cuanto la cámara se mueve. Es la misma regla que ya gobierna la ventana ("escala entera siempre, nunca 1.5x"), aplicada dentro del juego. Por lo mismo **el cambio es instantáneo y no interpolado**: una transición suave pasaría medio segundo por zooms fraccionarios, que es justo lo que se está evitando.
+
+**Alejarse se corta en 0,5x a propósito.** El mapa mide 2048×1440 y a 0,5x se ven 1280×768: la zona de la unidad, no el teatro entero. Ver todo el mapa es trabajo del mapa táctico, que es otra pantalla y otro problema — si el zoom llegara hasta ahí, el mapa táctico no tendría razón de existir.
+
+**Niveles como dato (`zoom_levels`, `PackedFloat32Array` exportado), no como enum.** Añadir un cuarto nivel o mover el de arranque es tocar el inspector. La cámara sólo garantiza dos cosas de código: que no se sale del array y que **no da la vuelta** al llegar al extremo — un botón de acercar que alejase del todo sería una trampa.
+
+**Los botones no saben qué zoom hay puesto.** Reciben "estás en el nivel N de M" y con eso apagan el que ya no lleva a ninguna parte. Es el mismo criterio que `WeaponBar` con las armas agotadas: se distingue de un vistazo "puedes" de "no puedes", y la fuente de verdad sigue siendo un solo sitio.
+
+**El cableado pasa por `SelectionManager`, no por el HUD.** El HUD no conoce la cámara y no va a empezar ahora: reenvía `zoom_change_requested(step)` y recibe `set_zoom_state(level, count)`. `SelectionManager` ya era el corredor entre los dos. Detalle que costó un `if`: la cámara fija su nivel en su propio `_ready()`, antes de que nadie esté conectado, así que el estado inicial de los botones hay que pedirlo a mano — conectarse a la señal no basta cuando la señal ya sonó.
+
+Verificado en headless sobre `main.tscn`: los tres niveles con sus topes sin dar la vuelta; el arrastre de cámara sigue cuadrando exacto (64 px de pantalla mueven 128/64/32 px de mundo según el zoom); lo que el HUD coloca sobre el mundo —cuenta atrás, menú de objetivo— sigue centrado en los tres niveles; y cerca del borde del mapa la cámara topa con sus límites sin sacar nada de pantalla. Eso último **no es un fallo y se dejó así**: el zoom no puede enseñar más allá del mapa, así que una unidad en la esquina deja de estar centrada. Confirmado por el usuario en el editor.
+
 ## 2026-08-04 (2)
 
 ### El efecto escucha a la simulación; la simulación no sabe que hay efecto

@@ -29,6 +29,12 @@ gestos separados por plataforma.
 | **Menú de unidad ajena** (atacar / info) | Click der sobre la unidad | Mantener pulsado sobre la unidad |
 | Elegir arma activa | Click en la barra inferior | Tap en la barra inferior |
 | Centrar cámara en unidad | Click en card del panel superior | Tap en card del panel superior |
+| **Acercar / alejar** (0,5x / 1x / 2x) | Botones `+` y `−` del borde derecho | Igual |
+
+Los niveles de zoom se cambian en el nodo `PanCamera` → `zoom_levels` (y con cuál arranca,
+`default_zoom_level`). Conviene que sean potencias de dos: con filtro Nearest, cualquier
+factor intermedio descarta píxeles en un patrón irregular que hierve al mover la cámara.
+Los botones se mueven cambiando los `offset` del nodo `ZoomControls` en `hud.tscn`.
 
 ## Dónde se ajusta el combate
 
@@ -54,6 +60,7 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 
 
 # PENDIENTES:
+- [ ] Los sprites se ven pixelados cuando se mueven. se ponen borrosos a medida que giran y maniobran.
 - Bugs y mejoras lanzamiento de AGM-65
 	- El avión sale de la pantalla intentando atacar, eso no debería ocurrir, debe maniobrar dentro del juego...
 		- Siempre falla el misil al tratar de re tomar el ataque? parece que si.
@@ -61,7 +68,7 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 	- El avión vira demasiado brusco y enseguida al lanzar el misil. es un giro cerrado de carrito a control remoto cuando debe ser un giro controlado... que pasó con el derrape y las variables cool y excentricas del control del jet, no aplican acá?
 - [ ] El contador de impacto debería ser visible siempre sobre la unidad? de ese modo puedo saber si está siendo atacado mientras uso otra unidad.
 - [ ] Pausar y play
-- [ ] Diferentes zooms
+- [X] Diferentes zooms !! El zoom al CV es muy grande
 - [ ] Como atacar a los enemigo?
 	- [X] Con unidad seleccionada y click al enemigo.
 	- Por minimapa

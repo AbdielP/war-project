@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" path="res://ui/hud/deployed_panel/deployed_panel.tscn" id="6"]
 [ext_resource type="PackedScene" path="res://ui/hud/weapon_bar/weapon_bar.tscn" id="7"]
 [ext_resource type="PackedScene" path="res://ui/hud/target_menu/target_menu.tscn" id="8"]
+[ext_resource type="PackedScene" path="res://ui/hud/zoom_controls/zoom_controls.tscn" id="9"]
 
 [node name="HUD" type="CanvasLayer" unique_id=1219806315]
 script = ExtResource("0")
@@ -64,6 +65,8 @@ offset_bottom = 9.0
 theme_override_colors/font_color = Color(0.9098039, 0.23137255, 0.23137255, 1)
 theme_override_font_sizes/font_size = 7
 vertical_alignment = 1
+
+[node name="ZoomControls" parent="." instance=ExtResource("9")]
 
 [node name="TargetMenu" parent="." instance=ExtResource("8")]
 

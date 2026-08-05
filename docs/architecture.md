@@ -174,6 +174,7 @@ extends Camera2D   class_name PanCamera
 |-------|--------|
 | `clicked(world_position: Vector2)` | Click/tap sin arrastre (umbral 6px) |
 | `long_pressed(world_position: Vector2)` | Pulsación mantenida sin arrastrar (`long_press_time`, 0,5 s). Equivalente táctil del click derecho: en móvil no hay segundo botón |
+| `zoom_changed(level, count)` | Cambió el nivel de acercamiento. Lo escucha quien dibuje los botones, para saber si queda cuerda |
 
 | Variable | Descripción |
 |----------|-------------|
@@ -186,6 +187,28 @@ extends Camera2D   class_name PanCamera
   táctil — el aviso llega con el dedo/botón aún apoyado. Al soltar después de que ya se
   disparó, no cuenta como `clicked`: si contara, el menú se abriría y una orden le
   llegaría encima en el mismo gesto.
+
+**Acercamiento.** `zoom_levels` (`PackedFloat32Array`, hoy `[0.5, 1.0, 2.0]`) y
+`default_zoom_level` (1) son exports: añadir un nivel o cambiar con cuál arranca es tocar
+el inspector. API: `zoom_level()`, `zoom_level_count()`, `set_zoom_level(n)`,
+`step_zoom(±1)`.
+
+**Potencias de dos, no una escala continua.** Con filtro Nearest, 0,5 descarta exactamente
+uno de cada dos píxeles del mundo; un 0,75 descartaría un patrón irregular que hierve en
+cuanto la cámara se mueve. Misma regla que la escala de ventana ("entera siempre, nunca
+1.5x"), aplicada dentro del juego. Por eso **el cambio es instantáneo y no interpolado**:
+una transición suave pasaría medio segundo por zooms fraccionarios.
+
+`step_zoom()` **no da la vuelta** en los extremos — un botón de acercar que alejase del
+todo sería una trampa. Y alejarse se corta en 0,5x (1280×768 de mundo visible sobre un
+mapa de 2048×1440) a propósito: ver el teatro entero es trabajo del mapa táctico.
+
+**Cerca del borde del mapa la cámara topa con sus límites y la unidad seguida deja de
+estar centrada.** No es un fallo: el zoom no puede enseñar más allá del mapa. Medido a los
+tres niveles, nada se sale de pantalla.
+
+El arrastre divide por `zoom` (`position -= delta_pantalla / zoom`), así que el mapa sigue
+al dedo exactamente a cualquier nivel.
 
 ---
 
@@ -213,7 +236,14 @@ click derecho / pulsación mantenida → PanCamera.long_pressed → _on_context_
 HUD.attack_requested (del menú) → _issue_attack_order(target)
 ESC → cierra el menú + _select(null)
 HUD.deselect_requested → _select(null)
+HUD.zoom_change_requested(step) → PanCamera.step_zoom(step)
+PanCamera.zoom_changed(level, count) → HUD.set_zoom_state(...)
 ```
+
+**Corredor del zoom.** El HUD no conoce la cámara y no debe empezar a conocerla, así que
+`SelectionManager` cablea los dos sentidos. Después de conectar **pide el estado inicial a
+mano**: la cámara fija su nivel en su propio `_ready()`, antes de que haya nadie
+escuchando, y conectarse a una señal no sirve de nada cuando ya sonó.
 
 **`_can_attack(target)`:** propia seleccionada, controlada por el jugador, y hostil al
 objetivo. Se comprueba dos veces por diseño — al ofrecer la opción en el menú y otra vez
@@ -777,11 +807,13 @@ extends CanvasLayer   class_name HUD
 | `deselect_requested` | Botón × presionado |
 | `unit_focus_requested(unit: Unit)` | Click en un cuadrito de `DeployedPanel`, o "Información" en `TargetMenu` |
 | `attack_requested(target: Unit)` | El jugador tocó "Atacar" en `TargetMenu` |
+| `zoom_change_requested(step: int)` | Pidió acercar (+1) o alejar (−1). Reenvía lo de `ZoomControls`; el HUD no conoce la cámara |
 
 API:
 - `show_selected_unit(unit: Unit)` — muestra panel + acciones (si controla) + barra de armas (si controla) + botón ×; se suscribe a `attack_target_changed` de la unidad
 - `clear_selected_unit()` — oculta todo, incluido el aviso de ataque; se desuscribe
 - `open_target_menu(target, can_attack)` / `close_target_menu()` — delegan en `TargetMenu`, convirtiendo la posición mundo→pantalla con `get_global_transform_with_canvas()`
+- `set_zoom_state(level, count)` — hasta dónde puede seguir acercándose o alejándose. Se lo dice `SelectionManager`, que sí tiene la cámara delante
 
 `_on_attack_target_changed(target)` mantiene el `AttackLabel` ("Atacando: <nombre>") en
 sincronía con la unidad seleccionada — enganchado a su señal y no refrescado a mano,
@@ -816,6 +848,7 @@ CanvasLayer (HUD)
 ├── DeployedPanel    (PanelContainer) — panel superior, unidades desplegadas
 ├── WeaponBar        (HBoxContainer)  — offset (160,344)-(480,376), barra de armas
 ├── AttackLabel      (Label)          — offset (160,332)-(480,343), "Atacando: X"
+├── ZoomControls     (VBoxContainer)  — offset (622,30)-(636,60), botones + / −
 ├── TargetMenu       (PanelContainer) — menú contextual, se posiciona en runtime
 └── DeselButton      (Button)         — offset (526,351), visible=false, flat, text="×"
 ```
@@ -898,6 +931,24 @@ Se entera por `Unit.ammo_changed` en vez de preguntar cada frame por algo que ca
 tarde en tarde. **No guarda estado de selección**: la fuente de verdad es
 `Unit.active_weapon`, porque la barra se reconstruye en cada selección. `HUD` hace de
 intermediario — recibe `weapon_selected` y llama a `Unit.set_active_weapon()`.
+
+---
+
+### `ZoomControls` — `ui/hud/zoom_controls/zoom_controls.gd`
+```
+extends VBoxContainer
+signal zoom_change_requested(step: int)
+```
+Dos botones cuadrados de 14×14 (`+` y `−`, `font_size` 8) apilados en el borde derecho,
+debajo de `DeployedPanel` — hueco libre entre ese panel y `ActionsPanel` (y=313). Estilo
+por `StyleBoxFlat` en código, misma paleta que `WeaponBar`.
+
+**No sabe qué zoom hay puesto.** Emite `+1` / `−1` y recibe `set_state(level, count)`, con
+lo que apaga el botón que ya no lleva a ninguna parte (`disabled` + alpha 0,3). Es el mismo
+criterio de `WeaponBar` con las armas agotadas: se distingue de un vistazo "puedes" de "no
+puedes", y la fuente de verdad sigue estando en un solo sitio, la cámara.
+
+Para moverlos basta cambiar los `offset` del nodo en `hud.tscn`.
 
 ---
 
@@ -1130,6 +1181,7 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [x] Cuenta atrás de impacto sobre el objetivo, ligada a la selección
 - [x] Botones de arma con munición restante, deshabilitados al agotarse
 - [x] Fuego del propulsor del misil (`MissileExhaust`), enganchado a `motor_ignited` / `fuel_spent`
+- [x] Tres niveles de zoom (0,5x / 1x / 2x) con botones `+` / `−` en el HUD
 
 ### Pendiente
 - [ ] Proyectil balístico para bombas (el mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`)

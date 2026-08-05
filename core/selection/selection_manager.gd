@@ -24,6 +24,12 @@ func _ready() -> void:
 	_hud.deselect_requested.connect(func() -> void: _select(null))
 	_hud.unit_focus_requested.connect(func(unit: Unit) -> void: _select(unit))
 	_hud.attack_requested.connect(_issue_attack_order)
+	_hud.zoom_change_requested.connect(_camera.step_zoom)
+	_camera.zoom_changed.connect(_hud.set_zoom_state)
+	# La cámara ya fijó su nivel en su propio _ready(), antes de que hubiera
+	# nadie escuchando: hay que pedirle el estado inicial a mano o los botones
+	# arrancan sin saber si queda cuerda.
+	_hud.set_zoom_state(_camera.zoom_level(), _camera.zoom_level_count())
 	_move_marker = _MoveMarker.new()
 	_move_marker.hide()
 	# Diferido: en _ready() la escena todavía se está montando y Godot

@@ -53,6 +53,8 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Velocidad, radio de giro, combustible, espoleta del misil | `core/weapon/agm65_missile.tscn` (nodo raíz) |
 | Posición del fuego del propulsor | nodo `Exhaust` de `agm65_missile.tscn` → `position` |
 | Velocidad y corte de frames del fuego | `core/weapon/missile_exhaust_frames.tres` |
+| Densidad de la estela de humo | nodo `SmokeTrail` de `agm65_missile.tscn` → `spacing_px` |
+| Largo de la estela (duración por frame) | `core/weapon/missile_smoke_frames.tres` |
 | Velocidad de crucero y viraje del avión | nodo `PlaneController` de `av8b_harrier.tscn` |
 | Velocidad de ataque y distancias de las pasadas | nodo `AttackRun` de `av8b_harrier.tscn` |
 | Circuito de espera (tamaño del óvalo) | nodo `OrbitBehavior` de `av8b_harrier.tscn` |
@@ -67,11 +69,16 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 
 # PENDIENTES:
 - [ ] Los sprites se ven pixelados cuando se mueven. se ponen borrosos a medida que giran y maniobran.
+- [ ] Relentizar vuelo y mejorar agilidad del avión. Los giros deben verse mas naturales.
+	- Mantener frenado durante el ataque.
+	- Velocidad normal de vuelo.
+	- Aceleración al ir hacia un target o durante combate aereo.
 - Bugs y mejoras lanzamiento de AGM-65
 	- El avión sale de la pantalla intentando atacar, eso no debería ocurrir, debe maniobrar dentro del juego...
 		- Siempre falla el misil al tratar de re tomar el ataque? parece que si.
 	- Sigue intentando atacar aún cuando se quedó sin arma. supongo que es por que no tenemos mas logicas de armas aún.
 	- El avión vira demasiado brusco y enseguida al lanzar el misil. es un giro cerrado de carrito a control remoto cuando debe ser un giro controlado... que pasó con el derrape y las variables cool y excentricas del control del jet, no aplican acá?
+- [X] Estela de humo del misil !! La cola se ve plana al final: hay que redibujar los frames 9–16 para que se abran y se desvanezcan por alfa en vez de encoger
 - [ ] El contador de impacto debería ser visible siempre sobre la unidad? de ese modo puedo saber si está siendo atacado mientras uso otra unidad.
 - [X] Pausar y play
 - [X] Diferentes zooms !! El zoom al CV es muy grande
@@ -81,7 +88,7 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 	- Desde el deslpiegue de una unidad aerea o terrestre?
 - [ ] Sistema de ataque de avión.
 	- [ ] Cada misil y cada bomba tendrá su mecánica... allí el reto
-	- [ ] Hacer distinción entre armas aereas y terrestres. no puedes atacar un tanque con un sidewinder
+	- [X] Hacer distinción entre armas aereas y terrestres. no puedes atacar un tanque con un sidewinder
 - [x] Las armas disponibles en el layout para armar un avión tienen que venir de una lista de "disponibles" al igual que los aviones. el jugador debe ir desbloqueando armas.
 - No desplegar aviones si hay otro vuelo en pista. puede ir subiendo al elevador, eso es todo.
 - [ ] Limitar a 2 el vuelo en escuadrón?, Las unidades desplegadas como escuadron deben navegar/desplazarce siguiendo al lider.

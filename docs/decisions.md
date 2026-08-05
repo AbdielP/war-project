@@ -2,6 +2,27 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-05
+
+### La estela no es una animación: es un rastro de piezas que ya salieron
+Humo del AGM-65, con arte del usuario (tira de 288×16 = 18 frames de 16×16, el último vacío y descartado). No es una cola que se deforme: `MissileSmokeTrail` cuelga de la tobera y va **soltando bocanadas sueltas por el mundo**, cada una con la rotación que llevaba el misil en ese instante. La curva sale sola — no hay geometría que doblar, hay piezas que ya salieron apuntando a donde el misil iba entonces. `guided_missile.gd` no se tocó: mismo enganche que el fuego (`motor_ignited` / `fuel_spent`, por duck-typing).
+
+**Las bocanadas cuelgan del mundo, no del misil.** Es la decisión que hace que esto sea una estela y no un adorno: hijas del misil viajarían *con* él, que es exactamente lo contrario. Nacen como hermanas suyas, en el nodo donde `WeaponSystem` ya suelta los proyectiles, y por eso **sobreviven al impacto**: el misil explota y la cola que dejó sigue deshaciéndose sola.
+
+**Se siembra por distancia recorrida, no por tiempo.** `spacing_px` (4 px). Con un temporizador el espaciado quedaría atado a la velocidad: estela rala en la aceleración inicial y apelmazada al frenar sin combustible, y encima cambiaría si algún día cambian los fps de física. Por distancia es uniforme siempre y el número significa algo que se puede mirar en el arte. **Además se siembra a lo largo del tramo, no en el punto actual**: a velocidad de crucero el misil avanza 5 px por frame, así que una bocanada por frame dejaría la cola a trozos; se interpolan posición y rumbo dentro del segmento recorrido.
+
+**El largo de la cola no se alarga bajando los fps, se alarga por frame.** La primera versión duraba 0,71 s (210 px) y se veía corta. Bajar `speed` a la mitad habría alargado igual, pero también habría vuelto a 12 fps el nacimiento de la bocanada, que es donde el dibujo cambia mucho de un frame al siguiente y donde un salto se ve. En su lugar se usaron duraciones por frame: los 9 primeros a 24 fps limpios, los 8 últimos alargándose de 1,5× a 5×. Vida 1,458 s → **438 px de estela y ~109 bocanadas vivas** a la vez.
+
+**Contra la repetición: espejo y desfase.** Todas las bocanadas son el mismo dibujo saliendo cada 4 px exactos, y eso se lee como un sello repetido. `flip_h` al azar duplica los dibujos gratis (y mueve el píxel de nacimiento de la columna 7 a la 8, las dos cola del misil, así que sigue anclada). El desfase tiene dos partes: un frame entero opcional (`start_jitter_frames`) que cambia el dibujo, y **siempre uno de menos de un frame**, que no cambia nada visible al nacer pero descoloca *cuándo* cada una salta al siguiente frame. Sin esa segunda parte seguirían escalonando a la vez, que era lo que se notaba: a velocidad de crucero cada frame dura tres bocanadas, y se veían bandas de tres iguales avanzando en bloque.
+
+**Limitación conocida y sin resolver: la cola se ve plana al final.** Es el precio de haber alargado estirando duraciones. Los 8 frames finales se llevan **26 de las 35 unidades de vida — ~325 px de los 438 son dibujo congelado**; el frame 16 dura 0,208 s, y en ese rato nacen ~16 bocanadas que enseñan el mismo píxel en fila. El desfase no lo arregla porque es **fijo**: donde cada frame dura 1 unidad lo cambia todo, y donde dura 5 sólo despeina el borde de la racha. De ahí que varíe la cabeza y no la cola. Segundo síntoma del mismo origen: todas mueren a los 438 px exactos, así que la estela termina en corte recto.
+
+**Se deja así a propósito, porque el arreglo es de arte.** El diagnóstico real: **el arte no tiene fase de disipación** —el alfa es 100 % en los 17 frames, y lo que parece un desvanecido es perder píxeles hasta quedar uno solo, sólido— y esa fase se inventó estirando. Los frames 9–16 *encogen*, cuando una estela real se abre en cono: el humo no pasa de 6 columnas de ancho en toda su vida, ni en el pico. El usuario los va a redibujar más anchos, más rotos y con rampa de alfa; con frames de verdad hay largo *y* variedad, y las duraciones pueden volver casi a plano. Los parches disponibles mientras tanto —dar a cada bocanada una velocidad ±15 % para que la divergencia crezca con la edad— se descartaron por ahora: arreglan el síntoma en la zona equivocada del problema.
+
+**Se descartó `GPUParticles2D`.** Sabe animar tiras, pero el espaciado por distancia y la rotación congelada por partícula se pelean con el sistema, y ~109 `Node2D` con sprite no justifican pagar ese control. Un `Line2D` tampoco: sería una cinta que hay que deformar, justo el problema que la estela por piezas no tiene.
+
+Verificado en headless: 100 px de vuelo recto dan 25 bocanadas con espaciado 4,000 exacto de mínimo a máximo; virando 90° el rumbo de las nuevas va de 3° a 88°; tras `fuel_spent` no nace ninguna más; al liberar el misil las 54 vivas siguen ahí; cada una se borra sola al acabar su animación; y la primera sale de la tobera —(0,−12), su píxel de nacimiento sobre el último de la cola— y no del centro del misil. Confirmado por el usuario en el editor, con la reserva de la cola plana anotada arriba.
+
 ## 2026-08-04 (4)
 
 ### Pausa: qué sigue vivo lo declara cada escena, no una lista en el código

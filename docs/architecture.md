@@ -663,8 +663,8 @@ siempre que llegue cerca.
 | `fuel_spent` | Apagar la estela |
 | `detonated(where)` | Explosión (heredada de `Projectile`) |
 
-El primer enganche con arte es el escape (`MissileExhaust`, abajo). Siguen sin arte la
-**explosión, el humo, la sombra y la caída**.
+Los enganches con arte son el escape (`MissileExhaust`) y la estela (`MissileSmokeTrail`),
+abajo. Siguen sin arte la **explosión, la sombra y la caída**.
 
 #### `MissileExhaust` — `missile_exhaust.gd`
 ```
@@ -714,6 +714,74 @@ o impar el cuerpo del misil—, no de la posición.
 
 `z_index = -1` dentro del misil: la llama se dibuja por detrás del fuselaje, misma
 convención que `Hardpoints` bajo el `Sprite2D` de una unidad.
+
+#### `MissileSmokeTrail` — `missile_smoke_trail.gd`
+```
+extends Node2D   class_name MissileSmokeTrail
+```
+La estela. **No dibuja nada**: colocado en la tobera (`position = (0, -12)`), va soltando
+`SmokePuff` sueltas por el mundo mientras haya motor. Se engancha solo a `motor_ignited` /
+`fuel_spent` del padre, igual que `MissileExhaust`, y `guided_missile.gd` no lo conoce.
+
+**Cada bocanada se queda donde nació, con el rumbo congelado del misil en ese instante.**
+De ahí que la estela se doble sola en las curvas: no hay una cola que deformar, hay un
+rastro de piezas que ya salieron apuntando a donde el misil iba entonces.
+
+**Cuelgan del mundo, no del misil** — se añaden a `get_parent().get_parent()`, el mismo
+nodo donde `WeaponSystem` suelta los proyectiles. Hijas del misil viajarían con él, que es
+lo contrario de una estela; y así la cola **sobrevive al impacto** y termina de deshacerse
+sola después de que el misil desaparezca.
+
+| Exportado | Hoy | Qué hace |
+|-----------|-----|----------|
+| `puff_scene` | `smoke_puff.tscn` | qué se suelta |
+| `spacing_px` | `4.0` | cada cuántos píxeles **recorridos** sale una |
+
+**Se siembra por distancia, no por tiempo**, y a lo largo del tramo recorrido, no en el
+punto actual: a velocidad de crucero el misil avanza 5 px por frame, así que una bocanada
+por frame dejaría la cola a trozos. Se interpolan posición (`lerp`) y rumbo (`lerp_angle`)
+dentro del segmento. El portero es `set_physics_process()`, no una bandera aparte.
+
+#### `SmokePuff` — `smoke_puff.gd`
+```
+extends AnimatedSprite2D   class_name SmokePuff
+```
+Una bocanada suelta: se reproduce una vez y `queue_free()` en `animation_finished`. No sabe
+nada del misil que la escupió. Nace **visible** —al revés que `MissileExhaust`, que arranca
+oculto porque vive colgado del misil desde antes de encender— y con `z_index = 8`, bajo el
+misil (9).
+
+| Exportado | Hoy | Qué hace |
+|-----------|-----|----------|
+| `puff_anim` | `&"puff"` | animación a reproducir |
+| `start_jitter_frames` | `1` | cuántos frames enteros puede saltarse al nacer |
+
+**Contra la repetición: `flip_h` al azar y desfase al nacer.** Todas son el mismo dibujo
+cada 4 px exactos, y eso se lee como un sello repetido. El espejo duplica los dibujos
+gratis y mueve el píxel de nacimiento de la columna 7 a la 8 — las dos son cola del misil,
+así que sigue anclada. El desfase tiene dos partes y la segunda es la que trabaja: el frame
+entero cambia el dibujo, y el **sub-frame** (siempre, `randf()`) descoloca *cuándo* cada una
+salta al siguiente. Sin él escalonarían todas a la vez: a velocidad de crucero cada frame
+dura tres bocanadas, y se veían bandas de tres iguales avanzando en bloque.
+
+**`core/weapon/missile_smoke_frames.tres`**: 17 `AtlasTexture` de 16×16 sobre
+`Missile_smoke_animation_16x16.png` (la tira trae 18; el último está vacío y se descartó),
+a 24 fps y `loop = false`. **Las duraciones no son planas** — 1,0 en los 9 primeros y de
+1,5 a 5,0 en los 8 últimos — y ahí está el largo de la cola: 35 unidades / 24 fps = 1,458 s,
+que a 300 px/s son **~438 px de estela y ~109 bocanadas vivas**. Se hizo así en vez de bajar
+`speed`: eso habría alargado igual, pero devolviendo a 12 fps el nacimiento, que es donde el
+dibujo cambia mucho entre frames y un salto se vería.
+
+> **Limitación conocida: el final de la cola se ve plano**, y es el precio de lo anterior.
+> Los 8 frames estirados se llevan 26 de las 35 unidades: **~325 px de los 438 son dibujo
+> congelado**, y el frame 16 dura 0,208 s — ~16 bocanadas seguidas enseñando el mismo píxel.
+> El desfase no lo tapa porque es fijo: donde un frame dura 1 unidad lo cambia todo, donde
+> dura 5 sólo despeina el borde. Causa de fondo: **el arte no tiene fase de disipación** —el
+> alfa es 100 % en los 17 frames, y los 9–16 *encogen* hasta un píxel sólido en vez de
+> abrirse (nunca pasa de 6 columnas de ancho, ni en el pico del frame 8). Pendiente de
+> redibujar esa fase más ancha, más rota y con rampa de alfa; entonces las duraciones pueden
+> volver casi a plano. Segundo síntoma del mismo origen: todas mueren a los 438 px exactos,
+> así que la estela acaba en corte recto.
 
 #### `WeaponSystem` — `weapon_system.gd`
 ```
@@ -1154,7 +1222,28 @@ Fuego, humo o explosión van en un nodo hijo que se conecta solo a las señales 
 su `_ready()`, por duck-typing (`has_signal`). El padre no guarda referencia ni sabe si el
 efecto está puesto. Así el script que decide *cuándo* pasa algo no crece cada vez que se
 añade arte, y el efecto sirve para cualquier otro nodo que emita las mismas señales.
-Ver `MissileExhaust` sobre `GuidedMissile.motor_ignited` / `fuel_spent`.
+Ver `MissileExhaust` y `MissileSmokeTrail`, los dos sobre `GuidedMissile.motor_ignited` /
+`fuel_spent`, ninguno conocido por él.
+
+### Un rastro de piezas sueltas, no una cola que se deforma
+Para una estela —humo, espuma, polvo— sale más barato ir soltando piezas que se quedan
+donde nacieron, con el rumbo congelado de ese instante, que mantener una geometría que haya
+que doblar detrás de quien la arrastra. La curva sale sola porque cada pieza ya salió
+apuntando a donde se iba entonces. Dos condiciones para que funcione: **cuelgan del mundo,
+no de quien las suelta** (si no, viajan con él, que es justo lo contrario), y **se siembran
+por distancia recorrida, no por tiempo** — con temporizador el espaciado queda atado a la
+velocidad y a los fps, y sale rala al acelerar y apelmazada al frenar. Ver
+`MissileSmokeTrail` / `SmokePuff`.
+
+### Un dibujo repetido en fila no es un efecto, es un sello
+Cuando un efecto siembra copias del mismo sprite a intervalos regulares, el ojo lee el
+patrón antes que el efecto. Se rompe gratis y sin tocar arte: espejar al azar (`flip_h`,
+que en pixel art no cuesta nada y no rompe el encaje) y desfasar la reproducción al nacer.
+Del desfase, **la parte que trabaja es la de menos de un frame**: no cambia el dibujo, pero
+descoloca en qué momento cada copia salta al siguiente, que es lo que se veía escalonar en
+bloque. Aviso por experiencia: **un desfase fijo no arregla los tramos de frames largos** —
+si un frame dura cinco veces más, un desfase de una unidad sólo despeina el borde de la
+racha. Ahí el problema es de arte, no de reproducción.
 
 ### Colocar arte sobre arte: medir los píxeles, no ajustar a ojo
 El desplazamiento de un efecto respecto a lo que decora sale de las filas/columnas opacas
@@ -1219,13 +1308,15 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [x] Cuenta atrás de impacto sobre el objetivo, ligada a la selección
 - [x] Botones de arma con munición restante, deshabilitados al agotarse
 - [x] Fuego del propulsor del misil (`MissileExhaust`), enganchado a `motor_ignited` / `fuel_spent`
+- [x] Estela de humo del misil (`MissileSmokeTrail` / `SmokePuff`): bocanadas sueltas sembradas por distancia, con la reserva de la cola plana anotada en su sección
 - [x] Tres niveles de zoom (0,5x / 1x / 2x) con botones `+` / `−` en el HUD
 - [x] Pausa y play (botón + barra espaciadora); cámara, HUD y selección siguen vivos en pausa
 
 ### Pendiente
 - [ ] Proyectil balístico para bombas (el mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`)
 - [ ] Cañón: hace falta resolver antes cómo dibujar una ráfaga sin instanciar un nodo por bala (impacto por cálculo + trazadoras)
-- [ ] Efectos: humo, explosión, sombra y caída. Los enganches existen (`detonated`), falta el arte. El fuego del propulsor ya está hecho — `MissileExhaust` sirve de patrón
+- [ ] Efectos: explosión, sombra y caída. Los enganches existen (`detonated`), falta el arte. Fuego y humo ya están — `MissileExhaust` y `MissileSmokeTrail` sirven de patrón
+- [ ] Redibujar los frames 9–16 del humo: que se abran y se desvanezcan por alfa en vez de encoger, para quitar la cola plana (ver `SmokePuff`)
 - [ ] Contramedidas (bengalas, chaff, ECM) como blancos falsos y degradación del guiado
 - [ ] Qué hace el avión cuando se queda sin munición y el blanco sigue vivo (hoy sigue haciendo pasadas)
 - [ ] Cadena de repliegue de arma: usar la siguiente cuando se acaba una, cañón como último recurso

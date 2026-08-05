@@ -633,7 +633,57 @@ siempre que llegue cerca.
 | `fuel_spent` | Apagar la estela |
 | `detonated(where)` | Explosión (heredada de `Projectile`) |
 
-Los enganches de efectos existen; **no hay arte de explosión, humo, sombra ni caída**.
+El primer enganche con arte es el escape (`MissileExhaust`, abajo). Siguen sin arte la
+**explosión, el humo, la sombra y la caída**.
+
+#### `MissileExhaust` — `missile_exhaust.gd`
+```
+extends AnimatedSprite2D   class_name MissileExhaust
+```
+El fuego del propulsor. Cuelga de la cola del misil como hijo y **el misil no sabe que
+existe**: se engancha solo a las señales del padre en `_ready()` por duck-typing
+(`has_signal`), así que cualquier proyectil que emita `motor_ignited` / `fuel_spent` puede
+llevar escape sin heredar de nada.
+
+| Fase del misil | Animación | Cicla |
+|----------------|-----------|-------|
+| `motor_ignited` | `ignite` (frames 0–9) | no |
+| al terminar de prender | `burn` (frames 10–14) | sí |
+| `fuel_spent` | `shutdown` (frames 15–19) | no, y se oculta al acabar |
+
+**Tres animaciones y no una porque el motor tiene tres momentos**, y la tira los tiene
+dibujados: prende, arde estable, se apaga. Ciclar los 20 frames enteros haría que la llama
+desapareciera y volviera a nacer cada 0,8 s; reproducirlos una sola vez dejaría 2,5 s de
+vuelo con motor y sin llama. Los nombres son `@export` (`ignite_anim`, `burn_anim`,
+`shutdown_anim`): re-cortar la tira es tocar el `.tres` y los tres campos, sin código.
+
+**El corte lo puso el autor del arte, no la medición.** El primer reparto salió de contar
+píxeles opacos por frame (0–7 / 8–16 / 17–19) y estaba mal: la métrica no distingue una
+llama que crece de una que arde. Al mirarla, el bucle sostenido es 10–14 y sólo son cinco
+frames. **Ojo con la numeración al hablar de esto:** aquí los frames se cuentan por su
+posición en el PNG (0–19), pero el panel de `SpriteFrames` de Godot renumera dentro de cada
+animación — su `burn` frame 0 es el 10 de la tira.
+
+**`core/weapon/missile_exhaust_frames.tres`** es el `SpriteFrames`: 20 `AtlasTexture` de
+16×16 sobre `assets/art/sprites/Animations/Missile_fire_animation_16x16.png`, a 24 fps.
+La tira es una rejilla uniforme, así que **no hace falta el JSON de frames** del editor de
+pixel art — ese sólo se gana el sueldo con atlas empaquetados de recortes irregulares, y
+sería un archivo más que mantener sincronizado.
+
+**Colocación (`position`, hoy `(0, -13)`):** medido, no supuesto. El Maverick apunta a +Y,
+su último píxel de cola está en la fila 2 del recorte y el primer píxel de la llama en la
+fila 15; con sprites centrados de 16×16 eso da −13 exactos, y la llama crece hacia −Y, o
+sea hacia atrás. **Es el único número que hay que rehacer si cambia el arte del misil.**
+
+**Medio píxel que no se puede cuadrar, y no es un fallo:** el cuerpo del misil tiene ancho
+**par** (columnas 7–8, eje en x=0) y la llama ancho **impar** (núcleo en la columna 8, eje
+en x=+0,5). Ningún desplazamiento entero centra una cosa en la otra; ±0,5 px es el mínimo
+posible. Se dejó a la derecha porque así el primer píxel de la llama cae exactamente sobre
+un píxel de la cola. Cuadrarlo de verdad es cosa del arte —hacer par el núcleo de la llama
+o impar el cuerpo del misil—, no de la posición.
+
+`z_index = -1` dentro del misil: la llama se dibuja por detrás del fuselaje, misma
+convención que `Hardpoints` bajo el `Sprite2D` de una unidad.
 
 #### `WeaponSystem` — `weapon_system.gd`
 ```
@@ -1010,6 +1060,21 @@ combustible finito, alcance mínimo, espoleta por máximo acercamiento (detonar 
 distancia deja de bajar, no cuando baja de un umbral) — y las contramedidas futuras
 encajan como blancos falsos reales y degradación del guiado, no como un porcentaje.
 
+### El efecto escucha; la simulación no sabe que hay efecto
+Fuego, humo o explosión van en un nodo hijo que se conecta solo a las señales del padre en
+su `_ready()`, por duck-typing (`has_signal`). El padre no guarda referencia ni sabe si el
+efecto está puesto. Así el script que decide *cuándo* pasa algo no crece cada vez que se
+añade arte, y el efecto sirve para cualquier otro nodo que emita las mismas señales.
+Ver `MissileExhaust` sobre `GuidedMissile.motor_ignited` / `fuel_spent`.
+
+### Colocar arte sobre arte: medir los píxeles, no ajustar a ojo
+El desplazamiento de un efecto respecto a lo que decora sale de las filas/columnas opacas
+reales de las dos texturas, no de mover el nodo hasta que quede bien. Con sprites
+centrados de N×N, el píxel de la fila `r` ocupa local `[r − N/2, r − N/2 + 1]`, y de ahí
+sale el offset exacto. **Anchos par e impar no se pueden centrar con offsets enteros**: el
+desvío mínimo es medio píxel y uno fraccionario rompe el encaje. Cuando pase, se deja
+escrito de qué lado quedó y por qué — es un arreglo de arte, no de posición.
+
 ### El contexto desambigua el gesto, no un modo aparte
 Antes de añadir un modo o un gesto secundario para una acción nueva, comprobar si el
 contexto ya alcanza para distinguirla. Ejemplo: atacar no necesitó doble-tap ni un botón de
@@ -1064,11 +1129,12 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [x] **Pasadas de ataque (`AttackRunBehavior`):** el avión frena al entrar en alcance, dispara, rompe y se aleja sin meterse por debajo del alcance mínimo — el arma manda sobre el vuelo
 - [x] Cuenta atrás de impacto sobre el objetivo, ligada a la selección
 - [x] Botones de arma con munición restante, deshabilitados al agotarse
+- [x] Fuego del propulsor del misil (`MissileExhaust`), enganchado a `motor_ignited` / `fuel_spent`
 
 ### Pendiente
 - [ ] Proyectil balístico para bombas (el mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`)
 - [ ] Cañón: hace falta resolver antes cómo dibujar una ráfaga sin instanciar un nodo por bala (impacto por cálculo + trazadoras)
-- [ ] Efectos: fuego, humo, explosión, sombra y caída. Los enganches existen (`motor_ignited`, `fuel_spent`, `detonated`), falta el arte
+- [ ] Efectos: humo, explosión, sombra y caída. Los enganches existen (`detonated`), falta el arte. El fuego del propulsor ya está hecho — `MissileExhaust` sirve de patrón
 - [ ] Contramedidas (bengalas, chaff, ECM) como blancos falsos y degradación del guiado
 - [ ] Qué hace el avión cuando se queda sin munición y el blanco sigue vivo (hoy sigue haciendo pasadas)
 - [ ] Cadena de repliegue de arma: usar la siguiente cuando se acaba una, cañón como último recurso

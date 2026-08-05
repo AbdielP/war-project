@@ -2,6 +2,25 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-04 (2)
+
+### El efecto escucha a la simulación; la simulación no sabe que hay efecto
+Primer arte de efectos: el fuego del propulsor del AGM-65, animación del usuario (tira de 320×16 = 20 frames de 16×16). `MissileExhaust` es un `AnimatedSprite2D` hijo del misil que se conecta **solo** a `motor_ignited` / `fuel_spent` en su `_ready()`, por duck-typing (`has_signal`). `GuidedMissile` no se tocó ni una línea: las dos señales ya estaban puestas como enganche desde el día anterior, y esto es cobrarlas.
+
+**Por qué un nodo aparte y no un `AnimatedSprite2D` manejado desde `guided_missile.gd`:** el misil decide cuándo hay empuje; enseñarlo es otro trabajo. Con la separación, el humo y la explosión entran igual —otro hijo, otras señales— sin engordar el script de vuelo, y cualquier proyectil futuro que emita esas dos señales lleva escape gratis sin heredar de nada.
+
+**Tres animaciones sobre la misma tira, no una.** El arte tiene tres momentos dibujados —prende (frames 0–9), arde estable (10–14), se apaga (15–19)— y coinciden con las fases que el misil ya emitía. Las alternativas se descartaron por lo que se ve: ciclar los 20 frames enteros apaga y vuelve a encender la llama cada 0,8 s, y reproducirlos una sola vez deja 2,5 s de vuelo con motor encendido y sin llama. `ignite` → `burn` (la única que cicla) → `shutdown` → invisible.
+
+**Dónde corta cada fase lo dice quien dibujó la tira, no una métrica.** El primer reparto (0–7 / 8–16 / 17–19) se dedujo contando píxeles opacos por frame, y estaba mal: esa cifra sube mientras la llama crece y baja mientras se apaga, pero no distingue "creciendo" de "ardiendo" — el tramo estable resultó ser 10–14, cinco frames, no nueve. Lo corrigió el usuario mirándola. **Contar píxeles sirve para medir posiciones —de ahí salió el offset de la cola, y ese sí estaba bien—, no para leer intención.** Nota de comunicación: al hablar de frames hay dos numeraciones y no coinciden, la de la tira (0–19) y la del panel de `SpriteFrames`, que reinicia dentro de cada animación.
+
+**El JSON de frames del editor de pixel art no se usó.** La tira es una rejilla uniforme y Godot la corta con veinte `AtlasTexture` de región calculada. El JSON sólo se gana el sueldo con atlas empaquetados de recortes irregulares; aquí sería un archivo más que mantener sincronizado a cambio de nada. Si algún día hay atlas empaquetado, se reconsidera.
+
+**La colocación se midió sobre los píxeles, no se ajustó a ojo.** El Maverick apunta a +Y, su último píxel de cola está en la fila 2 del recorte de 16×16 y el primer píxel de la llama en la fila 15: con sprites centrados eso da `position = (0, -13)` exacto, y la llama crece hacia −Y, o sea hacia atrás. Es el único número que hay que rehacer si cambia el arte del misil.
+
+**Medio píxel de desvío lateral que no se puede cuadrar, y se deja documentado en vez de disimulado:** el cuerpo del misil tiene ancho **par** (columnas 7–8, eje en x=0) y la llama ancho **impar** (núcleo en la columna 8, eje en x=+0,5). Ningún desplazamiento entero centra una cosa en la otra — y uno fraccionario rompería el encaje de píxel. Se dejó desviada a la derecha porque así el primer píxel de la llama cae justo sobre un píxel de la cola, que es lo que se pidió. Cuadrarlo de verdad es cosa del arte: hacer par el núcleo de la llama o impar el cuerpo del misil.
+
+Verificado en headless: el recurso carga y está cortado en 10/5/5 frames arrancando en los índices 0/10/15 de la tira, con los tres `loop` correctos; la fila de la llama y la de la cola ocupan el mismo intervalo en Y y la llama cae dentro de las dos columnas de la cola; el ciclo completo prende → arde (ciclando sola) → se apaga → desaparece; y en un lanzamiento real por `launch()`, la llama no existe mientras cae del ala, aparece sola pasada la separación y queda detrás del misil (producto escalar −1,00 contra el rumbo).
+
 ## 2026-08-04
 
 ### El arma es dato; el proyectil, comportamiento

@@ -1,11 +1,22 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://dgpbq55vf6cfr"]
 
-[ext_resource type="Script" path="res://core/weapon/guided_missile.gd" id="1"]
+[ext_resource type="Script" uid="uid://bcwglvnq3iy1q" path="res://core/weapon/guided_missile.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://b8qv2c2umn0wp" path="res://assets/art/sprites/agm65_maverick.tres" id="2"]
+[ext_resource type="Script" uid="uid://mxb8knsacjjx" path="res://core/weapon/missile_exhaust.gd" id="3"]
+[ext_resource type="SpriteFrames" path="res://core/weapon/missile_exhaust_frames.tres" id="4"]
 
-[node name="Agm65Missile" type="Node2D"]
+[node name="Agm65Missile" type="Node2D" unique_id=47075066]
 z_index = 9
 script = ExtResource("1")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=710814409]
 texture = ExtResource("2")
+
+[node name="Exhaust" type="AnimatedSprite2D" parent="." unique_id=1740238145]
+visible = false
+z_index = -1
+position = Vector2(0, -13)
+sprite_frames = ExtResource("4")
+animation = &"burn"
+frame_progress = 0.84921
+script = ExtResource("3")

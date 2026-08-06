@@ -2,6 +2,25 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-06 (2)
+
+### La sombra no cuenta el tiempo, mide la distancia
+Sombra del AGM-65, con arte del usuario (112×16 = 7 frames de 16×16: una barra de 2 px a alfa 39 % que se desliza de la columna 14 a la 8 y crece de 7 a 10 px de alto). `MissileShadow` cuelga del misil como hijo, así que viaja y rota con él — al revés que la estela, que se queda atrás.
+
+**Los 7 frames no se reproducen: son una escala de altura.** El frame se asigna a mano cada `_physics_process` a partir de `get_distance_to_aim()`. La razón no es estética: el misil lleva **espoleta de proximidad**, o sea que no sabe cuándo va a explotar, y «reproduce esto los últimos 0,3 s» es literalmente imposible de programar. La distancia sí la sabe siempre, y atándolo a ella la sombra se junta con el misil justo en el impacto venga a la velocidad que venga y desde donde venga. Mismo razonamiento que sembrar la estela por distancia recorrida en vez de con temporizador.
+
+**El suelo está a 12 px, no a cero.** El misil detona por proximidad sin llegar a tocar nada. Contando hasta cero, el último frame —la sombra pegada al misil, que es el remate del efecto— no se vería nunca. Salió en la prueba headless: a 12 px el frame era el 5.
+
+**Un getter público en vez de una señal.** `guided_missile.gd` sólo creció en `get_distance_to_aim()`. Las señales sirven para *que pase algo*; aquí el efecto depende de *cuánto vale algo*, que hay que leer cada frame. Se pide por duck-typing (`has_method`), igual que el fuego y el humo piden sus señales: si no está, la sombra se apaga sola.
+
+**La diagonal la pone el nodo, no el dibujo.** El arte traía el alejamiento sólo en horizontal. Con el sol al noroeste, a más altura la sombra tiene que irse abajo *y* a la derecha; la componente vertical faltaba porque **no cabía en el tile** —el cuerpo del misil llega a la fila 13 y sólo quedan dos libres—. Se añade como `position.y` (`altitude_drop_px`, 5 px), que no está atado a los 16 px, y **se encoge con la misma cuenta que el dibujo**: fija, al impactar la sombra quedaría 5 px por debajo del misil.
+
+**Se asume que la sombra rota con el objeto, sabiendo que es incorrecto.** Decisión del usuario, extendida a convención del proyecto: el arte se dibuja mirando al sur con la sombra abajo a la derecha, y al rotar la sombra rota también, así que el sol acaba siguiendo a cada objeto (se ve en el LHD, girado en la escena). Lo correcto sería separar forma —silueta, rota— de desplazamiento —lo decide el sol, fijo en el mundo—, que no necesita iluminación del motor, sólo un vector constante. Se descarta porque exige redibujar centrado todo el arte de sombras existente. Anotado en `architecture.md` para que, si se cambia algún día, se cambie para todo a la vez.
+
+Verificado en headless: 7 frames, el nodo `Shadow` en la escena a `z_index = -2` (bajo el humo y el misil), y el barrido de distancias da 400 px → frame 0 con 5,00 de caída, 60 px → frame 3 con 2,22, y 12 px → frame 6 con 0,00. Con un padre que no expone el getter, el nodo se apaga y no revienta.
+
+Pendiente de arte, decidido con el usuario: redibujarla **ovalada y de 3 px de ancho**. Hoy mide exactamente lo mismo que el cuerpo del misil (2 px), así que en los dos últimos frames se funden y parece que el misil engordó en vez de que la sombra llegó.
+
 ## 2026-08-06
 
 ### La cola plana se arregló donde estaba el problema: en el dibujo

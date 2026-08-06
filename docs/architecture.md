@@ -663,8 +663,13 @@ siempre que llegue cerca.
 | `fuel_spent` | Apagar la estela |
 | `detonated(where)` | Explosión (heredada de `Projectile`) |
 
-Los enganches con arte son el escape (`MissileExhaust`) y la estela (`MissileSmokeTrail`),
-abajo. Siguen sin arte la **explosión, la sombra y la caída**.
+Los enganches con arte son el escape (`MissileExhaust`), la estela (`MissileSmokeTrail`) y
+la sombra (`MissileShadow`), abajo. Siguen sin arte la **explosión y la caída**.
+
+| Método | Para qué |
+|--------|----------|
+| `get_speed()` | velocidad real, contando la inercia heredada del avión |
+| `get_distance_to_aim()` | lo que le falta para llegar. Lo lee `MissileShadow` como altura |
 
 #### `MissileExhaust` — `missile_exhaust.gd`
 ```
@@ -786,6 +791,48 @@ está al 22 % y al 11 %.
 > opacos más y algún paso de alfa extra. Límite duro a tener presente: con 2,5 s de
 > combustible el misil vuela ~700 px, así que una cola mucho más larga cubriría el recorrido
 > entero y dejaría de verse disolver en vuelo.
+
+#### `MissileShadow` — `missile_shadow.gd`
+```
+extends AnimatedSprite2D   class_name MissileShadow
+```
+La sombra del misil en el suelo. Hija suya, así que viaja y rota con él. **No reproduce la
+animación**: el frame se asigna a mano cada `_physics_process` a partir de lo que le falta
+al misil para llegar al blanco, o sea que los 7 frames no son una animación sino una
+**escala de altura**.
+
+| Exportado | Por defecto | Qué hace |
+|-----------|-------------|----------|
+| `descent_px` | `120.0` | distancia al blanco a la que empieza a picar (~0,4 s a velocidad de crucero) |
+| `ground_px` | `12.0` | distancia a la que se considera que tocó el suelo |
+| `altitude_drop_px` | `5.0` | cuánto se separa la sombra hacia abajo estando alto |
+
+**Por distancia y no por tiempo, por el mismo motivo que todo lo demás aquí.** El misil
+lleva espoleta de proximidad: **no sabe cuándo va a explotar**, así que «reproduce esto los
+últimos 0,3 s» no se puede programar. La distancia sí la sabe siempre, y atándolo a ella la
+sombra se junta con el misil justo en el impacto venga a la velocidad que venga.
+
+**`ground_px` no es cero, y no es un detalle.** El misil detona por proximidad a 12 px sin
+llegar a tocar nada. Contando hasta cero, el último frame —la sombra pegada al misil, que es
+el remate del efecto— no se vería nunca.
+
+**La diagonal la pone el nodo, no el dibujo.** El arte trae pintado el alejamiento
+horizontal (la barra viaja de la columna 14 a la 8 según baja) pero le falta la componente
+vertical: con el sol al noroeste, a más altura la sombra debe irse abajo *y* a la derecha.
+No cabía en el tile —el cuerpo del misil llega a la fila 13 y sólo quedan dos libres—, así
+que se añade como `position.y` del nodo, que no está atado a los 16 px. **Se encoge con la
+misma cuenta que el dibujo**: fija, al impactar la sombra quedaría 5 px por debajo del misil
+en vez de justo debajo.
+
+**`core/weapon/missile_shadow_frames.tres`**: 7 `AtlasTexture` de 16×16 sobre
+`Missile_shadow_animation_16x16.png` (112×16), animación `descend`, `loop = false`. Barra de
+2 px de ancho a alfa 39 % plano, que **crece al bajar** (7 px de alto arriba, 10 abajo) —
+convención de sombra falsa, cuanto más alto más pequeña. Las duraciones dan igual: nadie
+reproduce esta animación.
+
+> Pendiente de arte: redibujarla **ovalada y de 3 px de ancho** en vez de barra de 2. Hoy
+> mide exactamente lo mismo que el cuerpo del misil, así que en los dos últimos frames se
+> funden y parece que el misil engordó, no que la sombra llegó.
 
 #### `WeaponSystem` — `weapon_system.gd`
 ```
@@ -1229,6 +1276,42 @@ añade arte, y el efecto sirve para cualquier otro nodo que emita las mismas se�
 Ver `MissileExhaust` y `MissileSmokeTrail`, los dos sobre `GuidedMissile.motor_ignited` /
 `fuel_spent`, ninguno conocido por él.
 
+Cuando el efecto no depende de *que pase algo* sino de *cuánto vale algo* —una altura, una
+carga, un nivel de daño— la señal no sirve, y el reflejo de guardar una referencia al padre
+tampoco hace falta: se le pide un **getter público** por duck-typing (`has_method`) y se lee
+cada frame. Sigue sin haber acoplamiento en la dirección que importa, la simulación no
+publica un campo nuevo por cada efecto, y si el getter no está el efecto se apaga solo en
+vez de reventar. Ver `MissileShadow` sobre `get_distance_to_aim()`.
+
+### Los efectos se atan a lo que el juego sabe, no a un cronómetro
+Recurrente en todo lo del misil: **si el momento exacto no está decidido de antemano, no se
+puede programar por tiempo**. La espoleta es de proximidad, así que el misil no sabe cuándo
+va a explotar y «esto pasa los últimos 0,3 s» es imposible de escribir. Lo que sí sabe es a
+qué distancia está, y atando el efecto a esa magnitud sale gratis que caiga justo donde
+tiene que caer, a cualquier velocidad y desde cualquier ángulo. Mismo razonamiento que
+sembrar la estela por distancia recorrida y no con temporizador. Ver `MissileShadow` y
+`MissileSmokeTrail`.
+
+### Sombras: dirección de sol fija en el sprite, no en el mundo
+Convención del proyecto, **asumida a sabiendas de que es incorrecta**. El arte se dibuja
+mirando al sur con el sol al noroeste, o sea la sombra abajo a la derecha, y **la sombra va
+pintada o colgada en el espacio del sprite**: al rotar el objeto, rota con él. Consecuencia:
+el sol acaba siguiendo a cada objeto, y dos unidades con rumbos distintos se contradicen
+—se ve en el LHD, girado en la escena—.
+
+Lo correcto sería separar las dos propiedades: **la forma** es la silueta del objeto y rota
+con él, pero **el desplazamiento** lo decide el sol y es fijo en el mundo (`posición +
+dirección_del_sol × altura`). No hace falta iluminación del motor para eso; es un vector
+constante. Se descartó porque exige que todo el arte de sombras se dibuje centrado, sin el
+desplazamiento incorporado, y ya hay assets hechos al revés. **Si algún día se cambia, se
+cambia para todo a la vez** — media flota con cada criterio se ve peor que toda con el
+criterio malo.
+
+Lo que sí se hace por código es el reparto: en `MissileShadow` la separación horizontal está
+pintada en los frames y la vertical la pone el nodo, porque un tile de 16 px no tiene sitio
+para una diagonal de verdad. Y a 16 px el presupuesto de separación es de **2–5 px**: más y
+la sombra se despega tanto que se lee como otro objeto.
+
 ### Un rastro de piezas sueltas, no una cola que se deforma
 Para una estela —humo, espuma, polvo— sale más barato ir soltando piezas que se quedan
 donde nacieron, con el rumbo congelado de ese instante, que mantener una geometría que haya
@@ -1318,13 +1401,16 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [x] Botones de arma con munición restante, deshabilitados al agotarse
 - [x] Fuego del propulsor del misil (`MissileExhaust`), enganchado a `motor_ignited` / `fuel_spent`
 - [x] Estela de humo del misil (`MissileSmokeTrail` / `SmokePuff`): bocanadas sueltas sembradas por distancia, con fase de disipación por alfa
+- [x] Sombra del misil (`MissileShadow`): frame por distancia al blanco, se junta con él en el impacto
 - [x] Tres niveles de zoom (0,5x / 1x / 2x) con botones `+` / `−` en el HUD
 - [x] Pausa y play (botón + barra espaciadora); cámara, HUD y selección siguen vivos en pausa
 
 ### Pendiente
 - [ ] Proyectil balístico para bombas (el mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`)
 - [ ] Cañón: hace falta resolver antes cómo dibujar una ráfaga sin instanciar un nodo por bala (impacto por cálculo + trazadoras)
-- [ ] Efectos: explosión, sombra y caída. Los enganches existen (`detonated`), falta el arte. Fuego y humo ya están — `MissileExhaust` y `MissileSmokeTrail` sirven de patrón
+- [ ] Efectos: explosión y caída. Los enganches existen (`detonated`), falta el arte. Fuego, humo y sombra ya están — `MissileExhaust`, `MissileSmokeTrail` y `MissileShadow` sirven de patrón
+- [ ] Redibujar la sombra del misil ovalada y de 3 px de ancho: hoy mide lo mismo que el cuerpo y se funden en los últimos frames (ver `MissileShadow`)
+- [ ] Sombras del resto de unidades. Antes de dibujarlas, releer el patrón de sombras: la convención actual es incorrecta a propósito y cambiarla obliga a rehacer el arte de todas a la vez
 - [ ] Alargar la fase opaca del humo (3–4 frames más antes de que baje el alfa, y algún paso de alfa extra): hoy la estela se disuelve desde el primer tercio (ver `SmokePuff`)
 - [ ] Contramedidas (bengalas, chaff, ECM) como blancos falsos y degradación del guiado
 - [ ] Qué hace el avión cuando se queda sin munición y el blanco sigue vivo (hoy sigue haciendo pasadas)

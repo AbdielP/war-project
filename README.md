@@ -55,6 +55,8 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Velocidad y corte de frames del fuego | `core/weapon/missile_exhaust_frames.tres` |
 | Densidad de la estela de humo | nodo `SmokeTrail` de `agm65_missile.tscn` → `spacing_px` |
 | Largo de la estela (duración por frame) | `core/weapon/missile_smoke_frames.tres` |
+| Altura de la sombra del misil (diagonal) | nodo `Shadow` de `agm65_missile.tscn` → `altitude_drop_px` |
+| Cuándo empieza a bajar la sombra | mismo nodo → `descent_px` |
 | Velocidad de crucero y viraje del avión | nodo `PlaneController` de `av8b_harrier.tscn` |
 | Velocidad de ataque y distancias de las pasadas | nodo `AttackRun` de `av8b_harrier.tscn` |
 | Circuito de espera (tamaño del óvalo) | nodo `OrbitBehavior` de `av8b_harrier.tscn` |
@@ -79,6 +81,7 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 	- Sigue intentando atacar aún cuando se quedó sin arma. supongo que es por que no tenemos mas logicas de armas aún.
 	- El avión vira demasiado brusco y enseguida al lanzar el misil. es un giro cerrado de carrito a control remoto cuando debe ser un giro controlado... que pasó con el derrape y las variables cool y excentricas del control del jet, no aplican acá?
 - [X] Estela de humo del misil !! Falta alargar la fase opaca: empieza a desvanecerse al primer tercio, hacen falta 3–4 frames opacos más y algún paso de alfa extra antes del final
+- [X] Sombra del misil !! Redibujarla ovalada y de 3 px de ancho: ahora mide lo mismo que el cuerpo del misil y en los últimos frames se funden
 - [ ] El contador de impacto debería ser visible siempre sobre la unidad? de ese modo puedo saber si está siendo atacado mientras uso otra unidad.
 - [X] Pausar y play
 - [X] Diferentes zooms !! El zoom al CV es muy grande

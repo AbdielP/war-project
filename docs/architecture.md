@@ -764,24 +764,28 @@ entero cambia el dibujo, y el **sub-frame** (siempre, `randf()`) descoloca *cuá
 salta al siguiente. Sin él escalonarían todas a la vez: a velocidad de crucero cada frame
 dura tres bocanadas, y se veían bandas de tres iguales avanzando en bloque.
 
-**`core/weapon/missile_smoke_frames.tres`**: 17 `AtlasTexture` de 16×16 sobre
-`Missile_smoke_animation_16x16.png` (la tira trae 18; el último está vacío y se descartó),
-a 24 fps y `loop = false`. **Las duraciones no son planas** — 1,0 en los 9 primeros y de
-1,5 a 5,0 en los 8 últimos — y ahí está el largo de la cola: 35 unidades / 24 fps = 1,458 s,
-que a 300 px/s son **~438 px de estela y ~109 bocanadas vivas**. Se hizo así en vez de bajar
-`speed`: eso habría alargado igual, pero devolviendo a 12 fps el nacimiento, que es donde el
-dibujo cambia mucho entre frames y un salto se vería.
+**`core/weapon/missile_smoke_frames.tres`**: 23 `AtlasTexture` de 16×16 sobre
+`Missile_smoke_animation_16x16.png` (tira de 368×16), a 24 fps y `loop = false`. Dos fases:
+**0–8 la bocanada formándose** (de 1 a 6 columnas de ancho, opaca) y **9–22 disipándose**
+(se abre hasta las 16 columnas del tile y baja el alfa 100 → 70 → 55 → 39 → 22 → 11 %).
 
-> **Limitación conocida: el final de la cola se ve plano**, y es el precio de lo anterior.
-> Los 8 frames estirados se llevan 26 de las 35 unidades: **~325 px de los 438 son dibujo
-> congelado**, y el frame 16 dura 0,208 s — ~16 bocanadas seguidas enseñando el mismo píxel.
-> El desfase no lo tapa porque es fijo: donde un frame dura 1 unidad lo cambia todo, donde
-> dura 5 sólo despeina el borde. Causa de fondo: **el arte no tiene fase de disipación** —el
-> alfa es 100 % en los 17 frames, y los 9–16 *encogen* hasta un píxel sólido en vez de
-> abrirse (nunca pasa de 6 columnas de ancho, ni en el pico del frame 8). Pendiente de
-> redibujar esa fase más ancha, más rota y con rampa de alfa; entonces las duraciones pueden
-> volver casi a plano. Segundo síntoma del mismo origen: todas mueren a los 438 px exactos,
-> así que la estela acaba en corte recto.
+**Las duraciones no son planas, pero casi** — 1,0 en los 9 primeros y una rampa suave de
+1,5 a 2,6 en los 14 últimos — y ahí está el largo de la cola: 35,2 unidades / 24 fps =
+1,467 s, que a 300 px/s son **~440 px de estela y ~110 bocanadas vivas**. Se alarga por
+frame en vez de bajando `speed`: eso habría alargado igual, pero devolviendo a 12 fps el
+nacimiento, que es donde el dibujo cambia mucho entre frames y un salto se vería. La rampa
+se concentra al final a propósito: **cada unidad de duración son 12,5 px de estela enseñando
+el mismo dibujo**, así que estirar sale caro en bandas, y sólo es barato donde el alfa ya
+está al 22 % y al 11 %.
+
+> **Reserva conocida: la estela empieza a desvanecerse pronto.** Los frames opacos (0–17) se
+> llevan 301 px y el fade (18–22) los 139 restantes, o sea que se disuelve desde el primer
+> tercio y se lee menos como rastro. **Es de reparto de dibujos, no de reproducción**:
+> alargar la fase opaca sólo con duraciones devolvería las bandas (fue la causa de la cola
+> plana de la primera versión, ver `docs/decisions.md`). El arreglo bueno son 3–4 pasos
+> opacos más y algún paso de alfa extra. Límite duro a tener presente: con 2,5 s de
+> combustible el misil vuela ~700 px, así que una cola mucho más larga cubriría el recorrido
+> entero y dejaría de verse disolver en vuelo.
 
 #### `WeaponSystem` — `weapon_system.gd`
 ```
@@ -1245,6 +1249,11 @@ bloque. Aviso por experiencia: **un desfase fijo no arregla los tramos de frames
 si un frame dura cinco veces más, un desfase de una unidad sólo despeina el borde de la
 racha. Ahí el problema es de arte, no de reproducción.
 
+En un efecto que se siembra por distancia hay además una **regla de cambio**: la duración de
+un frame se convierte en longitud de rastro enseñando ese mismo dibujo (en el humo, 1 unidad
+= 12,5 px). Sirve para decidir dónde estirar sin pensar en segundos: donde el dibujo es
+visible sale caro en bandas, y sólo es barato en los frames que ya casi no se ven.
+
 ### Colocar arte sobre arte: medir los píxeles, no ajustar a ojo
 El desplazamiento de un efecto respecto a lo que decora sale de las filas/columnas opacas
 reales de las dos texturas, no de mover el nodo hasta que quede bien. Con sprites
@@ -1308,7 +1317,7 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [x] Cuenta atrás de impacto sobre el objetivo, ligada a la selección
 - [x] Botones de arma con munición restante, deshabilitados al agotarse
 - [x] Fuego del propulsor del misil (`MissileExhaust`), enganchado a `motor_ignited` / `fuel_spent`
-- [x] Estela de humo del misil (`MissileSmokeTrail` / `SmokePuff`): bocanadas sueltas sembradas por distancia, con la reserva de la cola plana anotada en su sección
+- [x] Estela de humo del misil (`MissileSmokeTrail` / `SmokePuff`): bocanadas sueltas sembradas por distancia, con fase de disipación por alfa
 - [x] Tres niveles de zoom (0,5x / 1x / 2x) con botones `+` / `−` en el HUD
 - [x] Pausa y play (botón + barra espaciadora); cámara, HUD y selección siguen vivos en pausa
 
@@ -1316,7 +1325,7 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [ ] Proyectil balístico para bombas (el mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`)
 - [ ] Cañón: hace falta resolver antes cómo dibujar una ráfaga sin instanciar un nodo por bala (impacto por cálculo + trazadoras)
 - [ ] Efectos: explosión, sombra y caída. Los enganches existen (`detonated`), falta el arte. Fuego y humo ya están — `MissileExhaust` y `MissileSmokeTrail` sirven de patrón
-- [ ] Redibujar los frames 9–16 del humo: que se abran y se desvanezcan por alfa en vez de encoger, para quitar la cola plana (ver `SmokePuff`)
+- [ ] Alargar la fase opaca del humo (3–4 frames más antes de que baje el alfa, y algún paso de alfa extra): hoy la estela se disuelve desde el primer tercio (ver `SmokePuff`)
 - [ ] Contramedidas (bengalas, chaff, ECM) como blancos falsos y degradación del guiado
 - [ ] Qué hace el avión cuando se queda sin munición y el blanco sigue vivo (hoy sigue haciendo pasadas)
 - [ ] Cadena de repliegue de arma: usar la siguiente cuando se acaba una, cañón como último recurso

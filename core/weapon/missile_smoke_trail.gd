@@ -14,8 +14,9 @@ class_name MissileSmokeTrail
 
 @export var puff_scene: PackedScene
 ## Cada cuántos píxeles recorridos sale una bocanada. Más bajo = estela más
-## densa y más nodos vivos. El arte mide ~6 px de ancho, así que por debajo de
-## eso las piezas se solapan y la cola se lee continua.
+## densa y más nodos vivos. La bocanada recién nacida mide ~6 px de ancho (luego
+## se abre hasta 16 al disiparse), así que por debajo de eso las piezas se
+## solapan ya desde la tobera y la cola se lee continua de principio a fin.
 @export var spacing_px: float = 4.0
 
 var _world: Node = null

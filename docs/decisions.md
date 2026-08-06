@@ -2,6 +2,17 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-06
+
+### La cola plana se arregló donde estaba el problema: en el dibujo
+El usuario redibujó la fase de disipación del humo. La tira pasa de 288×16 (18 frames, uno vacío) a **368×16 = 23 frames**, todos en uso. Los frames 0–8 —la bocanada formándose— están intactos, así que el píxel de nacimiento sigue en (7,14) y el nodo `SmokeTrail` no se movió de (0,−12). Lo nuevo son los **14 frames de disipación** (9–22) donde antes había 8: ahora **se abren** hasta ocupar el tile entero (de 6 a 16 columnas) y **se desvanecen por alfa** (100 → 70 → 55 → 39 → 22 → 11 %), en vez de encoger hasta un píxel sólido.
+
+**Con arte de verdad, las duraciones vuelven casi a plano.** Ya no hay que inventar la disipación estirando: frames 0–8 a `1,0` (24 fps limpios) y 9–22 con una rampa suave de `1,5` a `2,6`. 35,2 unidades / 24 fps = 1,467 s → **440 px de estela y ~110 bocanadas vivas**, prácticamente el mismo largo que antes. Lo que cambia es el reparto: **la banda más larga baja de 62 px a 32 px**, y cae en los frames al 22 % y 11 % de alfa, donde apenas se ve. Ahí estaba la cola plana. El parche descartado en su día —±15 % de velocidad por bocanada— sigue sin hacer falta.
+
+**Queda una reserva, y es de reparto, no de dibujo.** Los frames opacos (0–17) se llevan 301 px y el fade (18–22) los otros 139: la estela empieza a desvanecerse a un tercio del recorrido, así que se lee más como algo que se disuelve que como un rastro. Se deja así a propósito. Alargar la fase opaca sólo con duraciones devolvería las bandas; el camino bueno es dibujar 3 o 4 pasos opacos más (y más de 5 de alfa, para que el final no sea un corte). Y hay un límite duro que conviene tener presente: con 2,5 s de combustible el misil vuela ~700 px, así que una cola mucho más larga cubriría el recorrido entero y dejaría de verse disolver mientras vuela.
+
+Verificado en headless: 23 frames, `loop = false`, espaciado real 4,000 exacto de mínimo a máximo sobre una curva de 90°, ~110 bocanadas simultáneas, y el emisor se apaga en `fuel_spent`.
+
 ## 2026-08-05
 
 ### La estela no es una animación: es un rastro de piezas que ya salieron
@@ -15,7 +26,7 @@ Humo del AGM-65, con arte del usuario (tira de 288×16 = 18 frames de 16×16, el
 
 **Contra la repetición: espejo y desfase.** Todas las bocanadas son el mismo dibujo saliendo cada 4 px exactos, y eso se lee como un sello repetido. `flip_h` al azar duplica los dibujos gratis (y mueve el píxel de nacimiento de la columna 7 a la 8, las dos cola del misil, así que sigue anclada). El desfase tiene dos partes: un frame entero opcional (`start_jitter_frames`) que cambia el dibujo, y **siempre uno de menos de un frame**, que no cambia nada visible al nacer pero descoloca *cuándo* cada una salta al siguiente frame. Sin esa segunda parte seguirían escalonando a la vez, que era lo que se notaba: a velocidad de crucero cada frame dura tres bocanadas, y se veían bandas de tres iguales avanzando en bloque.
 
-**Limitación conocida y sin resolver: la cola se ve plana al final.** Es el precio de haber alargado estirando duraciones. Los 8 frames finales se llevan **26 de las 35 unidades de vida — ~325 px de los 438 son dibujo congelado**; el frame 16 dura 0,208 s, y en ese rato nacen ~16 bocanadas que enseñan el mismo píxel en fila. El desfase no lo arregla porque es **fijo**: donde cada frame dura 1 unidad lo cambia todo, y donde dura 5 sólo despeina el borde de la racha. De ahí que varíe la cabeza y no la cola. Segundo síntoma del mismo origen: todas mueren a los 438 px exactos, así que la estela termina en corte recto.
+**Limitación conocida: la cola se ve plana al final.** *(Resuelta el 2026-08-06 redibujando el arte — ver la entrada de arriba. Se deja el diagnóstico porque explica por qué se resolvió así.)* Es el precio de haber alargado estirando duraciones. Los 8 frames finales se llevan **26 de las 35 unidades de vida — ~325 px de los 438 son dibujo congelado**; el frame 16 dura 0,208 s, y en ese rato nacen ~16 bocanadas que enseñan el mismo píxel en fila. El desfase no lo arregla porque es **fijo**: donde cada frame dura 1 unidad lo cambia todo, y donde dura 5 sólo despeina el borde de la racha. De ahí que varíe la cabeza y no la cola. Segundo síntoma del mismo origen: todas mueren a los 438 px exactos, así que la estela termina en corte recto.
 
 **Se deja así a propósito, porque el arreglo es de arte.** El diagnóstico real: **el arte no tiene fase de disipación** —el alfa es 100 % en los 17 frames, y lo que parece un desvanecido es perder píxeles hasta quedar uno solo, sólido— y esa fase se inventó estirando. Los frames 9–16 *encogen*, cuando una estela real se abre en cono: el humo no pasa de 6 columnas de ancho en toda su vida, ni en el pico. El usuario los va a redibujar más anchos, más rotos y con rampa de alfa; con frames de verdad hay largo *y* variedad, y las duraciones pueden volver casi a plano. Los parches disponibles mientras tanto —dar a cada bocanada una velocidad ±15 % para que la divergencia crezca con la edad— se descartaron por ahora: arreglan el síntoma en la zona equivocada del problema.
 

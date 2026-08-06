@@ -78,7 +78,7 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 		- Siempre falla el misil al tratar de re tomar el ataque? parece que si.
 	- Sigue intentando atacar aún cuando se quedó sin arma. supongo que es por que no tenemos mas logicas de armas aún.
 	- El avión vira demasiado brusco y enseguida al lanzar el misil. es un giro cerrado de carrito a control remoto cuando debe ser un giro controlado... que pasó con el derrape y las variables cool y excentricas del control del jet, no aplican acá?
-- [X] Estela de humo del misil !! La cola se ve plana al final: hay que redibujar los frames 9–16 para que se abran y se desvanezcan por alfa en vez de encoger
+- [X] Estela de humo del misil !! Falta alargar la fase opaca: empieza a desvanecerse al primer tercio, hacen falta 3–4 frames opacos más y algún paso de alfa extra antes del final
 - [ ] El contador de impacto debería ser visible siempre sobre la unidad? de ese modo puedo saber si está siendo atacado mientras uso otra unidad.
 - [X] Pausar y play
 - [X] Diferentes zooms !! El zoom al CV es muy grande

@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" load_steps=19 format=3]
+[gd_resource type="SpriteFrames" load_steps=25 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/art/sprites/Animations/Missile_smoke_animation_16x16.png" id="1"]
 
@@ -70,9 +70,34 @@ region = Rect2(240, 0, 16, 16)
 atlas = ExtResource("1")
 region = Rect2(256, 0, 16, 16)
 
+[sub_resource type="AtlasTexture" id="Frame_17"]
+atlas = ExtResource("1")
+region = Rect2(272, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_18"]
+atlas = ExtResource("1")
+region = Rect2(288, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_19"]
+atlas = ExtResource("1")
+region = Rect2(304, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_20"]
+atlas = ExtResource("1")
+region = Rect2(320, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_21"]
+atlas = ExtResource("1")
+region = Rect2(336, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_22"]
+atlas = ExtResource("1")
+region = Rect2(352, 0, 16, 16)
+
 [resource]
 animations = [{
 "frames": [{
+
 "duration": 1.0,
 "texture": SubResource("Frame_00")
 }, {
@@ -103,26 +128,45 @@ animations = [{
 "duration": 1.5,
 "texture": SubResource("Frame_09")
 }, {
-"duration": 2.0,
+"duration": 1.5,
 "texture": SubResource("Frame_10")
 }, {
-"duration": 2.5,
+"duration": 1.6,
 "texture": SubResource("Frame_11")
 }, {
-"duration": 3.0,
+"duration": 1.6,
 "texture": SubResource("Frame_12")
 }, {
-"duration": 3.5,
+"duration": 1.7,
 "texture": SubResource("Frame_13")
 }, {
-"duration": 4.0,
+"duration": 1.7,
 "texture": SubResource("Frame_14")
 }, {
-"duration": 4.5,
+"duration": 1.8,
 "texture": SubResource("Frame_15")
 }, {
-"duration": 5.0,
+"duration": 1.8,
 "texture": SubResource("Frame_16")
+}, {
+"duration": 1.9,
+"texture": SubResource("Frame_17")
+}, {
+"duration": 1.9,
+"texture": SubResource("Frame_18")
+}, {
+"duration": 2.0,
+"texture": SubResource("Frame_19")
+}, {
+"duration": 2.2,
+"texture": SubResource("Frame_20")
+}, {
+"duration": 2.4,
+"texture": SubResource("Frame_21")
+}, {
+"duration": 2.6,
+"texture": SubResource("Frame_22")
+
 }],
 "loop": false,
 "name": &"puff",

@@ -12,10 +12,12 @@ class_name SmokePuff
 ##
 ## No todos los frames duran lo mismo, y no es un capricho. Los 9 primeros —la
 ## bocanada formándose— van a 24 fps limpios, porque ahí el dibujo cambia mucho
-## de un frame al otro y a menos velocidad se vería a saltos. Los últimos 8 van
-## alargándose hasta durar 5 veces más: el humo ya solo se deshace, cambia poco,
-## y es donde interesa que se quede. Se alarga la cola sin perder fluidez donde
-## se nota. Está todo en `missile_smoke_frames.tres`, por frame.
+## de un frame al otro y a menos velocidad se vería a saltos. Los 14 de la
+## disipación se alargan poco a poco hasta 2,6 veces, que es como se llega a los
+## 440 px sin bajar los fps. La rampa va al final a posta: cada unidad de
+## duración son 12,5 px de estela enseñando el mismo dibujo, así que estirar sale
+## caro en bandas repetidas y solo es barato donde el alfa ya está por el 11 %.
+## Está todo en `missile_smoke_frames.tres`, por frame.
 @export var puff_anim: StringName = &"puff"
 
 ## Cuántos frames puede saltarse al nacer, como mucho. Es lo que evita que la

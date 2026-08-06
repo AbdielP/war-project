@@ -91,6 +91,13 @@ func get_speed() -> float:
 	return _velocity.length()
 
 
+## Lo que le falta para llegar, en px. Lo lee [MissileShadow] como altura: no
+## hay altura de verdad en un juego 2D, así que la aproximación es que un misil
+## que ya casi llega es un misil que ya casi está en el suelo.
+func get_distance_to_aim() -> float:
+	return global_position.distance_to(_aim_point)
+
+
 func launch(shooter: Unit, muzzle: Node2D, at: Unit, weapon: WeaponType,
 		aim_offset: Vector2 = Vector2.ZERO) -> void:
 	super(shooter, muzzle, at, weapon, aim_offset)

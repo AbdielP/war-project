@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://dgpbq55vf6cfr"]
+[gd_scene load_steps=9 format=3 uid="uid://dgpbq55vf6cfr"]
 
 [ext_resource type="Script" uid="uid://bcwglvnq3iy1q" path="res://core/weapon/guided_missile.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://b8qv2c2umn0wp" path="res://assets/art/sprites/agm65_maverick.tres" id="2"]
@@ -6,6 +6,8 @@
 [ext_resource type="SpriteFrames" path="res://core/weapon/missile_exhaust_frames.tres" id="4"]
 [ext_resource type="Script" path="res://core/weapon/missile_smoke_trail.gd" id="5"]
 [ext_resource type="PackedScene" path="res://core/weapon/smoke_puff.tscn" id="6"]
+[ext_resource type="Script" path="res://core/weapon/missile_shadow.gd" id="7"]
+[ext_resource type="SpriteFrames" path="res://core/weapon/missile_shadow_frames.tres" id="8"]
 
 [node name="Agm65Missile" type="Node2D" unique_id=47075066]
 z_index = 9
@@ -27,3 +29,9 @@ script = ExtResource("3")
 position = Vector2(0, -12)
 script = ExtResource("5")
 puff_scene = ExtResource("6")
+
+[node name="Shadow" type="AnimatedSprite2D" parent="."]
+z_index = -2
+sprite_frames = ExtResource("8")
+animation = &"descend"
+script = ExtResource("7")

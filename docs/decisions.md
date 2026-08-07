@@ -2,6 +2,29 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-06 (3)
+
+### El mapa no sabe cuánto mide el mapa
+Minimapa y mapa táctico. Cuatro archivos en `ui/hud/minimap/` y **un solo dibujo**: el de la esquina y el de pantalla completa son el mismo `MapView` con distintos ajustes, sobre la misma imagen a distinta escala. Por ahora sólo terreno, sin unidades.
+
+**Nada guarda el tamaño del mapa.** Es la decisión de la que cuelga todo lo demás. Los mapas van a variar por misión, así que cualquier constante con el tamaño se queda vieja el día que se cargue otro. El tamaño se le pregunta al `TileMapLayer` (`get_used_rect()`), que es de donde ya lo sacaba `PanCamera` para sus límites. Una sola verdad, y el minimapa de una misión nueva funciona sin tocar nada.
+
+**La escala se calcula: el mayor entero de píxeles por celda que quepa.** Con el mapa actual sale 1 px/celda en el panel de 87 (imagen de 64×45) y 8 px/celda a pantalla completa (512×360). Si un mapa fuera tan grande que no cabe ni a 1, **se reduce el dato y no el dibujo**: cada píxel de la imagen resume un bloque de celdas y se sigue dibujando a escala 1. Nunca hay escala fraccionaria, que con filtro Nearest es exactamente lo que hierve al mover la cámara — el mismo motivo por el que `PanCamera` sólo admite potencias de dos.
+
+**El terreno sale de un dato del tile, no del color del dibujo.** Se añadió al TileSet una capa de datos `tipo` (`agua`, `tierra`, `arena`) marcada **una vez por tile en el atlas**, no por celda pintada: son 101 tiles contra 2880 celdas. Llegué a proponer deducirlo del color dominante de cada tile, que funciona y no exige marcar nada; el usuario lo rechazó y tenía razón — pinta bien pero no *sabe* nada, y el día que haga falta "¿puede pasar un tanque por aquí?" el color no lo contesta. El color se usó sólo como **borrador** para rellenar los 101 tiles de una pasada en vez de a mano.
+
+De paso apareció que el atajo que había ofrecido como parche —clasificar por `source_id`— **habría salido mal**: el tileset `sand2` contiene tiles de agua *y* de arena mezclados, y los dos de agua son el 95 % del mapa.
+
+**Las coordenadas no pueden ir en la rejilla de 32 px.** Son 2880 celdas: ni caben etiquetas (a 8 px por celda no entra una letra) ni sirve de nada un nombre por celda. Van por **zonas de 4×4 celdas** → 16 × 12 = A1…P12, rotuladas **fuera del mapa** y repetidas en los dos bordes, para no seguir una fila con el dedo hasta el otro extremo. La rejilla de 32 px se queda como líneas finas sin rotular, y **se apaga sola** por debajo de 4 px por celda: más juntas no se leen como cuadrícula, se leen como suciedad. El tamaño de zona queda como exportado (`zone_cells`) porque es de verlo en pantalla, no de decidirlo en una tabla.
+
+**El origen del mapa no es (0,0)** — hoy arranca en la fila −6. Las coordenadas cuentan desde la primera celda usada; contarlas desde el cero del mundo habría desplazado todas las etiquetas sin que se notase.
+
+**El recuadro de lo que se ve en pantalla sale de la transformación del lienzo, no de la cámara.** Es una propiedad de lo que hay en pantalla, no de un nodo concreto, así que el mapa lo dibuja sin conocer a nadie. Para *mover* la cámara sí se emite señal y la mueve `SelectionManager`, como el zoom: el HUD no manda sobre la cámara.
+
+**Pulsar el mapa grande lleva la mirada allí y lo cierra**, soltando el `follow_target` (si no, la cámara volvería a la unidad al frame siguiente y parecería roto). El minimapa **no navega**: a 1 px por celda no tiene sentido apuntar a un sitio, así que entero es un botón que abre el grande. El mapa táctico tapa la pantalla y se come los clicks a propósito, para que una pulsación no se cuele hasta el mundo y dé una orden sin querer. En pausa funciona sin hacer nada, porque cuelga del HUD.
+
+Verificado en headless: imagen de 64×45 con 2749 agua / 97 tierra / 34 arena —cuadra celda a celda con el tileset—, 16×12 zonas con las 192 devolviendo su propia etiqueta, letras `A`/`Z`/`AA`/`AB`/`AZ`/`BA`, esquinas `A1` y `P12`, ida y vuelta click↔mundo con error 0,000 px, la cadena completa minimapa → abre → click → cámara → cierra, y la `M` abriendo y cerrando **también con la partida pausada**.
+
 ## 2026-08-06 (2)
 
 ### La sombra no cuenta el tiempo, mide la distancia

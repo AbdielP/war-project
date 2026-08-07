@@ -25,6 +25,7 @@ func _ready() -> void:
 	_hud.unit_focus_requested.connect(func(unit: Unit) -> void: _select(unit))
 	_hud.attack_requested.connect(_issue_attack_order)
 	_hud.zoom_change_requested.connect(_camera.step_zoom)
+	_hud.camera_move_requested.connect(_look_at)
 	_camera.zoom_changed.connect(_hud.set_zoom_state)
 	# La cámara ya fijó su nivel en su propio _ready(), antes de que hubiera
 	# nadie escuchando: hay que pedirle el estado inicial a mano o los botones
@@ -35,6 +36,13 @@ func _ready() -> void:
 	# Diferido: en _ready() la escena todavía se está montando y Godot
 	# rechaza el add_child (el marcador nunca llegaba a existir).
 	get_tree().current_scene.add_child.call_deferred(_move_marker)
+
+
+## Llevar la mirada a un punto del mapa. Suelta a quien estuviera siguiendo: si
+## no, la cámara volvería a la unidad al frame siguiente y el mapa parecería roto.
+func _look_at(world_position: Vector2) -> void:
+	_camera.follow_target = null
+	_camera.position = world_position
 
 
 func _unhandled_input(event: InputEvent) -> void:

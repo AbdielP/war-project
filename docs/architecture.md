@@ -8,7 +8,10 @@ Referencia de sesión. Actualizar cuando cambie algo relevante.
 
 ```
 Node2D
-├── TileMapLayer          — terreno (tile_set: terrain_tileset.tres)
+├── TileMapLayer          — terreno (tile_set: terrain_tileset.tres, celdas de 32×32)
+│                           hoy 64×45 celdas desde (0,−6) = 2048×1440 px de mundo.
+│                           Es la única fuente del tamaño del mapa: de aquí sacan
+│                           sus límites `PanCamera` y su imagen `MapTerrain`.
 ├── LHD_WASP              — instance lhd_wasp.tscn, position (1110, 519)
 ├── HUD                   — instance hud.tscn (CanvasLayer, fijo en pantalla)
 ├── PanCamera             — instance pan_camera.tscn (Camera2D)
@@ -927,6 +930,7 @@ extends CanvasLayer   class_name HUD
 | `unit_focus_requested(unit: Unit)` | Click en un cuadrito de `DeployedPanel`, o "Información" en `TargetMenu` |
 | `attack_requested(target: Unit)` | El jugador tocó "Atacar" en `TargetMenu` |
 | `zoom_change_requested(step: int)` | Pidió acercar (+1) o alejar (−1). Reenvía lo de `ZoomControls`; el HUD no conoce la cámara |
+| `camera_move_requested(world_position: Vector2)` | Pulsó un punto del mapa táctico. Mismo trato: reenvía |
 
 API:
 - `show_selected_unit(unit: Unit)` — muestra panel + acciones (si controla) + barra de armas (si controla) + botón ×; se suscribe a `attack_target_changed` de la unidad
@@ -1107,6 +1111,104 @@ extends PanelContainer
 ```
 `add_event(text: String)` — añade línea, máximo 4, elimina la más vieja.
 
+### Mapa — `ui/hud/minimap/`
+
+Cuatro archivos y **un solo dibujo**: el minimapa de la esquina y el mapa táctico a
+pantalla completa son el mismo `MapView` con distintos ajustes, sobre la misma imagen a
+distinta escala.
+
+#### `MapTerrain` — `map_terrain.gd`
+```
+extends RefCounted   class_name MapTerrain
+```
+El terreno reducido a una `ImageTexture` de **un píxel por celda**, más las cuentas de
+coordenadas. No es un nodo: es el dato que dibujan los dos mapas.
+
+| Miembro | Descripción |
+|---------|-------------|
+| `build(layer, cells_per_pixel)` | estático. Construye la imagen leyendo el `TileMapLayer` |
+| `texture` / `cells` / `origin_cell` / `tile_px` / `world_rect` | la imagen y las medidas del mapa |
+| `cells_per_px` | cuántas celdas resume cada píxel. 1 salvo mapas enormes |
+| `zone_count(n)` / `zone_at(world, n)` / `zone_center(zone, n)` / `label_at(world, n)` | coordenadas |
+| `column_label(i)` | estático. `A`…`Z`, `AA`, `AB`… |
+
+**El tamaño sale del `TileMapLayer`, nunca de una constante.** El mapa cambia por misión;
+apuntarlo en algún sitio sería tener dos verdades y que una envejezca. Misma fuente de la
+que `PanCamera` saca sus límites.
+
+**El tipo de terreno sale del dato, no del dibujo.** El TileSet lleva una capa de datos
+personalizada `tipo` (`agua`, `tierra`, `arena`), marcada **una vez por tile en el atlas**
+—no por celda pintada—, y `COLORS` dice de qué color se pinta cada uno. Un tipo que esté en
+el mapa pero no en `COLORS` sale en rojo (`UNKNOWN_COLOR`): mejor que cante a que
+desaparezca. Se descartó deducir el terreno del color dominante del tile: pinta bien pero
+no *sabe* nada, y dos tiles parecidos pueden ser cosas distintas.
+
+**Un píxel que resume varias celdas se decide por mayoría, no por promedio.** Promediar
+colores inventa uno que no está en Resurrect64.
+
+**El origen no es (0,0)** — hoy el mapa arranca en la fila −6. Las coordenadas cuentan
+desde `origin_cell`; contarlas desde el cero del mundo desplazaría todas las etiquetas sin
+que se notara.
+
+#### `MapView` — `map_view.gd`
+```
+extends Control   class_name MapView
+```
+Dibuja terreno, rejilla, coordenadas y el recuadro de lo que se ve en pantalla. Emite
+`map_clicked(world_position)`.
+
+| Exportado | Minimapa | Táctico | Qué hace |
+|-----------|----------|---------|----------|
+| `show_grid` | `false` | `true` | rejilla fina (celdas) + gruesa (zonas) |
+| `show_labels` | `false` | `true` | letras arriba y abajo, números a los lados |
+| `zone_cells` | — | `4` | celdas por lado de zona. **El número a mover si las coordenadas salen gruesas o finas** |
+| `show_viewport_rect` | `true` | `true` | recuadro de lo que se está mirando |
+
+**La escala no se configura, se calcula:** el mayor número entero de píxeles por celda que
+quepa en el control. Si no cabe ni uno, se resume el mapa dentro de la propia imagen y se
+dibuja a 1. **Nunca hay escala fraccionaria**, que con Nearest es lo que hace hervir los
+píxeles al mover la cámara — el mismo motivo por el que `PanCamera` sólo usa potencias de
+dos. Con el mapa de 64×45: minimapa 1 px/celda (imagen de 64×45 en un panel de 87), táctico
+8 px/celda (512×360). Se recalcula en `resized`, así que redimensionar el panel basta.
+
+**La rejilla fina se apaga sola** por debajo de 4 px por celda: líneas más juntas no se leen
+como cuadrícula, se leen como suciedad.
+
+**Las coordenadas van fuera del mapa**, repetidas en los dos bordes para no tener que seguir
+una fila con el dedo hasta el otro extremo. Dentro no caben —a 8 px por celda una zona de
+4 celdas mide 32 px— y taparían el terreno.
+
+**El recuadro de pantalla sale de la transformación del lienzo, no de la cámara.** Es una
+propiedad de lo que hay en pantalla, no de un nodo concreto, así que el mapa lo dibuja sin
+conocer a nadie.
+
+#### `Minimap` — `minimap.gd`
+```
+extends PanelContainer   class_name Minimap
+```
+El mapa pequeño. Emite `expand_requested`. **No es un mando de navegación**: a 1 px por
+celda no cabe una coordenada ni tendría sentido apuntar a un sitio concreto, así que el
+minimapa entero —terreno y marco— es un botón que abre el grande.
+
+#### `TacticalMap` — `tactical_map.gd`
+```
+extends Control   class_name TacticalMap
+```
+El mapa a pantalla completa. Emite `move_requested(world_position)` y `closed`. Se abre y
+cierra con `shortcut_key` (`M`, `KEY_NONE` la desactiva) o pulsando el minimapa.
+
+Pulsar un punto lleva la cámara allí **y cierra**: se abre el mapa para decidir a dónde ir,
+y una vez decidido estorba. `SelectionManager._look_at()` es quien mueve la cámara, y
+suelta el `follow_target` al hacerlo — si no, la cámara volvería a la unidad al frame
+siguiente y el mapa parecería roto.
+
+Tapa la pantalla y **se come los clicks a propósito**: con el mapa abierto, una pulsación no
+puede colarse hasta el mundo y dar una orden de movimiento sin querer. Funciona en pausa sin
+hacer nada, porque cuelga del HUD y el HUD ya es `process_mode = Always`.
+
+**El terreno se reconstruye al abrir**, no al arrancar: el mapa cambia por misión y así no
+hay que acordarse de avisar a nadie al cargar otro.
+
 ---
 
 ## Autoloads
@@ -1247,6 +1349,23 @@ Quien los junta es la unidad, que traduce una a otra y rehace las distancias si 
 cambia a mitad de acción. Lo mismo con `salvo_size` / `salvo_spread`: "de uno en uno" o
 "toda la carga con dispersión" es un número en un `.tres`, no una rama de código.
 
+Mismo criterio con el terreno: **qué es un tile lo marca el artista en el TileSet, no lo
+adivina el código mirando el dibujo**. La capa de datos `tipo` se rellena una vez por tile
+en el atlas —no por celda pintada, que son miles— y todo lo que necesite saber de terreno
+la lee. Deducirlo del color dominante del tile llegó a plantearse y se descartó: pinta bien
+pero no *sabe* nada, y dos tiles parecidos pueden ser cosas distintas. El color se usó sólo
+como borrador para no marcar 101 tiles a mano la primera vez.
+
+### La escala de una vista se calcula, no se configura
+Todo lo que enseñe el mundo a otro tamaño —el minimapa, el mapa táctico— saca su escala del
+sitio que tiene y del tamaño real del mapa, cogiendo **el mayor entero que quepa**. Nunca un
+número escrito a mano: el mapa cambia por misión y el panel no, así que cualquier constante
+se queda vieja o produce una escala fraccionaria. Y una escala fraccionaria con filtro
+Nearest descarta píxeles en un patrón irregular que hierve al mover la cámara — mismo motivo
+por el que `PanCamera` sólo admite potencias de dos. Cuando ni el entero más pequeño cabe,
+se reduce **el dato** (varias celdas por píxel de imagen) en vez de encoger el dibujo. Ver
+`MapView` y `MapTerrain`.
+
 ### Limitar la maniobra por radio, no por velocidad angular
 Un móvil con tope de grados por segundo gira **más cerrado** cuanto más rápido va, que es
 al revés que la física y produce proyectiles imposibles de esquivar. Con tope de radio de
@@ -1380,7 +1499,7 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [x] AV-8B Harrier: vuelo al punto → órbita CCW
 - [x] LHD Wasp: despliegue completo (elevador → taxi → despegue → óvalo)
 - [x] HangarWindow: selector cantidad + misión + DESPLEGAR
-- [x] HUD base: event log, minimap placeholder, selection panel, actions panel
+- [x] HUD base: event log, minimapa, selection panel, actions panel
 - [x] Vuelo separado en `PlaneController` (cómo vuela) + `OrbitBehavior` (a dónde va); la cubierta cede el control con `start_flight()` y no vuelve a tocar al avión
 - [x] Escuadrones agrupan en un solo cuadrito con badge `xN` en `DeployedPanel`, click enfoca al líder
 - [x] Armamento por misión: se elige loadout en el hangar y el avión sale con las armas colgadas de los `Marker2D` de las alas (`HardpointRack`)
@@ -1404,6 +1523,8 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [x] Sombra del misil (`MissileShadow`): frame por distancia al blanco, se junta con él en el impacto
 - [x] Tres niveles de zoom (0,5x / 1x / 2x) con botones `+` / `−` en el HUD
 - [x] Pausa y play (botón + barra espaciadora); cámara, HUD y selección siguen vivos en pausa
+- [x] Minimapa y mapa táctico (`MapTerrain` / `MapView` / `Minimap` / `TacticalMap`): terreno, rejilla de celdas y coordenadas por zonas. Sólo terreno, todavía sin unidades
+- [x] Capa de datos `tipo` en `terrain_tileset.tres` (agua / tierra / arena), 101 tiles marcados
 
 ### Pendiente
 - [ ] Proyectil balístico para bombas (el mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`)
@@ -1423,7 +1544,9 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [ ] Sistema de vuelo completo: objetivos, ataque, regreso al portaaviones
 - [ ] Aterrizaje/recuperación de aviones
 - [ ] Pantalla de puerto (reemplazar `PlayerFleet` hardcodeado)
-- [ ] Minimapa interactivo (placeholder existe, lógica pendiente de definir)
+- [ ] Unidades en el mapa (hoy sólo terreno): puntos por bando, y el minimapa como aviso de que pasa algo fuera de pantalla
+- [ ] Coordenadas pulsables en el `EventLog`: `MapTerrain.label_at()` y `zone_center()` ya existen para eso, falta que el registro las escriba y las enlace
+- [ ] Decidir el tamaño de zona definitivo (`zone_cells`, hoy 4 → A1…P12): es de verlo en pantalla
 - [ ] Mecánicas de ataque/combate
 - [ ] Unidades enemigas
 - [ ] Menú de opciones al clickear unidad enemiga (ya se selecciona; falta el menú)

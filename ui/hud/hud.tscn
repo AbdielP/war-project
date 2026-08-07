@@ -11,6 +11,7 @@
 [ext_resource type="PackedScene" path="res://ui/hud/target_menu/target_menu.tscn" id="8"]
 [ext_resource type="PackedScene" path="res://ui/hud/zoom_controls/zoom_controls.tscn" id="9"]
 [ext_resource type="PackedScene" path="res://ui/hud/pause_button/pause_button.tscn" id="10"]
+[ext_resource type="PackedScene" path="res://ui/hud/minimap/tactical_map.tscn" id="11"]
 
 [node name="HUD" type="CanvasLayer" unique_id=1219806315]
 process_mode = 3
@@ -27,6 +28,8 @@ offset_left = 5.0
 offset_top = 292.0
 offset_right = 92.0
 offset_bottom = 379.0
+
+[node name="TacticalMap" parent="." instance=ExtResource("11")]
 
 [node name="HangarWindow" parent="." instance=ExtResource("5")]
 

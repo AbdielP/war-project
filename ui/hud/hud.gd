@@ -7,6 +7,8 @@ signal unit_focus_requested(unit: Unit)
 signal attack_requested(target: Unit)
 ## Pidió acercar (+1) o alejar (−1). El HUD no conoce la cámara: reenvía y ya.
 signal zoom_change_requested(step: int)
+## Pulsó un punto del mapa táctico. Mismo trato que el zoom: se reenvía.
+signal camera_move_requested(world_position: Vector2)
 
 @onready var _selection_panel: PanelContainer = $SelectionPanel
 @onready var _actions_panel: PanelContainer = $ActionsPanel
@@ -18,6 +20,8 @@ signal zoom_change_requested(step: int)
 @onready var _attack_label: Label = $AttackLabel
 @onready var _impact_timer: Label = $ImpactTimer
 @onready var _zoom_controls: VBoxContainer = $ZoomControls
+@onready var _minimap: Minimap = $Minimap
+@onready var _tactical_map: TacticalMap = $TacticalMap
 
 ## Dónde se pone la cuenta atrás respecto al objetivo, en píxeles de pantalla:
 ## arriba y un poco a la derecha, para no taparlo ni pisar su recuadro.
@@ -40,6 +44,9 @@ func _ready() -> void:
 	_desel_btn.pressed.connect(func() -> void: deselect_requested.emit())
 	_zoom_controls.zoom_change_requested.connect(
 			func(step: int) -> void: zoom_change_requested.emit(step))
+	_minimap.expand_requested.connect(_tactical_map.open)
+	_tactical_map.move_requested.connect(
+			func(where: Vector2) -> void: camera_move_requested.emit(where))
 
 
 ## Hasta dónde puede seguir acercándose o alejándose. Se lo dice quien tiene la

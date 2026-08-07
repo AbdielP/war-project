@@ -31,6 +31,8 @@ gestos separados por plataforma.
 | Centrar cámara en unidad | Click en card del panel superior | Tap en card del panel superior |
 | **Acercar / alejar** (0,5x / 1x / 2x) | Botones `+` y `−` del borde derecho | Igual |
 | **Pausa / play** | Barra espaciadora, o el botón bajo los de zoom | Botón bajo los de zoom |
+| **Mapa táctico** (abrir / cerrar) | Tecla `M`, o click en el minimapa | Tap en el minimapa |
+| **Ir a un punto del mapa** | Click sobre el mapa táctico (lo cierra al ir) | Tap sobre el mapa táctico |
 
 Los niveles de zoom se cambian en el nodo `PanCamera` → `zoom_levels` (y con cuál arranca,
 `default_zoom_level`). Conviene que sean potencias de dos: con filtro Nearest, cualquier
@@ -61,6 +63,19 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Velocidad de ataque y distancias de las pasadas | nodo `AttackRun` de `av8b_harrier.tscn` |
 | Circuito de espera (tamaño del óvalo) | nodo `OrbitBehavior` de `av8b_harrier.tscn` |
 | Resistencia de cada unidad | `<unidad>_type.tres` → `max_health` |
+
+## Dónde se ajusta el mapa
+
+| Qué | Dónde |
+|-----|-------|
+| Tamaño de las zonas de coordenadas (A1…P12) | nodo `TacticalMap/Map` de `hud.tscn` → `zone_cells` |
+| Tecla que abre el mapa táctico | nodo `TacticalMap` → `shortcut_key` (`KEY_NONE` la desactiva) |
+| Qué terreno es cada tile (agua / tierra / arena) | `assets/art/tiles/terrain_tileset.tres` → capa de datos `tipo`, en el editor del TileSet |
+| Color de cada tipo de terreno en el mapa | `ui/hud/minimap/map_terrain.gd` → `COLORS` |
+
+El tamaño del mapa **no se configura en ningún sitio**: sale del `TileMapLayer`, así que un
+mapa de otra misión funciona sin tocar nada. La escala del minimapa y del mapa táctico se
+calcula sola — el mayor número entero de píxeles por celda que quepa.
 
 ## Documentación
 - `docs/GDD.md` — diseño del juego, mecánicas, unidades
@@ -102,5 +117,8 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 		- debes modificar los parametros del harrier por tu cuenta: core/unit/av8b_harrier/av8b_harrier.gd
 - [X] El refactor de vuelo hace un giro imposible al darle - Se desactivo brake on turns y mejoró, pero se comporta muy abierto.
 - [X] Las unidades desplegadas como escuadron deben salir en el menú deu nidades como una sola y un multiplicador de la cantidad: x2, x3.. xN
-- Minimapa y mapa tactico
+- [X] Minimapa y mapa tactico — terreno, rejilla de 32x32 y coordenadas por zonas (A1…P12). Falta:
+	- [ ] Unidades en el mapa (puntos por bando)
+	- [ ] Coordenadas pulsables en el log de eventos (`label_at` / `zone_center` ya existen)
+	- [ ] Decidir el tamaño de zona definitivo: `TacticalMap/Map` → `zone_cells`, hoy 4
 	- A partir de aqui iniciar las opciones de ataque de unidades

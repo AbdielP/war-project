@@ -1,4 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/hud/minimap/minimap.gd" id="1"]
+[ext_resource type="Script" path="res://ui/hud/minimap/map_view.gd" id="2"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
 bg_color = Color(0.19215686, 0.21176471, 0.21960784, 1)
@@ -11,11 +14,14 @@ border_color = Color(0.56078434, 0.827451, 1, 1)
 [node name="Minimap" type="PanelContainer"]
 offset_right = 96.0
 offset_bottom = 96.0
+tooltip_text = "Mapa táctico (M)"
 theme_override_styles/panel = SubResource("StyleBoxFlat_1")
+script = ExtResource("1")
 
-[node name="Placeholder" type="Label" parent="."]
+[node name="MapView" type="Control" parent="."]
 layout_mode = 2
-horizontal_alignment = 1
-vertical_alignment = 1
-text = "mapa"
-theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+mouse_filter = 0
+script = ExtResource("2")
+show_grid = false
+show_labels = false
+show_viewport_rect = true

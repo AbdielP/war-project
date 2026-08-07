@@ -27,9 +27,18 @@ signal map_clicked(world_position: Vector2)
 ## El recuadro de lo que se ve en pantalla ahora mismo. Sin él, el mapa a
 ## pantalla completa es un cuadro bonito en el que no sabes dónde estabas.
 @export var show_viewport_rect: bool = true
+## Un punto por unidad, del color de su bando ([Team]).
+@export var show_units: bool = true
+## Lado del punto de una unidad, en píxeles de pantalla. **No escala con el
+## mapa**: es un icono, no terreno — a 1 px por celda un punto a escala sería
+## invisible, y en el mapa grande sería una mancha.
+@export var marker_px: int = 2
 
 const _COLOR_TEXT := Color(0.6705882, 0.5803922, 0.4784314)
 const _COLOR_ACCENT := Color(0.56078434, 0.827451, 1.0)
+## Filo oscuro alrededor de cada punto. No es adorno: el azul del jugador y el
+## azul del agua se parecen demasiado, y un punto de 2 px sin borde desaparece.
+const _COLOR_MARKER_EDGE := Color(0.19215686, 0.21176471, 0.21960784)
 const _FONT_SIZE := 8
 ## Sitio que se reserva fuera del mapa para las coordenadas.
 const _LABEL_MARGIN := 10
@@ -46,7 +55,7 @@ var _last_transform := Transform2D()
 func _ready() -> void:
 	resized.connect(_refit)
 	_refit()
-	set_process(show_viewport_rect)
+	set_process(show_viewport_rect or show_units)
 
 
 ## Rehace la imagen del terreno. Público porque el mapa cambia por misión: quien
@@ -135,12 +144,13 @@ func _find_layer() -> TileMapLayer:
 	return found[0] as TileMapLayer if not found.is_empty() else null
 
 
-## El recuadro de la cámara se mueve sin que nadie avise, así que hay que
-## mirarlo. Se compara la transformación en vez de redibujar siempre: parado no
-## cuesta nada.
+## El recuadro de la cámara y las unidades se mueven sin que nadie avise, así
+## que hay que mirarlo. Con unidades no queda otra que redibujar siempre — son
+## un puñado de rectángulos y el mapa oculto ni se dibuja. Sin ellas basta con
+## comparar la transformación, y parado no cuesta nada.
 func _process(_delta: float) -> void:
 	var current := get_viewport().get_canvas_transform()
-	if current != _last_transform:
+	if show_units or current != _last_transform:
 		_last_transform = current
 		queue_redraw()
 
@@ -156,6 +166,8 @@ func _draw() -> void:
 		_draw_labels(drawn)
 	if show_viewport_rect:
 		_draw_viewport_rect()
+	if show_units:
+		_draw_units(drawn)
 
 
 ## Dos rejillas encima de la misma imagen: la fina son las celdas del terreno
@@ -220,6 +232,31 @@ func _draw_viewport_rect() -> void:
 	var world := inverse * screen
 	var rect := Rect2(world_to_local(world.position), world.size * _world_scale())
 	draw_rect(rect, _COLOR_ACCENT, false, 1.0)
+
+
+## Un punto por unidad, del color de su bando. Se pintan al final para que
+## queden por encima de la rejilla y del recuadro de cámara: son lo que se viene
+## a mirar.
+##
+## Se sacan del grupo de unidades y no de una lista propia. El mapa no se entera
+## de quién nace y quién muere, ni hay nada que mantener sincronizado: pregunta
+## cada vez que dibuja, que es cuando importa.
+func _draw_units(drawn: Vector2) -> void:
+	var inside := Rect2(_origin, drawn)
+	var half := marker_px * 0.5
+	for node in get_tree().get_nodes_in_group(Unit.GROUP):
+		var unit := node as Unit
+		if unit == null:
+			continue
+		var center := world_to_local(unit.global_position)
+		# Una unidad fuera del mapa no se pinta en el borde: se pintaría encima
+		# de las coordenadas y mentiría sobre dónde está.
+		if not inside.has_point(center):
+			continue
+		var rect := Rect2((center - Vector2(half, half)).round(),
+				Vector2(marker_px, marker_px))
+		draw_rect(rect.grow(1.0), _COLOR_MARKER_EDGE, true)
+		draw_rect(rect, Team.color(unit.team), true)
 
 
 func _gui_input(event: InputEvent) -> void:

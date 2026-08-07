@@ -72,6 +72,11 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Tecla que abre el mapa táctico | nodo `TacticalMap` → `shortcut_key` (`KEY_NONE` la desactiva) |
 | Qué terreno es cada tile (agua / tierra / arena) | `assets/art/tiles/terrain_tileset.tres` → capa de datos `tipo`, en el editor del TileSet |
 | Color de cada tipo de terreno en el mapa | `ui/hud/minimap/map_terrain.gd` → `COLORS` |
+| Tamaño del punto de las unidades | nodo `MapView` de cada mapa → `marker_px` (2 en el minimapa, 4 en el táctico) |
+| Color de cada bando | `core/team/team.gd` → `_COLORS` |
+
+Las unidades se marcan con un punto del color de su bando: **azul** el jugador, **rojo** los
+enemigos, **verde** los aliados y **blanco** los neutrales.
 
 El tamaño del mapa **no se configura en ningún sitio**: sale del `TileMapLayer`, así que un
 mapa de otra misión funciona sin tocar nada. La escala del minimapa y del mapa táctico se
@@ -118,7 +123,9 @@ calcula sola — el mayor número entero de píxeles por celda que quepa.
 - [X] El refactor de vuelo hace un giro imposible al darle - Se desactivo brake on turns y mejoró, pero se comporta muy abierto.
 - [X] Las unidades desplegadas como escuadron deben salir en el menú deu nidades como una sola y un multiplicador de la cantidad: x2, x3.. xN
 - [X] Minimapa y mapa tactico — terreno, rejilla de 32x32 y coordenadas por zonas (A1…P12). Falta:
-	- [ ] Unidades en el mapa (puntos por bando)
+	- [X] Unidades en el mapa (puntos por bando)
 	- [ ] Coordenadas pulsables en el log de eventos (`label_at` / `zone_center` ya existen)
 	- [ ] Decidir el tamaño de zona definitivo: `TacticalMap/Map` → `zone_cells`, hoy 4
-	- A partir de aqui iniciar las opciones de ataque de unidades
+	- [ ] Que el minimapa avise de que pasa algo fuera de pantalla (parpadeo al recibir fuego)
+	- [ ] Distinguir en el mapa la unidad seleccionada, y quizá aire de superficie
+	- A partir de aqui iniciar las opciones de ataque de unidades -> QUE HACER CUANDO CLICK AL TENER UNIDAD SELECCIONADA

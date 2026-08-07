@@ -119,9 +119,17 @@ la IA, pero lo aplican ellos.
 
 | Miembro | Descripción |
 |---|---|
-| `enum Side { PLAYER, ALLY, ENEMY }` | `ALLY` es del lado del jugador pero la mueve la IA |
-| `color(side) → Color` | Azul `#8fd3ff` / verde `#a8ca58` / rojo `#e83b3b` (Resurrect64) |
-| `are_hostile(a, b) → bool` | Hoy: hostiles si exactamente uno es `ENEMY` |
+| `enum Side { PLAYER, ALLY, ENEMY, NEUTRAL }` | `ALLY` es del lado del jugador pero la mueve la IA. `NEUTRAL` no es de nadie: fauna, civiles, restos |
+| `color(side) → Color` | Azul `#8fd3ff` / verde `#a8ca58` / rojo `#e83b3b` / blanco `#ffffff` (Resurrect64) |
+| `are_hostile(a, b) → bool` | Hostiles si exactamente uno es `ENEMY`, **salvo que alguno sea `NEUTRAL`** |
+
+**Los bandos nuevos se añaden al final del enum.** `Unit.team` es exportado, así que se
+guarda como número en las escenas: colar uno en medio renumeraría los de abajo y cambiaría
+de bando a todas las unidades ya colocadas.
+
+**El neutral obligó a tocar `are_hostile()`.** La regla anterior —"hostil si uno de los dos
+es enemigo"— habría hecho que un neutral fuese **enemigo del enemigo**, que es justo lo que
+neutral no significa. La excepción va aquí y no en quien pregunta.
 
 Las firmas usan `Team.Side` y no `Side` a secas: dentro del propio archivo GDScript
 trata el enum local como un tipo distinto del que ven los demás, y las llamadas de fuera
@@ -1163,6 +1171,8 @@ Dibuja terreno, rejilla, coordenadas y el recuadro de lo que se ve en pantalla. 
 | `show_labels` | `false` | `true` | letras arriba y abajo, números a los lados |
 | `zone_cells` | — | `4` | celdas por lado de zona. **El número a mover si las coordenadas salen gruesas o finas** |
 | `show_viewport_rect` | `true` | `true` | recuadro de lo que se está mirando |
+| `show_units` | `true` | `true` | un punto por unidad, del color de su bando |
+| `marker_px` | `2` | `4` | lado del punto **en píxeles de pantalla** |
 
 **La escala no se configura, se calcula:** el mayor número entero de píxeles por celda que
 quepa en el control. Si no cabe ni uno, se resume el mapa dentro de la propia imagen y se
@@ -1181,6 +1191,21 @@ una fila con el dedo hasta el otro extremo. Dentro no caben —a 8 px por celda 
 **El recuadro de pantalla sale de la transformación del lienzo, no de la cámara.** Es una
 propiedad de lo que hay en pantalla, no de un nodo concreto, así que el mapa lo dibuja sin
 conocer a nadie.
+
+**Las unidades salen del grupo `Unit.GROUP`, preguntando al dibujar.** No hay lista propia
+ni suscripción a `died`: el mapa no se entera de quién nace ni quién muere y no hay nada que
+mantener sincronizado. El color lo da `Team.color(unit.team)`, así que un bando nuevo se
+pinta solo.
+
+**El punto tiene tamaño fijo en píxeles de pantalla, no a escala del mapa** — es un icono,
+no terreno: a 1 px por celda un punto a escala sería invisible y en el mapa grande una
+mancha. Lleva **un filo oscuro de 1 px**, que no es adorno: el azul del jugador (`#8fd3ff`)
+y el del agua (`#4d9be6`) se parecen demasiado y un punto de 2 px sin borde desaparece. Una
+unidad fuera del mapa **no se pinta pegada al borde**: se metería encima de las coordenadas
+y mentiría sobre dónde está.
+
+Con `show_units` el mapa **se redibuja cada frame**; sin ellas basta con mirar si cambió la
+transformación del lienzo. Son un puñado de rectángulos, y un mapa oculto no se dibuja.
 
 #### `Minimap` — `minimap.gd`
 ```
@@ -1483,8 +1508,14 @@ verdad compite por el mismo gesto primario (inspeccionar vs. atacar).
 | Accent/selección | `#8fd3ff` | `Color(0.561, 0.827, 1.0)` |
 | Bando aliado (IA) | `#a8ca58` | `Color(0.659, 0.792, 0.345)` |
 | Bando enemigo | `#e83b3b` | `Color(0.910, 0.231, 0.231)` |
+| Bando neutral | `#ffffff` | `Color(1.0, 1.0, 1.0)` |
+| Agua (mapa) | `#4d9be6` | dominante del tile, en `MapTerrain.COLORS` |
+| Tierra (mapa) | `#91db69` | ídem |
+| Arena (mapa) | `#fbff86` | ídem |
+| Terreno sin color asignado | `#ff0044` | `MapTerrain.UNKNOWN_COLOR`, a propósito chillón |
 
-Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo accent del HUD.
+Los colores de bando viven en `Team._COLORS`; el del jugador es el mismo accent del HUD.
+Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 
 ---
 
@@ -1523,7 +1554,8 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [x] Sombra del misil (`MissileShadow`): frame por distancia al blanco, se junta con él en el impacto
 - [x] Tres niveles de zoom (0,5x / 1x / 2x) con botones `+` / `−` en el HUD
 - [x] Pausa y play (botón + barra espaciadora); cámara, HUD y selección siguen vivos en pausa
-- [x] Minimapa y mapa táctico (`MapTerrain` / `MapView` / `Minimap` / `TacticalMap`): terreno, rejilla de celdas y coordenadas por zonas. Sólo terreno, todavía sin unidades
+- [x] Minimapa y mapa táctico (`MapTerrain` / `MapView` / `Minimap` / `TacticalMap`): terreno, rejilla de celdas, coordenadas por zonas y un punto por unidad del color de su bando
+- [x] Bando `NEUTRAL` (blanco), con el que no se mete nadie
 - [x] Capa de datos `tipo` en `terrain_tileset.tres` (agua / tierra / arena), 101 tiles marcados
 
 ### Pendiente
@@ -1544,7 +1576,8 @@ Los dos colores de bando viven en `Team._COLORS`; el del jugador es el mismo acc
 - [ ] Sistema de vuelo completo: objetivos, ataque, regreso al portaaviones
 - [ ] Aterrizaje/recuperación de aviones
 - [ ] Pantalla de puerto (reemplazar `PlayerFleet` hardcodeado)
-- [ ] Unidades en el mapa (hoy sólo terreno): puntos por bando, y el minimapa como aviso de que pasa algo fuera de pantalla
+- [ ] El minimapa como aviso de que pasa algo fuera de pantalla (parpadeo al recibir fuego, o similar). Los puntos ya están; falta que llamen la atención
+- [ ] Distinguir en el mapa la unidad seleccionada, y quizá aire de superficie (`UnitType.Domain`)
 - [ ] Coordenadas pulsables en el `EventLog`: `MapTerrain.label_at()` y `zone_center()` ya existen para eso, falta que el registro las escriba y las enlace
 - [ ] Decidir el tamaño de zona definitivo (`zone_cells`, hoy 4 → A1…P12): es de verlo en pantalla
 - [ ] Mecánicas de ataque/combate

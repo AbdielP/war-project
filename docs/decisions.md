@@ -2,6 +2,23 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-06 (4)
+
+### Un bando nuevo se añade por el final, y el neutral no es enemigo de nadie
+Puntos de unidad en el minimapa y en el mapa táctico, del color de su bando. Los colores ya existían en `Team` desde antes —azul `#8fd3ff` el jugador, verde `#a8ca58` los aliados, rojo `#e83b3b` los enemigos—, así que lo único que faltaba de verdad era el neutral.
+
+**`NEUTRAL` va al final del enum, no en su sitio "lógico".** `Unit.team` es exportado y se guarda como número en las escenas: meterlo entre `ALLY` y `ENEMY` habría renumerado `ENEMY` y convertido en otra cosa a todos los T-14 ya colocados en `main.tscn`. Comprobado tras el cambio que siguen siendo enemigos.
+
+**El neutral obligó a cambiar `are_hostile()`, que es lógica de combate.** La regla era "hostiles si exactamente uno de los dos es enemigo". Con un cuarto bando eso convertía al neutral en **enemigo del enemigo**, que es justo lo contrario de lo que significa. Ahora con un neutral no se mete nadie. La excepción va en `Team` y no en quien pregunta, que es lo que el propio archivo ya decía que había que hacer.
+
+**Los puntos salen del grupo de unidades, preguntando al dibujar.** Ni lista propia ni suscripción a `died`: el mapa no se entera de quién nace ni de quién muere, y no hay nada que se pueda quedar desincronizado. Probado añadiendo una unidad neutral en caliente — aparece sin avisar a nadie.
+
+**El punto mide lo mismo en pantalla en los dos mapas, no a escala del terreno.** Es un icono: a 1 px por celda un punto a escala sería invisible, y a 8 px una mancha. Lleva un filo oscuro de 1 px que **no es decoración** — el azul del jugador (`#8fd3ff`) y el del agua (`#4d9be6`) se parecen demasiado, y un punto de 2 px sin borde se pierde en el mar. Una unidad que se salga del mapa no se pinta pegada al borde: se metería encima de las coordenadas y mentiría sobre dónde está.
+
+Con unidades el mapa se redibuja cada frame en vez de sólo cuando se mueve la cámara. Son unos pocos rectángulos y un mapa oculto no se dibuja, así que no se complicó con detección de cambios.
+
+Verificado en headless: los cuatro bandos con sus colores y `NEUTRAL = 3`; hostilidad jugador↔enemigo `true`, jugador↔aliado `false`, neutral↔jugador y neutral↔enemigo `false`; las 5 unidades del mapa en su píxel y su zona correctos (el LHD en `N10`, los T-14 en `C4`, `E3`, `F2` y `H2`).
+
 ## 2026-08-06 (3)
 
 ### El mapa no sabe cuánto mide el mapa

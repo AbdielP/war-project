@@ -25,3 +25,5 @@ script = ExtResource("2")
 show_grid = false
 show_labels = false
 show_viewport_rect = true
+show_units = true
+marker_px = 2

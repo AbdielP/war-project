@@ -25,3 +25,5 @@ show_grid = true
 show_labels = true
 zone_cells = 4
 show_viewport_rect = true
+show_units = true
+marker_px = 4

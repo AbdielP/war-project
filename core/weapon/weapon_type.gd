@@ -15,6 +15,13 @@ class_name WeaponType
 ## así que se escribe a mano en vez de recortar el nombre largo: un arma nueva
 ## mal nombrada saldría cortada donde no toca.
 @export var short_name: String = ""
+## Código de brevedad OTAN que se canta al soltarla: "Rifle" un misil
+## aire-superficie, "Fox Two" uno aire-aire de infrarrojos, "Pickle" una bomba,
+## "Guns" el cañón. Va en el arma y no en una tabla del registro de eventos
+## porque es parte de lo que el arma **es**: un arma nueva lo trae puesto y
+## nadie tiene que acordarse de añadirla a una lista aparte. Vacío = no se canta
+## nada y el registro sólo dice el nombre.
+@export var brevity_code: String = ""
 @export var icon: Texture2D
 
 @export_group("Objetivos")

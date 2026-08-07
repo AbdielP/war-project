@@ -6,3 +6,4 @@
 script = ExtResource("1")
 display_name = "GAU-12 Equalizer"
 short_name = "CAÑÓN"
+brevity_code = "Guns"

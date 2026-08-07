@@ -8,6 +8,7 @@
 script = ExtResource("1")
 display_name = "AGM-65 Maverick"
 short_name = "AGM-65"
+brevity_code = "Rifle"
 icon = ExtResource("2")
 targets = 2
 min_range = 300.0

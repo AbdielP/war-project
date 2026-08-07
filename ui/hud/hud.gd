@@ -12,7 +12,10 @@ signal zoom_change_requested(step: int)
 signal map_clicked(world_position: Vector2, unit: Unit)
 ## Lo mismo con el botón derecho.
 signal map_context_requested(world_position: Vector2, unit: Unit)
+## Pulsó una coordenada del registro de eventos: llevar la mirada allí.
+signal look_requested(world_position: Vector2)
 
+@onready var _event_log: EventLog = $EventLog
 @onready var _selection_panel: PanelContainer = $SelectionPanel
 @onready var _actions_panel: PanelContainer = $ActionsPanel
 @onready var _hangar_window: PanelContainer = $HangarWindow
@@ -47,6 +50,8 @@ func _ready() -> void:
 	_desel_btn.pressed.connect(func() -> void: deselect_requested.emit())
 	_zoom_controls.zoom_change_requested.connect(
 			func(step: int) -> void: zoom_change_requested.emit(step))
+	_event_log.look_requested.connect(
+			func(where: Vector2) -> void: look_requested.emit(where))
 	_minimap.expand_requested.connect(_tactical_map.open)
 	_tactical_map.clicked.connect(
 			func(where: Vector2, unit: Unit) -> void: map_clicked.emit(where, unit))
@@ -136,6 +141,12 @@ func clear_selected_unit() -> void:
 	_impact_timer.hide()
 	_desel_btn.hide()
 	_tactical_map.set_selected_unit(null)
+
+
+## Una orden dada, para el registro de eventos. Igual que el marcador: lo cuenta
+## quien la da, porque nadie más se entera de que ha habido una.
+func report_move_order(unit: Unit, where: Vector2) -> void:
+	_event_log.report_move_order(unit, where)
 
 
 ## El destino de la orden en curso, para que se vea en los dos mapas. Se lo dice

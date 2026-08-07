@@ -7,5 +7,6 @@
 script = ExtResource("1")
 display_name = "AIM-120 AMRAAM"
 short_name = "AIM120"
+brevity_code = "Fox Three"
 icon = ExtResource("2")
 targets = 1

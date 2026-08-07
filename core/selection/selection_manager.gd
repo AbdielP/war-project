@@ -27,6 +27,7 @@ func _ready() -> void:
 	_hud.zoom_change_requested.connect(_camera.step_zoom)
 	_hud.map_clicked.connect(_on_map_clicked)
 	_hud.map_context_requested.connect(_on_map_context_requested)
+	_hud.look_requested.connect(_look_at)
 	_camera.zoom_changed.connect(_hud.set_zoom_state)
 	# La cámara ya fijó su nivel en su propio _ready(), antes de que hubiera
 	# nadie escuchando: hay que pedirle el estado inicial a mano o los botones
@@ -190,6 +191,7 @@ func _issue_move_order(target: Vector2) -> void:
 	_move_marker.global_position = target
 	_move_marker.show()
 	_hud.show_order_marker(target)
+	_hud.report_move_order(_selected_unit, target)
 	if _selected_unit.has_signal("order_fulfilled"):
 		_selected_unit.order_fulfilled.connect(_on_order_fulfilled, CONNECT_ONE_SHOT)
 

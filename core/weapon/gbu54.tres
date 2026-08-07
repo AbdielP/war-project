@@ -7,5 +7,6 @@
 script = ExtResource("1")
 display_name = "GBU-54 JDAM"
 short_name = "GBU-54"
+brevity_code = "Pickle"
 icon = ExtResource("2")
 targets = 2

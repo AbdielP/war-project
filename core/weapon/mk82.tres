@@ -7,5 +7,6 @@
 script = ExtResource("1")
 display_name = "Mk-82 500lb"
 short_name = "Mk-82"
+brevity_code = "Pickle"
 icon = ExtResource("2")
 targets = 2

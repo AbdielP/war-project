@@ -13,9 +13,13 @@ class_name TacticalMap
 ## HUD ya es `process_mode = Always`. Mirar el mapa congelado es justo para lo
 ## que sirve un mapa táctico.
 
-## El jugador pulsó un punto: quiere mirar ahí. Se reenvía y ya — el mapa no
-## conoce la cámara, igual que el resto del HUD.
-signal move_requested(world_position: Vector2)
+## El jugador pulsó el mapa, con lo que hubiera debajo. **El mapa no decide qué
+## significa**: eso depende de qué haya seleccionado, y de eso sabe quien manda
+## las órdenes. Aquí sólo se cuenta el gesto, igual que con la cámara.
+signal clicked(world_position: Vector2, unit: Unit)
+## Click derecho. Mismo trato.
+signal context_requested(world_position: Vector2, unit: Unit)
+signal opened
 signal closed
 
 ## Tecla que lo abre y lo cierra. `KEY_NONE` la desactiva. Mismo trato que el
@@ -23,11 +27,22 @@ signal closed
 @export var shortcut_key: Key = KEY_M
 
 @onready var _view: MapView = $Map
+@onready var _hint: Label = $Hint
+
+## Quién está seleccionado ahora mismo. **Sólo para el rótulo.** El mapa no lo
+## usa para decidir nada: el mismo click significa una cosa u otra según esto, y
+## esa decisión es de quien lleva las órdenes, no de una vista.
+var _selected: Unit = null
 
 
 func _ready() -> void:
 	hide()
 	_view.map_clicked.connect(_on_map_clicked)
+	_view.map_context_requested.connect(_on_map_context_requested)
+	# El atajo de teclado no existe en móvil: sin este botón no habría forma de
+	# salir del mapa.
+	$CloseButton.pressed.connect(close)
+	_update_hint()
 
 
 func open() -> void:
@@ -35,11 +50,32 @@ func open() -> void:
 	# así no hay que acordarse de avisar a nadie cuando se carga otro.
 	_view.refresh()
 	show()
+	opened.emit()
 
 
 func close() -> void:
+	# Se llama también desde fuera, y a veces con el mapa ya cerrado: cerrar dos
+	# veces no debe contarse como que el jugador lo cerró dos veces.
+	if not visible:
+		return
 	hide()
 	closed.emit()
+
+
+## Se lo dice el HUD al cambiar la selección. Con el mapa cerrado da igual, pero
+## así el rótulo ya está puesto cuando se abre.
+func set_selected_unit(unit: Unit) -> void:
+	_selected = unit
+	if _view != null:
+		_view.set_selected_unit(unit)
+	_update_hint()
+
+
+## Dónde cae el punto de una unidad en la pantalla. Lo pregunta el HUD para
+## poner el menú sobre el punto pulsado: con el mapa abierto la unidad puede
+## estar lejísimos de la cámara y el menú saldría en cualquier parte.
+func marker_position(unit: Unit) -> Vector2:
+	return _view.global_position + _view.world_to_local(unit.global_position)
 
 
 func toggle() -> void:
@@ -49,11 +85,37 @@ func toggle() -> void:
 		open()
 
 
-## Pulsar lleva la mirada allí y cierra. Cerrar es parte del gesto: se abre el
-## mapa para decidir a dónde ir, y una vez decidido estorba.
-func _on_map_clicked(world_position: Vector2) -> void:
-	move_requested.emit(world_position)
-	close()
+## El rótulo dice **qué va a hacer el siguiente click**, que es lo que cambia
+## según la selección. Sin él, el mismo gesto haría dos cosas distintas sin
+## avisar de cuál toca.
+func _update_hint() -> void:
+	if _hint == null:
+		return
+	if is_instance_valid(_selected) and _selected.is_player_controlled():
+		_hint.text = "%s — pulsa un punto para dirigirla" % _selected.get_display_name()
+	elif is_instance_valid(_selected):
+		_hint.text = "%s — pulsa un punto para mirar" % _selected.get_display_name()
+	else:
+		_hint.text = "Pulsa un punto para mirar"
+
+
+## **Pulsar no cierra el mapa.** Se dirige a la unidad, se ataca o se mira sin
+## salir de él: el destino aparece marcado en el propio mapa y el recuadro de
+## cámara enseña a dónde se fue la vista. Cerrar es cosa de la tecla.
+func _on_map_clicked(world_position: Vector2, unit: Unit) -> void:
+	clicked.emit(world_position, unit)
+
+
+func _on_map_context_requested(world_position: Vector2, unit: Unit) -> void:
+	context_requested.emit(world_position, unit)
+
+
+func set_order_marker(world_position: Vector2) -> void:
+	_view.set_order_marker(world_position)
+
+
+func clear_order_marker() -> void:
+	_view.clear_order_marker()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:

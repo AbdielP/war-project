@@ -17,7 +17,16 @@ signal expand_requested
 func _ready() -> void:
 	# Pulsar el terreno y pulsar el marco del panel hacen lo mismo: el minimapa
 	# entero es el botón, no sólo la parte pintada.
-	_view.map_clicked.connect(func(_world: Vector2) -> void: expand_requested.emit())
+	_view.map_clicked.connect(
+			func(_world: Vector2, _unit: Unit) -> void: expand_requested.emit())
+
+
+func set_order_marker(world_position: Vector2) -> void:
+	_view.set_order_marker(world_position)
+
+
+func clear_order_marker() -> void:
+	_view.clear_order_marker()
 
 
 func _gui_input(event: InputEvent) -> void:

@@ -12,18 +12,24 @@ class_name MapView
 ## propia imagen. Nunca hay una escala fraccionaria, que con filtro Nearest es
 ## lo que hace hervir los píxeles al mover la cámara.
 
-## Emitida al pulsar sobre el mapa, con el punto del mundo que se pulsó.
-signal map_clicked(world_position: Vector2)
+## Emitida al pulsar sobre el mapa, con el punto del mundo que se pulsó y la
+## unidad cuyo punto estaba debajo, o `null` si era terreno. El mapa resuelve
+## qué hay debajo porque nadie más puede: a esta escala un píxel son decenas de
+## píxeles de mundo y una consulta de física no acertaría a nadie nunca.
+signal map_clicked(world_position: Vector2, unit: Unit)
+## Lo mismo con el botón derecho.
+signal map_context_requested(world_position: Vector2, unit: Unit)
 
-## Rejilla fina, una línea por celda de terreno. Se calla sola cuando la celda
-## queda tan pequeña que la rejilla sería ruido en vez de referencia.
+## Rejilla de zonas de coordenadas. **No dibuja las celdas de terreno**: eran
+## casi 2900 cuadritos de 7 px, y el tamaño del tile no le dice nada a nadie.
 @export var show_grid: bool = false
 ## Letras arriba y abajo, números a los lados.
 @export var show_labels: bool = false
 ## Cuántas celdas mide el lado de una zona de coordenadas. Con celdas de 32 px,
-## 4 son zonas de 128 px de mundo. **Es el número a mover si las coordenadas
-## salen demasiado gruesas o demasiado finas.**
-@export var zone_cells: int = 4
+## 8 son zonas de 256 px de mundo. **Es el número a mover si las coordenadas
+## salen demasiado gruesas o demasiado finas.** Es una petición, no una orden:
+## ver [method _zone_side].
+@export var zone_cells: int = 8
 ## El recuadro de lo que se ve en pantalla ahora mismo. Sin él, el mapa a
 ## pantalla completa es un cuadro bonito en el que no sabes dónde estabas.
 @export var show_viewport_rect: bool = true
@@ -42,20 +48,35 @@ const _COLOR_MARKER_EDGE := Color(0.19215686, 0.21176471, 0.21960784)
 const _FONT_SIZE := 8
 ## Sitio que se reserva fuera del mapa para las coordenadas.
 const _LABEL_MARGIN := 10
-## Por debajo de esto la rejilla fina se apaga: líneas más juntas que esto no
-## se leen como cuadrícula, se leen como suciedad.
-const _MIN_GRID_PX := 4.0
+## Lo mínimo que puede medir una zona en pantalla. Por debajo, las zonas se
+## agrupan: una coordenada más pequeña que esto no se lee y sus líneas se leen
+## como rayado, no como cuadrícula.
+const _MIN_ZONE_PX := 24.0
+## Cuánto se agranda el punto de una unidad para poder pulsarlo. El punto se
+## dibuja del tamaño en que se lee bien, no del tamaño en que se acierta: 4 px
+## con el ratón ya cuesta, y con el dedo es imposible.
+const _PICK_GROW := 3.0
 
 var _terrain: MapTerrain = null
 var _scale: int = 1
 var _origin: Vector2 = Vector2.ZERO
 var _last_transform := Transform2D()
+## Dónde se mandó ir a la unidad. Es el mismo marcador que se planta en el
+## mundo, dibujado aquí: con el mapa abierto, el del mundo no se ve.
+var _order: Vector2 = Vector2.ZERO
+var _has_order: bool = false
+## A quién se le pinta el recuadro de seleccionada. Mientras haya una, **el
+## recuadro de cámara se calla**: con la cámara siguiéndola, sería un cuadro
+## enorme persiguiendo al mismo punto que ya está resaltado.
+var _selected: Unit = null
+## Mantener pulsado equivale al click derecho, igual que en el mundo. Sin esto,
+## en móvil no habría forma de abrir el menú de una unidad desde el mapa.
+var _press := LongPress.new()
 
 
 func _ready() -> void:
 	resized.connect(_refit)
 	_refit()
-	set_process(show_viewport_rect or show_units)
 
 
 ## Rehace la imagen del terreno. Público porque el mapa cambia por misión: quien
@@ -69,12 +90,50 @@ func terrain() -> MapTerrain:
 	return _terrain
 
 
+func set_order_marker(world_position: Vector2) -> void:
+	_order = world_position
+	_has_order = true
+	queue_redraw()
+
+
+func clear_order_marker() -> void:
+	_has_order = false
+	queue_redraw()
+
+
+func set_selected_unit(unit: Unit) -> void:
+	_selected = unit
+	queue_redraw()
+
+
 ## Píxeles de pantalla por celda de terreno, ya contando el resumen. Sale
 ## fraccionario sólo cuando la imagen resume varias celdas por píxel.
 func cell_px() -> float:
 	if _terrain == null:
 		return float(_scale)
 	return float(_scale) / _terrain.cells_per_px
+
+
+## Celdas por lado de zona **de verdad**. `zone_cells` es lo que se pide; si el
+## mapa crece o la vista encoge, las zonas se agrupan de dos en dos hasta que la
+## coordenada se puede leer. Sin esto, un mapa del doble de grande volvería a
+## llenar la pantalla de rayas y habría que ir retocando el exportado a mano por
+## cada misión.
+func _zone_side() -> int:
+	var side := maxi(zone_cells, 1)
+	var px := cell_px()
+	if px <= 0.0:
+		return side
+	while px * side < _MIN_ZONE_PX:
+		side *= 2
+	return side
+
+
+## La coordenada de un punto del mundo ("F7"), con el tamaño de zona que se está
+## dibujando de verdad. Lo pedirá el registro de eventos: si preguntase con
+## `zone_cells` a secas, el texto y el dibujo podrían no coincidir.
+func zone_label_at(world: Vector2) -> String:
+	return _terrain.label_at(world, _zone_side()) if _terrain != null else ""
 
 
 func world_to_local(world: Vector2) -> Vector2:
@@ -148,7 +207,9 @@ func _find_layer() -> TileMapLayer:
 ## que hay que mirarlo. Con unidades no queda otra que redibujar siempre — son
 ## un puñado de rectángulos y el mapa oculto ni se dibuja. Sin ellas basta con
 ## comparar la transformación, y parado no cuesta nada.
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _press.tick(delta):
+		_emit_at(_press.origin(), true)
 	var current := get_viewport().get_canvas_transform()
 	if show_units or current != _last_transform:
 		_last_transform = current
@@ -164,20 +225,31 @@ func _draw() -> void:
 		_draw_grid(drawn)
 	if show_labels:
 		_draw_labels(drawn)
-	if show_viewport_rect:
+	if show_viewport_rect and not is_instance_valid(_selected):
 		_draw_viewport_rect()
+	if _has_order:
+		_draw_order_marker(drawn)
 	if show_units:
 		_draw_units(drawn)
 
 
-## Dos rejillas encima de la misma imagen: la fina son las celdas del terreno
-## —la cuadrícula de 32 px de verdad— y la gruesa son las zonas que llevan
-## coordenada. La fina desaparece cuando no se puede leer.
+## El destino de la orden en curso: la misma cruz dentro de un círculo que se
+## planta en el mundo, al mismo tamaño en los dos mapas. Es un icono, no
+## terreno — si escalara, en el minimapa no se vería.
+func _draw_order_marker(drawn: Vector2) -> void:
+	var center := world_to_local(_order)
+	if not Rect2(_origin, drawn).has_point(center):
+		return
+	draw_arc(center, 4.0, 0.0, TAU, 16, _COLOR_ACCENT, 1.0)
+	draw_line(center + Vector2(-2, 0), center + Vector2(3, 0), _COLOR_ACCENT, 1.0)
+	draw_line(center + Vector2(0, -2), center + Vector2(0, 3), _COLOR_ACCENT, 1.0)
+
+
+## Una sola rejilla: la de las zonas que llevan coordenada. La de celdas de
+## terreno se quitó — 64×45 cuadritos de 7 px no son una cuadrícula, son un
+## rayado, y el tamaño del tile no es información de juego.
 func _draw_grid(drawn: Vector2) -> void:
-	var step := cell_px()
-	if step >= _MIN_GRID_PX and _terrain.cells_per_px == 1:
-		_draw_lines(drawn, step, Color(0.0, 0.0, 0.0, 0.25))
-	_draw_lines(drawn, step * zone_cells, Color(_COLOR_ACCENT, 0.35))
+	_draw_lines(drawn, cell_px() * _zone_side(), Color(_COLOR_ACCENT, 0.3))
 
 
 func _draw_lines(drawn: Vector2, step: float, color: Color) -> void:
@@ -201,8 +273,9 @@ func _draw_labels(drawn: Vector2) -> void:
 	var font := get_theme_default_font()
 	if font == null:
 		return
-	var zones := _terrain.zone_count(zone_cells)
-	var step := cell_px() * zone_cells
+	var side := _zone_side()
+	var zones := _terrain.zone_count(side)
+	var step := cell_px() * side
 
 	for i in range(zones.x):
 		var text := MapTerrain.column_label(i)
@@ -257,16 +330,71 @@ func _draw_units(drawn: Vector2) -> void:
 				Vector2(marker_px, marker_px))
 		draw_rect(rect.grow(1.0), _COLOR_MARKER_EDGE, true)
 		draw_rect(rect, Team.color(unit.team), true)
+		# La seleccionada lleva su propio recuadro, separado del punto para que
+		# no se coma el color del bando. Esto sustituye al recuadro de cámara.
+		if unit == _selected:
+			draw_rect(rect.grow(3.0), _COLOR_ACCENT, false, 1.0)
 
 
+## Qué unidad hay bajo un punto del panel, o `null` si sólo hay terreno. Se
+## busca contra los puntos dibujados y no contra el mundo: lo que el jugador
+## apunta es el punto que ve, no la unidad de tamaño real que hay detrás. Gana
+## la más cercana, que es la que cree estar pulsando.
+func unit_at(local_position: Vector2) -> Unit:
+	if _terrain == null or not show_units:
+		return null
+	var inside := Rect2(_origin, _drawn_size())
+	var reach := marker_px * 0.5 + _PICK_GROW
+	var best: Unit = null
+	var best_distance := INF
+	for node in get_tree().get_nodes_in_group(Unit.GROUP):
+		var unit := node as Unit
+		if unit == null:
+			continue
+		var center := world_to_local(unit.global_position)
+		if not inside.has_point(center):
+			continue
+		var distance := center.distance_to(local_position)
+		if distance > reach or distance >= best_distance:
+			continue
+		best_distance = distance
+		best = unit
+	# Igual que en el mundo: pulsar a un miembro del escuadrón es pulsar al líder.
+	return best.squad.leader if best != null and best.squad != null else best
+
+
+## El click izquierdo se cuenta **al soltar**, no al pulsar: hasta que el dedo no
+## se levanta no se sabe si era un click o el principio de una pulsación
+## mantenida. El derecho no espera a nada, que en PC no hay ambigüedad.
 func _gui_input(event: InputEvent) -> void:
-	var button := event as InputEventMouseButton
-	if button == null or not button.pressed or button.button_index != MOUSE_BUTTON_LEFT:
-		return
 	if _terrain == null:
 		return
-	var world := local_to_world(button.position)
+	var motion := event as InputEventMouseMotion
+	if motion != null:
+		_press.moved(motion.position)
+		return
+	var button := event as InputEventMouseButton
+	if button == null:
+		return
+	if button.button_index == MOUSE_BUTTON_RIGHT:
+		if button.pressed:
+			_emit_at(button.position, true)
+		return
+	if button.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if button.pressed:
+		_press.press(button.position)
+	elif _press.release():
+		_emit_at(button.position, false)
+	accept_event()
+
+
+func _emit_at(local_position: Vector2, context: bool) -> void:
+	var world := local_to_world(local_position)
 	if not _terrain.world_rect.has_point(world):
 		return
-	map_clicked.emit(world)
-	accept_event()
+	var unit := unit_at(local_position)
+	if context:
+		map_context_requested.emit(world, unit)
+	else:
+		map_clicked.emit(world, unit)

@@ -17,13 +17,35 @@ mouse_filter = 2
 color = Color(0.19215686, 0.21176471, 0.21960784, 1)
 
 [node name="Map" type="Control" parent="."]
-offset_right = 640.0
+offset_top = 26.0
+offset_right = 486.0
 offset_bottom = 384.0
 mouse_filter = 0
 script = ExtResource("2")
 show_grid = true
 show_labels = true
-zone_cells = 4
+zone_cells = 8
 show_viewport_rect = true
 show_units = true
 marker_px = 4
+
+[node name="Hint" type="Label" parent="."]
+offset_left = 492.0
+offset_top = 126.0
+offset_right = 636.0
+offset_bottom = 190.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+theme_override_font_sizes/font_size = 8
+autowrap_mode = 2
+
+[node name="CloseButton" type="Button" parent="."]
+offset_left = 620.0
+offset_top = 86.0
+offset_right = 636.0
+offset_bottom = 102.0
+theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+theme_override_colors/font_hover_color = Color(0.56078434, 0.827451, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.56078434, 0.827451, 1, 1)
+flat = true
+text = "×"

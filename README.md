@@ -31,8 +31,17 @@ gestos separados por plataforma.
 | Centrar cámara en unidad | Click en card del panel superior | Tap en card del panel superior |
 | **Acercar / alejar** (0,5x / 1x / 2x) | Botones `+` y `−` del borde derecho | Igual |
 | **Pausa / play** | Barra espaciadora, o el botón bajo los de zoom | Botón bajo los de zoom |
-| **Mapa táctico** (abrir / cerrar) | Tecla `M`, o click en el minimapa | Tap en el minimapa |
-| **Ir a un punto del mapa** | Click sobre el mapa táctico (lo cierra al ir) | Tap sobre el mapa táctico |
+| **Mapa táctico** (abrir) | Tecla `M`, o click en el minimapa | Tap en el minimapa |
+| **Cerrar el mapa táctico** | Tecla `M`, o botón `×` | Botón `×` |
+| **Ir a un punto del mapa** | Click sobre el mapa, sin unidad seleccionada | Igual |
+| **Dirigir la unidad desde el mapa** | Click sobre el mapa, con unidad propia seleccionada | Igual |
+| **Atacar desde el mapa** | Click sobre el punto de un enemigo, con unidad propia seleccionada | Igual |
+| **Menú de unidad ajena desde el mapa** | Click der. sobre su punto | Mantener pulsado sobre su punto |
+
+En el mapa táctico se manda igual que en el mundo: el mismo gesto significa lo mismo, y lo que
+haya bajo el punto decide. **Pulsar no cierra el mapa** — el destino queda marcado en el propio
+mapa, y el recuadro de la cámara enseña a dónde se fue la vista. Con una unidad seleccionada se
+resalta su punto y se oculta ese recuadro, que si no sería un cuadro enorme persiguiéndola.
 
 Los niveles de zoom se cambian en el nodo `PanCamera` → `zoom_levels` (y con cuál arranca,
 `default_zoom_level`). Conviene que sean potencias de dos: con filtro Nearest, cualquier
@@ -68,12 +77,15 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 
 | Qué | Dónde |
 |-----|-------|
-| Tamaño de las zonas de coordenadas (A1…P12) | nodo `TacticalMap/Map` de `hud.tscn` → `zone_cells` |
+| Tamaño de las zonas de coordenadas (A1…H6) | nodo `TacticalMap/Map` de `hud.tscn` → `zone_cells` (hoy 8) |
 | Tecla que abre el mapa táctico | nodo `TacticalMap` → `shortcut_key` (`KEY_NONE` la desactiva) |
+| Cuánto hay que aguantar para que cuente como pulsación mantenida | `core/input/long_press.gd` → `hold_time` (0,5 s) |
 | Qué terreno es cada tile (agua / tierra / arena) | `assets/art/tiles/terrain_tileset.tres` → capa de datos `tipo`, en el editor del TileSet |
 | Color de cada tipo de terreno en el mapa | `ui/hud/minimap/map_terrain.gd` → `COLORS` |
 | Tamaño del punto de las unidades | nodo `MapView` de cada mapa → `marker_px` (2 en el minimapa, 4 en el táctico) |
 | Color de cada bando | `core/team/team.gd` → `_COLORS` |
+| Zona de dibujo del mapa táctico (para que no la pisen los paneles) | nodo `TacticalMap/Map` → `offset_top` / `offset_right` |
+| Sitio del rótulo y del botón de cerrar | nodos `TacticalMap/Hint` y `TacticalMap/CloseButton` → `offset` |
 
 Las unidades se marcan con un punto del color de su bando: **azul** el jugador, **rojo** los
 enemigos, **verde** los aliados y **blanco** los neutrales.
@@ -81,6 +93,16 @@ enemigos, **verde** los aliados y **blanco** los neutrales.
 El tamaño del mapa **no se configura en ningún sitio**: sale del `TileMapLayer`, así que un
 mapa de otra misión funciona sin tocar nada. La escala del minimapa y del mapa táctico se
 calcula sola — el mayor número entero de píxeles por celda que quepa.
+
+**El mapa no dibuja la cuadrícula de 32 px del terreno**, solo la de zonas de coordenadas: una
+línea por celda serían casi 2900 cuadritos y se lee como rayado, no como cuadrícula. Y
+`zone_cells` es lo que se *pide*, no lo que sale: si el mapa crece, las zonas se agrupan de dos
+en dos hasta que la coordenada vuelve a leerse. Por eso no hay que retocarlo por misión.
+
+El mapa táctico **no se dibuja encima del HUD**: su área esquiva la barra superior y la columna
+de paneles de la derecha, así que el hangar, las acciones, el zoom y la lista de desplegadas
+siguen a mano con el mapa abierto. Lo único que se esconde es la barra de armas. Si mueves
+paneles del HUD, ajusta los dos `offset` de la tabla o volverán a solaparse.
 
 ## Documentación
 - `docs/GDD.md` — diseño del juego, mecánicas, unidades
@@ -125,7 +147,4 @@ calcula sola — el mayor número entero de píxeles por celda que quepa.
 - [X] Minimapa y mapa tactico — terreno, rejilla de 32x32 y coordenadas por zonas (A1…P12). Falta:
 	- [X] Unidades en el mapa (puntos por bando)
 	- [ ] Coordenadas pulsables en el log de eventos (`label_at` / `zone_center` ya existen)
-	- [ ] Decidir el tamaño de zona definitivo: `TacticalMap/Map` → `zone_cells`, hoy 4
-	- [ ] Que el minimapa avise de que pasa algo fuera de pantalla (parpadeo al recibir fuego)
-	- [ ] Distinguir en el mapa la unidad seleccionada, y quizá aire de superficie
-	- A partir de aqui iniciar las opciones de ataque de unidades -> QUE HACER CUANDO CLICK AL TENER UNIDAD SELECCIONADA
+	- [X] Distinguir en el mapa la unidad seleccionada, y quizá aire de superficie

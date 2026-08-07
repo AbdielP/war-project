@@ -198,11 +198,36 @@ extends Camera2D   class_name PanCamera
   táctil — el aviso llega con el dedo/botón aún apoyado. Al soltar después de que ya se
   disparó, no cuenta como `clicked`: si contara, el menú se abriría y una orden le
   llegaría encima en el mismo gesto.
+- El reconocimiento del gesto no está aquí: lo lleva `LongPress` (ver abajo). La cámara sólo
+  le va contando lo que pasa y traduce las respuestas a sus señales.
 
 **Acercamiento.** `zoom_levels` (`PackedFloat32Array`, hoy `[0.5, 1.0, 2.0]`) y
 `default_zoom_level` (1) son exports: añadir un nivel o cambiar con cuál arranca es tocar
 el inspector. API: `zoom_level()`, `zoom_level_count()`, `set_zoom_level(n)`,
 `step_zoom(±1)`.
+
+---
+
+### `LongPress` — `core/input/long_press.gd`
+```
+extends RefCounted   class_name LongPress
+```
+Reconoce "mantener pulsado sin arrastrar", el equivalente táctil del click derecho. Ajustes:
+`hold_time` (0,5 s) y `move_threshold_px` (6).
+
+| Método | Qué contesta |
+|--------|--------------|
+| `press(pos)` | empieza a contar |
+| `moved(pos)` | `true` **la primera vez** que se pasa de umbral y deja de ser pulsación |
+| `release()` | `true` si soltar cuenta como click limpio — ni se arrastró ni ya saltó la mantenida |
+| `tick(delta)` | `true` **exactamente una vez**, al cumplirse el tiempo y sin soltar |
+| `origin()` / `is_pressed()` / `is_dragging()` | estado |
+
+**No conoce eventos ni nodos, y por eso lo usan los dos.** `PanCamera` trabaja en
+coordenadas de pantalla dentro de `_unhandled_input`; `MapView` en locales dentro de
+`_gui_input`. Se le cuenta lo que pasa y contesta qué significa, así que el mismo gesto se
+reconoce igual en el mundo y en el mapa sin copiar el temporizador ni el umbral de arrastre.
+Salió de dentro de `PanCamera`, donde estaba enredado con el estado del paneo.
 
 **Potencias de dos, no una escala continua.** Con filtro Nearest, 0,5 descarta exactamente
 uno de cada dos píxeles del mundo; un 0,75 descartaría un patrón irregular que hierve en
@@ -234,14 +259,23 @@ contextual. Es el único lugar donde se decide qué significa cada gesto de entr
 **Flujo de input — el mismo gesto en PC y táctil, sin ramas por plataforma:**
 ```
 click izquierdo / tap → PanCamera.clicked → _on_camera_clicked(pos)
-  └─ unidad bajo cursor:
+       └─ _handle_click(pos, _find_unit_at(pos))
+mapa táctico          → HUD.map_clicked   → _on_map_clicked(pos, unit)
+       └─ suelta la cámara; sin nada propio que dirigir → _look_at(pos)
+       └─ si no → _handle_click(pos, unit)
+
+_handle_click(pos, unit)
+  └─ unidad bajo el punto:
        └─ puedo atacarla (propia seleccionada + hostil) → _issue_attack_order(unit)
        └─ es la ya seleccionada → _select(null)
        └─ si no → _select(unit)
   └─ sin unidad + hay propia seleccionada → _issue_move_order(pos)
 
-click derecho / pulsación mantenida → PanCamera.long_pressed → _on_context_requested(pos)
-  └─ unidad ajena bajo cursor → _hud.open_target_menu(unit, can_attack)
+click derecho / mantenida → PanCamera.long_pressed      → _on_context_requested(pos)
+mapa táctico              → HUD.map_context_requested   → _on_map_context_requested(pos, unit)
+
+_handle_context(pos, unit)
+  └─ unidad ajena bajo el punto → _hud.open_target_menu(unit, can_attack)
   └─ si no, y hay propia seleccionada → _issue_move_order(pos)
 
 HUD.attack_requested (del menú) → _issue_attack_order(target)
@@ -250,6 +284,19 @@ HUD.deselect_requested → _select(null)
 HUD.zoom_change_requested(step) → PanCamera.step_zoom(step)
 PanCamera.zoom_changed(level, count) → HUD.set_zoom_state(...)
 ```
+
+**El significado del gesto está separado de quién lo trae.** `_handle_click` y
+`_handle_context` reciben ya resuelto qué hay debajo; el mundo lo averigua con
+`_find_unit_at()` (física) y el mapa con `MapView.unit_at()` (contra los puntos dibujados).
+Cambiar qué significa un click cambia en los dos sitios a la vez, que es justo lo que se
+quiere: **el mapa no es otro modo de juego, es la misma partida vista de lejos.**
+
+**Tocar el mapa suelta la cámara** (`_release_camera()`). Sin eso, ordenar desde el mapa deja
+la vista pegada a la unidad y el recuadro de cámara se va de paseo con ella mientras lo miras.
+Si el click acaba seleccionando a alguien, `_select()` la vuelve a enganchar — eso sí se
+quiere. La única excepción del mapa respecto al mundo es que, sin nada propio que dirigir,
+pulsar terreno lleva la mirada allí (`_look_at`) en vez de no hacer nada: es para lo que se
+abre el mapa.
 
 **Corredor del zoom.** El HUD no conoce la cámara y no debe empezar a conocerla, así que
 `SelectionManager` cablea los dos sentidos. Después de conectar **pide el estado inicial a
@@ -938,13 +985,27 @@ extends CanvasLayer   class_name HUD
 | `unit_focus_requested(unit: Unit)` | Click en un cuadrito de `DeployedPanel`, o "Información" en `TargetMenu` |
 | `attack_requested(target: Unit)` | El jugador tocó "Atacar" en `TargetMenu` |
 | `zoom_change_requested(step: int)` | Pidió acercar (+1) o alejar (−1). Reenvía lo de `ZoomControls`; el HUD no conoce la cámara |
-| `camera_move_requested(world_position: Vector2)` | Pulsó un punto del mapa táctico. Mismo trato: reenvía |
+| `map_clicked(world_position: Vector2, unit: Unit)` | Pulsó el mapa táctico, con la unidad que hubiera bajo el punto o `null`. Mismo trato: reenvía |
+| `map_context_requested(world_position: Vector2, unit: Unit)` | Ídem con el botón derecho |
 
 API:
-- `show_selected_unit(unit: Unit)` — muestra panel + acciones (si controla) + barra de armas (si controla) + botón ×; se suscribe a `attack_target_changed` de la unidad
+- `show_selected_unit(unit: Unit)` — muestra panel + acciones (si controla) + barra de armas + botón ×; se suscribe a `attack_target_changed` de la unidad; le pasa la selección al `TacticalMap` para su rótulo y su recuadro
 - `clear_selected_unit()` — oculta todo, incluido el aviso de ataque; se desuscribe
-- `open_target_menu(target, can_attack)` / `close_target_menu()` — delegan en `TargetMenu`, convirtiendo la posición mundo→pantalla con `get_global_transform_with_canvas()`
+- `open_target_menu(target, can_attack)` / `close_target_menu()` — delegan en `TargetMenu`
+- `show_order_marker(world_position)` / `clear_order_marker()` — el destino de la orden en curso, para que se vea en los dos mapas. Se lo dice `SelectionManager`: el HUD no conoce el mundo
 - `set_zoom_state(level, count)` — hasta dónde puede seguir acercándose o alejándose. Se lo dice `SelectionManager`, que sí tiene la cámara delante
+
+**`_refresh_weapon_bar()` junta las tres condiciones que esconden la barra de armas:** que no
+haya selección, que la unidad no sea del jugador, o que el mapa táctico esté abierto. Las tres
+acaban en `show_weapons(null)`, así que caben en una llamada, y por eso `TacticalMap.opened` y
+`closed` van conectadas ahí. **La barra es lo único del HUD que se esconde con el mapa
+abierto** — cae justo encima del terreno y ahí no se dispara nada; el hangar, las acciones, el
+zoom y la lista de desplegadas siguen a mano.
+
+**El menú contextual se coloca sobre el punto del mapa cuando el mapa está abierto**, en vez
+de sobre la unidad (`get_global_transform_with_canvas()`). Es la misma unidad mirada desde
+otro sitio: la de verdad puede estar a media misión de la cámara, y el menú saldría pegado a
+un borde de la pantalla.
 
 `_on_attack_target_changed(target)` mantiene el `AttackLabel` ("Atacando: <nombre>") en
 sincronía con la unidad seleccionada — enganchado a su señal y no refrescado a mano,
@@ -972,7 +1033,8 @@ Agregar casos aquí al implementar nuevas acciones.
 ```
 CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en pausa
 ├── EventLog         (PanelContainer) — offset (6,195)
-├── Minimap          (PanelContainer) — offset (5,292) — placeholder
+├── Minimap          (PanelContainer) — offset (5,292)
+├── TacticalMap      (Control)        — pantalla completa, visible=false
 ├── HangarWindow     (PanelContainer)
 ├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=313
 ├── SelectionPanel   (PanelContainer) — offset_left=544, offset_top=349
@@ -984,6 +1046,14 @@ CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en 
 ├── TargetMenu       (PanelContainer) — menú contextual, se posiciona en runtime
 └── DeselButton      (Button)         — offset (526,351), visible=false, flat, text="×"
 ```
+
+**El mapa táctico va pronto en la lista a propósito.** En un `CanvasLayer` el orden de los
+hijos decide quién dibuja encima, y el mapa está donde está para que el resto del HUD le pase
+por delante y siga siendo pulsable con el mapa abierto. Lo que evita el solape no es el orden
+sino la **colocación**: el área de dibujo del mapa empieza en `y=26` (bajo `DeployedPanel`) y
+acaba en `x=486` (antes de la columna de la derecha), así que ningún panel cruza el terreno y
+la escala no baja por ello. Probarlo moviendo el mapa al final es tentador y sale mal:
+entonces tapa el hangar y la lista de desplegadas.
 
 ---
 
@@ -1162,14 +1232,22 @@ que se notara.
 ```
 extends Control   class_name MapView
 ```
-Dibuja terreno, rejilla, coordenadas y el recuadro de lo que se ve en pantalla. Emite
-`map_clicked(world_position)`.
+Dibuja terreno, rejilla, coordenadas, el recuadro de lo que se ve en pantalla, las unidades,
+el destino de la orden en curso y el recuadro de la unidad seleccionada.
+
+| Señal | Cuándo |
+|-------|--------|
+| `map_clicked(world_position: Vector2, unit: Unit)` | Click izquierdo dentro del terreno |
+| `map_context_requested(world_position: Vector2, unit: Unit)` | Ídem con el derecho |
+
+API además de los exportados: `set_order_marker(world)` / `clear_order_marker()`,
+`set_selected_unit(unit)`, `unit_at(local_position)`, `world_to_local()` / `local_to_world()`.
 
 | Exportado | Minimapa | Táctico | Qué hace |
 |-----------|----------|---------|----------|
-| `show_grid` | `false` | `true` | rejilla fina (celdas) + gruesa (zonas) |
+| `show_grid` | `false` | `true` | rejilla de zonas de coordenadas (**no** de celdas de terreno) |
 | `show_labels` | `false` | `true` | letras arriba y abajo, números a los lados |
-| `zone_cells` | — | `4` | celdas por lado de zona. **El número a mover si las coordenadas salen gruesas o finas** |
+| `zone_cells` | — | `8` | celdas por lado de zona **que se piden**. **El número a mover si las coordenadas salen gruesas o finas** |
 | `show_viewport_rect` | `true` | `true` | recuadro de lo que se está mirando |
 | `show_units` | `true` | `true` | un punto por unidad, del color de su bando |
 | `marker_px` | `2` | `4` | lado del punto **en píxeles de pantalla** |
@@ -1181,8 +1259,19 @@ píxeles al mover la cámara — el mismo motivo por el que `PanCamera` sólo us
 dos. Con el mapa de 64×45: minimapa 1 px/celda (imagen de 64×45 en un panel de 87), táctico
 8 px/celda (512×360). Se recalcula en `resized`, así que redimensionar el panel basta.
 
-**La rejilla fina se apaga sola** por debajo de 4 px por celda: líneas más juntas no se leen
-como cuadrícula, se leen como suciedad.
+**Sólo hay una rejilla: la de zonas.** Hubo una segunda, fina, con una línea por celda de
+terreno — 64×45 = casi 2900 cuadritos de 7 px. Se quitó: no era información sino el tamaño
+del tile, un detalle de implementación, y a esa densidad no se lee como cuadrícula sino como
+rayado. Sirve de referencia el sistema de las cartas náuticas (Silent Hunter, Sea Power,
+Command): **una sola rejilla, pocas divisiones, letra+número**, y subdividir sólo con zoom.
+
+**`zone_cells` es una petición, no una orden.** `_zone_side()` la duplica tantas veces como
+haga falta hasta que una zona mida al menos 24 px en pantalla. Con el mapa de 64×45 a 7 px
+por celda, 8 celdas dan zonas de 56 px → **8×6 zonas, A1…H6**. En un mapa del doble de
+grande las zonas pasarían solas a 16 celdas y seguiría leyéndose igual, sin retocar el
+exportado por misión. `zone_label_at(world)` devuelve la coordenada con el tamaño que se está
+dibujando **de verdad** — el registro de eventos debe preguntar por ahí, o el texto y el
+dibujo podrían no coincidir.
 
 **Las coordenadas van fuera del mapa**, repetidas en los dos bordes para no tener que seguir
 una fila con el dedo hasta el otro extremo. Dentro no caben —a 8 px por celda una zona de
@@ -1207,29 +1296,73 @@ y mentiría sobre dónde está.
 Con `show_units` el mapa **se redibuja cada frame**; sin ellas basta con mirar si cambió la
 transformación del lienzo. Son un puñado de rectángulos, y un mapa oculto no se dibuja.
 
+**El click izquierdo se cuenta al soltar, no al pulsar.** Hasta que el dedo no se levanta no
+se sabe si era un click o el principio de una pulsación mantenida — que aquí significa lo
+mismo que en el mundo: abrir el menú de la unidad. Lo reconoce `LongPress`, el mismo detector
+que usa `PanCamera`. De regalo, arrastrar sobre el mapa ya no dispara una orden. El botón
+derecho no espera a nada: en PC no hay ambigüedad.
+
+**`unit_at()` busca contra los puntos dibujados, no contra el mundo.** A la escala del mapa un
+píxel son decenas de píxeles de mundo, así que una consulta de física en el punto pulsado no
+acertaría a una unidad nunca: lo que el jugador apunta es el punto que ve. Gana el más
+cercano, con 3 px de margen alrededor porque un cuadrito de 4 px no se acierta ni con ratón.
+Igual que en el mundo, pulsar a un miembro de escuadrón devuelve al líder.
+
+**El recuadro de cámara y el de la unidad seleccionada son excluyentes.** Con una unidad
+seleccionada la cámara la sigue, así que el recuadro de pantalla se convertía en un cuadro
+enorme persiguiendo por todo el mapa al mismo punto que ya está resaltado. Habiendo selección
+se dibuja **su** recuadro (accent, separado 3 px del punto para no comerse el color del bando)
+y se calla el de cámara; sin selección vuelve el de cámara. **Sólo aplica al mapa táctico** —
+al minimapa no se le pasa la selección, y ahí el recuadro de cámara se queda siempre.
+
+**El destino de la orden se dibuja en los dos mapas**, con la misma cruz dentro de un círculo
+que planta `MoveMarker` en el mundo y al mismo tamaño en ambos: es un icono. Con el mapa
+abierto el marcador del mundo no se ve, y sin esto no habría forma de saber a dónde se mandó
+la unidad.
+
 #### `Minimap` — `minimap.gd`
 ```
 extends PanelContainer   class_name Minimap
 ```
 El mapa pequeño. Emite `expand_requested`. **No es un mando de navegación**: a 1 px por
 celda no cabe una coordenada ni tendría sentido apuntar a un sitio concreto, así que el
-minimapa entero —terreno y marco— es un botón que abre el grande.
+minimapa entero —terreno y marco— es un botón que abre el grande. Reenvía a su `MapView` el
+destino de la orden (`set_order_marker` / `clear_order_marker`) y nada más: no sabe qué unidad
+está seleccionada, y por eso conserva su recuadro de cámara.
 
 #### `TacticalMap` — `tactical_map.gd`
 ```
 extends Control   class_name TacticalMap
 ```
-El mapa a pantalla completa. Emite `move_requested(world_position)` y `closed`. Se abre y
-cierra con `shortcut_key` (`M`, `KEY_NONE` la desactiva) o pulsando el minimapa.
+El mapa a pantalla completa. Emite `clicked(world, unit)`, `context_requested(world, unit)`,
+`opened` y `closed`. Se abre pulsando el minimapa o con `shortcut_key` (`M`, `KEY_NONE` la
+desactiva), y **se cierra con esa tecla o con el botón `×`** — el atajo no existe en móvil, y
+sin el botón no habría salida.
 
-Pulsar un punto lleva la cámara allí **y cierra**: se abre el mapa para decidir a dónde ir,
-y una vez decidido estorba. `SelectionManager._look_at()` es quien mueve la cámara, y
-suelta el `follow_target` al hacerlo — si no, la cámara volvería a la unidad al frame
-siguiente y el mapa parecería roto.
+**El mapa no decide qué significa un click.** Depende de qué haya seleccionado, y de eso sabe
+`SelectionManager`; aquí sólo se cuenta el gesto, igual que se hace con la cámara. `_selected`
+existe únicamente para el rótulo y para pasarle la selección al `MapView`.
+
+**Pulsar no cierra el mapa.** Se dirige a la unidad, se ataca o se mira sin salir de él: el
+destino queda marcado en el propio mapa y el recuadro de cámara enseña a dónde se fue la
+vista. Cerrar es cosa de la tecla o del botón.
+
+API: `open()` / `close()` / `toggle()`, `set_selected_unit(unit)`, `set_order_marker(world)` /
+`clear_order_marker()`, y `marker_position(unit)` — dónde cae el punto de una unidad en la
+pantalla, que es lo que el HUD usa para colocar el menú contextual.
 
 Tapa la pantalla y **se come los clicks a propósito**: con el mapa abierto, una pulsación no
 puede colarse hasta el mundo y dar una orden de movimiento sin querer. Funciona en pausa sin
 hacer nada, porque cuelga del HUD y el HUD ya es `process_mode = Always`.
+
+**Árbol de `tactical_map.tscn`:**
+```
+Control (TacticalMap)      — 640×384, mouse_filter = STOP
+├── Backdrop     (ColorRect) — pantalla completa, opaca
+├── Map          (MapView)   — (0,26)-(486,384): esquiva la barra superior y la columna derecha
+├── Hint         (Label)     — (492,126), autowrap: qué hará el siguiente click
+└── CloseButton  (Button)    — (620,86), bajo el de pausa
+```
 
 **El terreno se reconstruye al abrir**, no al arrancar: el mapa cambia por misión y así no
 hay que acordarse de avisar a nadie al cargar otro.
@@ -1391,6 +1524,11 @@ por el que `PanCamera` sólo admite potencias de dos. Cuando ni el entero más p
 se reduce **el dato** (varias celdas por píxel de imagen) en vez de encoger el dibujo. Ver
 `MapView` y `MapTerrain`.
 
+La misma idea vale para lo que se dibuja encima: `zone_cells` dice el tamaño de zona que se
+**quiere**, y la vista lo agrupa hasta que la coordenada se lee. Un exportado que fija un
+resultado visual se queda viejo en cuanto cambia el mapa o el panel; uno que expresa una
+intención sigue valiendo. **Exportar la intención, calcular el resultado.**
+
 ### Limitar la maniobra por radio, no por velocidad angular
 Un móvil con tope de grados por segundo gira **más cerrado** cuanto más rápido va, que es
 al revés que la física y produce proyectiles imposibles de esquivar. Con tope de radio de
@@ -1497,6 +1635,12 @@ significar "atacar", así que el mismo click/tap que selecciona ya sirve. Se res
 gesto secundario (aquí, pulsación mantenida / click derecho) sólo para la acción que de
 verdad compite por el mismo gesto primario (inspeccionar vs. atacar).
 
+El corolario apareció con el mapa táctico: **una vista nueva no inventa gestos nuevos.**
+Pulsar el mapa significa lo mismo que pulsar el mundo —dirigir, atacar, seleccionar,
+inspeccionar— y lo resuelven las mismas funciones. Lo único que cambia es cómo se averigua
+qué hay debajo. Si una vista necesitara su propio vocabulario de clicks, el problema
+normalmente es la vista, no el vocabulario.
+
 ---
 
 ## Paleta de colores (Resurrect64 en uso)
@@ -1557,6 +1701,9 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] Minimapa y mapa táctico (`MapTerrain` / `MapView` / `Minimap` / `TacticalMap`): terreno, rejilla de celdas, coordenadas por zonas y un punto por unidad del color de su bando
 - [x] Bando `NEUTRAL` (blanco), con el que no se mete nadie
 - [x] Capa de datos `tipo` en `terrain_tileset.tres` (agua / tierra / arena), 101 tiles marcados
+- [x] **Mandar desde el mapa táctico:** dirigir, atacar y abrir el menú contextual pulsando el mapa, con los mismos gestos que en el mundo (incluida la pulsación mantenida en táctil) y sin cerrarlo. Destino marcado en los dos mapas, unidad seleccionada resaltada y rotulada, y botón `×` para cerrarlo sin teclado
+- [x] Rejilla de coordenadas por zonas que **se agrupan solas** para seguir legibles pase lo que pase con el tamaño del mapa (`A1…H6` hoy)
+- [x] `LongPress`: el mismo detector de pulsación mantenida en la cámara y en el mapa
 
 ### Pendiente
 - [ ] Proyectil balístico para bombas (el mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`)
@@ -1577,10 +1724,10 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [ ] Aterrizaje/recuperación de aviones
 - [ ] Pantalla de puerto (reemplazar `PlayerFleet` hardcodeado)
 - [ ] El minimapa como aviso de que pasa algo fuera de pantalla (parpadeo al recibir fuego, o similar). Los puntos ya están; falta que llamen la atención
-- [ ] Distinguir en el mapa la unidad seleccionada, y quizá aire de superficie (`UnitType.Domain`)
+- [ ] Distinguir en el mapa aire de superficie (`UnitType.Domain`) — la unidad seleccionada ya se resalta
+- [ ] Menú contextual también en el minimapa, o dejarlo como botón: hoy sus puntos de 2 px no se pueden apuntar
+- [ ] Nombres propios de zona por misión ("Bahía Norte") encima de la rejilla, si el registro de eventos gana con ello. El sistema de zonas serviría de rejilla de fondo sin tirar nada — modelo Foxhole / EVE frente a modelo carta náutica
 - [ ] Coordenadas pulsables en el `EventLog`: `MapTerrain.label_at()` y `zone_center()` ya existen para eso, falta que el registro las escriba y las enlace
-- [ ] Decidir el tamaño de zona definitivo (`zone_cells`, hoy 4 → A1…P12): es de verlo en pantalla
 - [ ] Mecánicas de ataque/combate
 - [ ] Unidades enemigas
-- [ ] Menú de opciones al clickear unidad enemiga (ya se selecciona; falta el menú)
 - [ ] IA de unidades enemigas y aliadas (`Team.Side.ALLY` existe pero nadie la mueve)

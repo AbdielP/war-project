@@ -2,6 +2,44 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-07 (2)
+
+### Una rejilla que se lee, y un gesto que se reconoce en un solo sitio
+La cuadrícula del mapa táctico se veía rayada. La causa: había **dos** rejillas encima del terreno, y la fina dibujaba una línea por celda de terreno — 64×45 = casi 2900 cuadritos de 7 px.
+
+**Se quitó entera.** El tamaño del tile es un detalle de implementación: no le dice nada al jugador, y a esa densidad no se lee como cuadrícula sino como rayado. Queda sólo la rejilla de zonas, que es la que lleva coordenada. Miradas otras soluciones antes de decidir: las cartas náuticas (Silent Hunter, Sea Power, Command) usan **una sola rejilla con pocas divisiones** y subdividen sólo con zoom; los wargames de sectores (Wargame, Steel Division) usan regiones translúcidas con nombre; el RTS clásico (C&C, StarCraft) no dibuja rejilla ninguna. Se eligió el modelo de carta náutica porque es el que da coordenadas automáticas para el registro de eventos sin bautizar nada a mano en cada mapa.
+
+**Las zonas pasaron de 4 a 8 celdas: 8×6 zonas, A1…H6** en vez de 16×12.
+
+**Y `zone_cells` dejó de ser una orden para ser una petición.** El mapa va a crecer, así que un número fijo de celdas por zona volvería a llenar la pantalla de rayas el día que se cargue un mapa mayor, y habría que ir retocando el exportado misión por misión. Ahora la vista **agrupa las zonas de dos en dos** hasta que una mide al menos 24 px en pantalla. La regla que queda, hermana de la de la escala: **exportar la intención, calcular el resultado**. Se añadió `zone_label_at()` para que el registro de eventos pregunte la coordenada con el tamaño que se está dibujando de verdad y no puedan divergir el texto y el dibujo.
+
+**La pulsación mantenida salió de `PanCamera` a `LongPress`.** Faltaba en el mapa —en móvil no había forma de abrir el menú de una unidad desde ahí— y el detector estaba enredado con el estado del paneo de la cámara. Copiarlo era lo rápido; en su lugar se sacó a `core/input/long_press.gd`, que **no conoce eventos ni nodos**: se le cuenta lo que pasa y contesta qué significa. Por eso lo usan igual la cámara (coordenadas de pantalla, `_unhandled_input`) y la vista del mapa (locales, `_gui_input`), y el gesto se reconoce con el mismo tiempo y el mismo umbral en los dos sitios.
+
+De ahí salió un cambio que no estaba previsto y que era correcto: **el click izquierdo en el mapa se cuenta al soltar, no al pulsar.** Hasta que el dedo no se levanta no se sabe si era un click o el principio de una mantenida. De regalo, arrastrar sobre el mapa ya no dispara una orden.
+
+Verificado en headless por el camino real del input: zona de 56 px con 8×6 zonas `A1…H6` (LHD en `G5`, T-14 en `B2`); la mantenida sobre el punto del T-14 abre su menú a los 0,504 s **sin soltar**, y soltar después no da orden; el click corto sigue ordenando; arrastrar no ordena; y el paneo de la cámara sigue funcionando tras el refactor.
+
+## 2026-08-07
+
+### El mapa táctico no es otro modo de juego, es la misma partida vista de lejos
+Se puede mandar desde el mapa: dirigir a la unidad seleccionada, atacar pulsando el punto de un enemigo y abrir su menú con el botón derecho.
+
+**El significado del gesto se sacó a una función compartida.** `_handle_click` y `_handle_context` reciben ya resuelto qué hay debajo; el mundo lo averigua con una consulta de física y el mapa preguntándole a `MapView`. Escribir la lógica dos veces era lo cómodo y lo que garantiza que dentro de un mes el mapa y el mundo hagan cosas distintas sin que nadie se dé cuenta. La regla que queda: **una vista nueva no inventa gestos nuevos**; si los necesita, el problema es la vista.
+
+**Lo que hay bajo el click lo resuelve el mapa contra sus propios puntos, no contra el mundo.** A 7 px por celda, un píxel son ~4,5 px de mundo, así que una consulta de física en el punto pulsado no acertaría a una unidad nunca. Lo que el jugador apunta es el punto que ve, no la unidad de tamaño real que hay detrás: gana el punto más cercano, con 3 px de margen alrededor porque un cuadrito de 4 px no se acierta ni con ratón.
+
+**Pulsar no cierra el mapa.** Lo hice al revés primero —cerrar como parte del gesto, "se decide y estorba"— y era incómodo: das una orden y pierdes de vista el mapa justo cuando quieres comprobar a dónde va. Ahora sólo cierran la tecla `M` y un botón `×`, que además es la única salida en móvil, donde no hay teclado. Como el marcador de destino del mundo no se ve con el mapa abierto, **se dibuja también dentro del mapa** (y del minimapa).
+
+**El recuadro de cámara y la unidad seleccionada son excluyentes.** Con una unidad seleccionada la cámara la sigue, así que el recuadro de pantalla se convertía en un cuadro enorme persiguiéndola por todo el mapa. Habiendo selección se resalta **su** punto y se calla el recuadro; sin selección vuelve el recuadro. Sólo en el táctico: al minimapa no se le pasa la selección y ahí el recuadro sigue siendo lo útil.
+
+**Tocar el mapa suelta el `follow_target`.** Esto era gratis antes sin saberlo: todos los clicks pasaban por `_look_at()`, que ya lo soltaba. Al dejar de pasar por ahí, la cámara se quedó pegada a la unidad y el recuadro se fue de paseo. Se soltó explícitamente, que es donde debía estar desde el principio.
+
+**El mapa se acomodó, no se puso encima.** Al ver la barra de armas por delante del terreno moví el mapa al final del `CanvasLayer` para que tapara el HUD entero — y con ello dejé sin acceso el hangar y la lista de desplegadas. La corrección: el orden vuelve a estar como estaba y **el área de dibujo del mapa esquiva a los paneles** (empieza en `y=26`, acaba en `x=486`), con lo que no se solapa nada y la escala sigue en 7 px por celda. Lo único que se esconde con el mapa abierto es la barra de armas, que cae justo sobre el terreno y ahí no se dispara nada.
+
+Verificado en headless metiendo los eventos por el viewport, no llamando a los manejadores: `M` abre; click izquierdo en terreno deja el mapa abierto, planta el destino en los dos mapas y suelta la cámara (`follow_target` de `LHD_WASP` a `null`); click derecho sobre el punto del T-14 abre su menú colocado sobre ese punto; click izquierdo sobre él deja `attack_target = T-14`; el botón `×` y `M` cierran. Y que ninguno de los cinco paneles del HUD cruza el rectángulo del terreno.
+
+Queda pendiente la **pulsación mantenida** en el mapa: en móvil no hay forma de abrir el menú contextual desde ahí. El detector vive en `PanCamera` y lo suyo es sacarlo a un sitio común en vez de duplicarlo.
+
 ## 2026-08-06 (4)
 
 ### Un bando nuevo se añade por el final, y el neutral no es enemigo de nadie

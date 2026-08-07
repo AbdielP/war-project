@@ -7,8 +7,11 @@ signal unit_focus_requested(unit: Unit)
 signal attack_requested(target: Unit)
 ## Pidió acercar (+1) o alejar (−1). El HUD no conoce la cámara: reenvía y ya.
 signal zoom_change_requested(step: int)
-## Pulsó un punto del mapa táctico. Mismo trato que el zoom: se reenvía.
-signal camera_move_requested(world_position: Vector2)
+## Pulsó el mapa táctico, con la unidad que hubiera bajo el punto o `null`.
+## Mismo trato que el zoom: se reenvía a quien sepa qué hacer con ello.
+signal map_clicked(world_position: Vector2, unit: Unit)
+## Lo mismo con el botón derecho.
+signal map_context_requested(world_position: Vector2, unit: Unit)
 
 @onready var _selection_panel: PanelContainer = $SelectionPanel
 @onready var _actions_panel: PanelContainer = $ActionsPanel
@@ -45,8 +48,14 @@ func _ready() -> void:
 	_zoom_controls.zoom_change_requested.connect(
 			func(step: int) -> void: zoom_change_requested.emit(step))
 	_minimap.expand_requested.connect(_tactical_map.open)
-	_tactical_map.move_requested.connect(
-			func(where: Vector2) -> void: camera_move_requested.emit(where))
+	_tactical_map.clicked.connect(
+			func(where: Vector2, unit: Unit) -> void: map_clicked.emit(where, unit))
+	_tactical_map.context_requested.connect(
+			func(where: Vector2, unit: Unit) -> void: map_context_requested.emit(where, unit))
+	# La barra de armas es lo único que sobra con el mapa abierto: cae justo
+	# encima del terreno y ahí no se dispara nada. El resto del HUD se queda.
+	_tactical_map.opened.connect(_refresh_weapon_bar)
+	_tactical_map.closed.connect(_refresh_weapon_bar)
 
 
 ## Hasta dónde puede seguir acercándose o alejándose. Se lo dice quien tiene la
@@ -79,23 +88,38 @@ func show_selected_unit(unit: Unit) -> void:
 	_current_unit = unit
 	_selection_panel.show_unit(unit.get_display_name())
 	_actions_panel.show_actions(unit.get_actions() if unit.is_player_controlled() else [])
-	# Del enemigo se ve qué es, no se le cambia el arma. `show_weapons(null)`
-	# esconde la barra, así que no hace falta repetir la condición.
-	_weapon_bar.show_weapons(unit if unit.is_player_controlled() else null)
+	_refresh_weapon_bar()
 	# El objetivo puede cambiar sin tocar la selección — si muere, por ejemplo —,
 	# así que el aviso se engancha a la unidad en vez de refrescarse a mano.
 	unit.attack_target_changed.connect(_on_attack_target_changed)
 	unit.ammo_changed.connect(_on_ammo_changed)
 	_on_attack_target_changed(unit.attack_target)
 	_desel_btn.show()
+	_tactical_map.set_selected_unit(unit)
+
+
+## Del enemigo se ve qué es, no se le cambia el arma. Y con el mapa táctico
+## abierto no se ve ninguna: `show_weapons(null)` esconde la barra, así que las
+## tres condiciones caben en una llamada.
+func _refresh_weapon_bar() -> void:
+	var unit: Unit = _current_unit
+	if not is_instance_valid(unit) or not unit.is_player_controlled() or _tactical_map.visible:
+		unit = null
+	_weapon_bar.show_weapons(unit)
 
 
 ## El menú se coloca solo junto a la unidad: convierte su posición del mundo a
 ## coordenadas de pantalla a través del canvas, que es lo que ve el HUD.
+##
+## Con el mapa táctico abierto se pone sobre el punto de la unidad en el mapa.
+## Es la misma unidad, pero mirándola desde otro sitio: la de verdad puede estar
+## a media misión de la cámara y el menú saldría pegado a un borde.
 func open_target_menu(target: Unit, can_attack: bool) -> void:
 	if not is_instance_valid(target):
 		return
-	_target_menu.open(target, target.get_global_transform_with_canvas().origin, can_attack)
+	var where: Vector2 = _tactical_map.marker_position(target) if _tactical_map.visible \
+		else target.get_global_transform_with_canvas().origin
+	_target_menu.open(target, where, can_attack)
 
 
 func close_target_menu() -> void:
@@ -111,6 +135,19 @@ func clear_selected_unit() -> void:
 	_attack_label.hide()
 	_impact_timer.hide()
 	_desel_btn.hide()
+	_tactical_map.set_selected_unit(null)
+
+
+## El destino de la orden en curso, para que se vea en los dos mapas. Se lo dice
+## quien da las órdenes: el HUD no conoce el mundo.
+func show_order_marker(world_position: Vector2) -> void:
+	_minimap.set_order_marker(world_position)
+	_tactical_map.set_order_marker(world_position)
+
+
+func clear_order_marker() -> void:
+	_minimap.clear_order_marker()
+	_tactical_map.clear_order_marker()
 
 
 func _on_attack_target_changed(target: Unit) -> void:

@@ -29,16 +29,14 @@ var follow_target: Node2D = null
 
 var _zoom_level: int = -1
 
-var _dragging := false
-var _drag_started := false
-var _long_fired := false
-var _press_time := 0.0
-var _press_position := Vector2.ZERO
+var _press := LongPress.new()
 var _last_position := Vector2.ZERO
 
 
 func _ready() -> void:
 	enabled = true
+	_press.hold_time = long_press_time
+	_press.move_threshold_px = click_threshold_px
 	_fit_limits_to_map()
 	set_zoom_level(default_zoom_level)
 
@@ -72,24 +70,14 @@ func set_zoom_level(level: int) -> void:
 
 
 func _process(delta: float) -> void:
-	_tick_long_press(delta)
+	if _press.tick(delta):
+		long_pressed.emit(get_global_mouse_position())
 	if follow_target == null:
 		return
 	if not is_instance_valid(follow_target):
 		follow_target = null
 		return
 	position = follow_target.global_position
-
-
-## Se dispara sin soltar el botón, como en cualquier menú contextual táctil:
-## el aviso llega mientras el dedo sigue apoyado, no al levantarlo.
-func _tick_long_press(delta: float) -> void:
-	if not _dragging or _drag_started or _long_fired:
-		return
-	_press_time += delta
-	if _press_time >= long_press_time:
-		_long_fired = true
-		long_pressed.emit(get_global_mouse_position())
 
 
 func _fit_limits_to_map() -> void:
@@ -118,22 +106,13 @@ func _fit_limits_to_map() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == pan_button:
 		if event.pressed:
-			_dragging = true
-			_drag_started = false
-			_long_fired = false
-			_press_time = 0.0
-			_press_position = event.position
+			_press.press(event.position)
 			_last_position = event.position
-		else:
-			_dragging = false
-			# Si ya se atendió como pulsación larga, soltar no es un click:
-			# si no, el menú se abriría y acto seguido llegaría la orden.
-			if not _drag_started and not _long_fired:
-				clicked.emit(get_global_mouse_position())
-	elif event is InputEventMouseMotion and _dragging:
-		if not _drag_started and event.position.distance_to(_press_position) >= click_threshold_px:
-			_drag_started = true
+		elif _press.release():
+			clicked.emit(get_global_mouse_position())
+	elif event is InputEventMouseMotion and _press.is_pressed():
+		if _press.moved(event.position):
 			follow_target = null
-		if _drag_started:
+		if _press.is_dragging():
 			position -= (event.position - _last_position) / zoom
 		_last_position = event.position

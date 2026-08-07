@@ -25,7 +25,8 @@ func _ready() -> void:
 	_hud.unit_focus_requested.connect(func(unit: Unit) -> void: _select(unit))
 	_hud.attack_requested.connect(_issue_attack_order)
 	_hud.zoom_change_requested.connect(_camera.step_zoom)
-	_hud.camera_move_requested.connect(_look_at)
+	_hud.map_clicked.connect(_on_map_clicked)
+	_hud.map_context_requested.connect(_on_map_context_requested)
 	_camera.zoom_changed.connect(_hud.set_zoom_state)
 	# La cámara ya fijó su nivel en su propio _ready(), antes de que hubiera
 	# nadie escuchando: hay que pedirle el estado inicial a mano o los botones
@@ -45,6 +46,37 @@ func _look_at(world_position: Vector2) -> void:
 	_camera.position = world_position
 
 
+## Pulsar el mapa táctico es el mismo gesto que pulsar el mundo, y significa lo
+## mismo: lo que haya debajo manda. Sólo cambia cómo se averigua qué hay debajo
+## —el mapa lo resuelve contra los puntos que dibuja— y una excepción: sin nada
+## propio que dirigir, pulsar terreno lleva la mirada allí, que es para lo que se
+## abre el mapa.
+func _on_map_clicked(world_position: Vector2, unit: Unit) -> void:
+	_release_camera()
+	if unit == null and not _has_own_selection():
+		_look_at(world_position)
+		return
+	_handle_click(world_position, unit)
+
+
+func _on_map_context_requested(world_position: Vector2, unit: Unit) -> void:
+	_release_camera()
+	_handle_context(world_position, unit)
+
+
+## Tocar el mapa suelta la cámara de quien estuviera siguiendo. Si no, ordenar
+## desde el mapa deja la vista pegada a la unidad y el recuadro de cámara se va
+## de paseo con ella por todo el mapa mientras lo miras. Si el click acaba
+## seleccionando a alguien, [method _select] vuelve a engancharla — eso sí se
+## quiere.
+func _release_camera() -> void:
+	_camera.follow_target = null
+
+
+func _has_own_selection() -> bool:
+	return is_instance_valid(_selected_unit) and _selected_unit.is_player_controlled()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 		_on_context_requested(get_global_mouse_position())
@@ -56,8 +88,14 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Click izquierdo o tap. Lo que hay debajo decide qué significa — el mismo
 ## gesto en PC y en táctil, sin gestos distintos por plataforma.
 func _on_camera_clicked(world_position: Vector2) -> void:
+	_handle_click(world_position, _find_unit_at(world_position))
+
+
+## Qué significa un click izquierdo. Está aparte de quién lo trae porque el
+## mundo y el mapa táctico lo comparten: cambia cómo se averigua qué hay debajo,
+## no qué significa pulsarlo.
+func _handle_click(world_position: Vector2, unit: Unit) -> void:
 	_hud.close_target_menu()
-	var unit: Unit = _find_unit_at(world_position)
 	if unit != null:
 		# Con algo propio seleccionado, tocar a un hostil es atacarlo. Atacar
 		# es lo frecuente; para mirarlo está la pulsación larga o el click
@@ -75,7 +113,12 @@ func _on_camera_clicked(world_position: Vector2) -> void:
 ## Click derecho (PC) o pulsación mantenida (táctil). Sobre una unidad ajena
 ## abre su menú; sobre el mapa sigue siendo una orden de movimiento.
 func _on_context_requested(world_position: Vector2) -> void:
-	var unit: Unit = _find_unit_at(world_position)
+	_handle_context(world_position, _find_unit_at(world_position))
+
+
+## Igual que [method _handle_click]: el significado del gesto, separado de si
+## viene del mundo o del mapa táctico.
+func _handle_context(world_position: Vector2, unit: Unit) -> void:
 	if unit != null and not unit.is_player_controlled():
 		_hud.open_target_menu(unit, _can_attack(unit))
 		return
@@ -85,9 +128,7 @@ func _on_context_requested(world_position: Vector2) -> void:
 
 
 func _can_attack(target: Unit) -> bool:
-	return _selected_unit != null \
-		and _selected_unit.is_player_controlled() \
-		and _selected_unit.is_hostile_to(target)
+	return _has_own_selection() and _selected_unit.is_hostile_to(target)
 
 
 func _find_unit_at(world_position: Vector2) -> Unit:
@@ -148,6 +189,7 @@ func _issue_move_order(target: Vector2) -> void:
 	_selected_unit.receive_move_order(target)
 	_move_marker.global_position = target
 	_move_marker.show()
+	_hud.show_order_marker(target)
 	if _selected_unit.has_signal("order_fulfilled"):
 		_selected_unit.order_fulfilled.connect(_on_order_fulfilled, CONNECT_ONE_SHOT)
 
@@ -176,6 +218,7 @@ func _clear_move_order() -> void:
 	_forget_order_unit()
 	_order_unit = null
 	_move_marker.hide()
+	_hud.clear_order_marker()
 
 
 func _forget_order_unit() -> void:

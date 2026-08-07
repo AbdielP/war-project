@@ -52,6 +52,10 @@ func _ready() -> void:
 			func(step: int) -> void: zoom_change_requested.emit(step))
 	_event_log.look_requested.connect(
 			func(where: Vector2) -> void: look_requested.emit(where))
+	# El minimapa se estira a mano y crece hacia arriba, justo hacia donde está
+	# el registro. Que se aparte él, que es el que no lo pidió.
+	_minimap.resized.connect(_push_event_log_above_minimap)
+	_push_event_log_above_minimap()
 	_minimap.expand_requested.connect(_tactical_map.open)
 	_tactical_map.clicked.connect(
 			func(where: Vector2, unit: Unit) -> void: map_clicked.emit(where, unit))
@@ -141,6 +145,13 @@ func clear_selected_unit() -> void:
 	_impact_timer.hide()
 	_desel_btn.hide()
 	_tactical_map.set_selected_unit(null)
+
+
+const _COLUMN_GAP := 6.0
+
+
+func _push_event_log_above_minimap() -> void:
+	_event_log.set_bottom(_minimap.position.y - _COLUMN_GAP)
 
 
 ## Una orden dada, para el registro de eventos. Igual que el marcador: lo cuenta

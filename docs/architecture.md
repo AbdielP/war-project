@@ -565,6 +565,7 @@ icono no se desincronizan entre misiones.
 |-------|--------|-----|
 | — | `display_name` | String |
 | — | `short_name` | Para los botones de `WeaponBar`, donde caben ~6 caracteres |
+| — | `brevity_code` | Código OTAN que se canta al soltarla, para el `EventLog` |
 | — | `icon` | Texture2D (`AtlasTexture` sobre `Jet_bombs_missiles.png`) |
 | Objetivos | `targets` | Flags Aire / Superficie. Contra qué sirve |
 | Alcance | `min_range`, `max_range` | Envolvente de tiro. Debajo del mínimo el arma aún no se estabilizó; encima del máximo se queda sin combustible |
@@ -574,6 +575,11 @@ icono no se desincronizan entre misiones.
 | Lanzamiento | `salvo_size` | 1 = de una en una; **0 = todo lo que quede** |
 | Lanzamiento | `salvo_spread` | Radio de dispersión del punto de apuntado de cada arma de la andanada |
 | Lanzamiento | `reload_time` | Segundos entre andanadas |
+
+**El código de brevedad va en el arma, no en una tabla del registro.** Es parte de lo que el
+arma *es*: un arma nueva lo trae puesto y nadie tiene que acordarse de añadirla a una lista
+aparte. Puestos hoy: AGM-65 `Rifle`, AIM-9 `Fox Two`, AIM-120 `Fox Three`, GAU-12 `Guns`,
+Mk-82 y GBU-54 `Pickle`. Vacío = el parte sólo dice el nombre.
 
 `get_short_name()` cae al nombre largo si el corto está vacío.
 `can_engage_domain(domain)` e `in_range(distance)` responden las dos preguntas que hace
@@ -987,12 +993,14 @@ extends CanvasLayer   class_name HUD
 | `zoom_change_requested(step: int)` | Pidió acercar (+1) o alejar (−1). Reenvía lo de `ZoomControls`; el HUD no conoce la cámara |
 | `map_clicked(world_position: Vector2, unit: Unit)` | Pulsó el mapa táctico, con la unidad que hubiera bajo el punto o `null`. Mismo trato: reenvía |
 | `map_context_requested(world_position: Vector2, unit: Unit)` | Ídem con el botón derecho |
+| `look_requested(world_position: Vector2)` | Pulsó una coordenada del `EventLog`: llevar la mirada allí |
 
 API:
 - `show_selected_unit(unit: Unit)` — muestra panel + acciones (si controla) + barra de armas + botón ×; se suscribe a `attack_target_changed` de la unidad; le pasa la selección al `TacticalMap` para su rótulo y su recuadro
 - `clear_selected_unit()` — oculta todo, incluido el aviso de ataque; se desuscribe
 - `open_target_menu(target, can_attack)` / `close_target_menu()` — delegan en `TargetMenu`
 - `show_order_marker(world_position)` / `clear_order_marker()` — el destino de la orden en curso, para que se vea en los dos mapas. Se lo dice `SelectionManager`: el HUD no conoce el mundo
+- `report_move_order(unit, where)` — una orden dada, para el `EventLog`. Igual que el marcador: lo cuenta quien la da, porque nadie más se entera de que ha habido una
 - `set_zoom_state(level, count)` — hasta dónde puede seguir acercándose o alejándose. Se lo dice `SelectionManager`, que sí tiene la cámara delante
 
 **`_refresh_weapon_bar()` junta las tres condiciones que esconden la barra de armas:** que no
@@ -1032,8 +1040,8 @@ Agregar casos aquí al implementar nuevas acciones.
 **Árbol de `hud.tscn`:**
 ```
 CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en pausa
-├── EventLog         (PanelContainer) — offset (6,195)
-├── Minimap          (PanelContainer) — offset (5,292)
+├── EventLog         (PanelContainer) — columna izquierda, se mide y se coloca solo
+├── Minimap          (PanelContainer) — esquina inferior izquierda, estirable
 ├── TacticalMap      (Control)        — pantalla completa, visible=false
 ├── HangarWindow     (PanelContainer)
 ├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=313
@@ -1185,9 +1193,40 @@ arranca hasta reanudar, porque `FlightDeck` sí es pausable.
 
 ### `EventLog` — `ui/hud/event_log/event_log.gd`
 ```
-extends PanelContainer
+extends PanelContainer   class_name EventLog
 ```
-`add_event(text: String)` — añade línea, máximo 4, elimina la más vieja.
+El parte de lo que va pasando, con la coordenada del mapa. Emite
+`look_requested(world_position)` al pulsar una coordenada. `map_path` (exportado) apunta al
+`MapView` de donde salen esas coordenadas.
+
+| Evento | De dónde | Ejemplo |
+|--------|----------|---------|
+| Orden de movimiento | `SelectionManager` → `HUD.report_move_order()` | `LHD Wasp → F4` |
+| Empieza a atacar | `Unit.attack_target_changed` | `LHD Wasp ataca T-14 Armata B2` |
+| Disparo | `Unit.ammo_changed` | `LHD Wasp: AGM-65 (Rifle!)` |
+| Muerte | `Unit.died` | `Splash! T-14 Armata B2` |
+
+**Se engancha él solo a cada unidad por el grupo**, igual que el mapa saca sus puntos: nadie
+tiene que avisarle de quién nace o muere. El repaso inicial va **diferido**, y no es un
+detalle menor: en `_ready()` sólo existen las unidades que van antes que el HUD en la escena
+—las de después aún no están en el grupo— y `node_added` tampoco las coge, porque ya estaban
+en el árbol cuando el registro se conectó. Sin diferirlo, media flota no se registraba. Las
+órdenes sí llegan de fuera: no las emite nadie, las da el jugador.
+
+**Las coordenadas se leen del mapa táctico, no del minimapa.** En el minimapa las zonas se
+agrupan hasta caber en 87 px, así que el mapa entero sale como dos o tres coordenadas y el
+parte diría `A1` de todo. Se piden con `MapView.zone_label_at()`, que usa el tamaño de zona
+que se está dibujando de verdad.
+
+**Cada línea es un `RichTextLabel` con BBCode**, que es lo que hace pulsable la coordenada
+(`[url]` + `meta_clicked`). El `url` lleva el **punto exacto del mundo**, no la letra: la zona
+es para leerla, pero la cámara va a donde pasó la cosa. Hay que fijarle el ancho a mano
+(`custom_minimum_size.x`): con `fit_content` y sin saber el ancho, calcula su alto mínimo
+suponiendo ancho cero y una sola línea pedía 300 px.
+
+**El panel mide lo que midan sus líneas y crece hacia arriba**, con el borde de abajo quieto,
+como una consola. Vacío no se dibuja. `set_bottom(y)` lo mueve el HUD cuando el minimapa
+cambia de tamaño: comparten columna y el minimapa manda, porque es el que el jugador estira.
 
 ### Mapa — `ui/hud/minimap/`
 
@@ -1329,6 +1368,28 @@ celda no cabe una coordenada ni tendría sentido apuntar a un sitio concreto, as
 minimapa entero —terreno y marco— es un botón que abre el grande. Reenvía a su `MapView` el
 destino de la orden (`set_order_marker` / `clear_order_marker`) y nada más: no sabe qué unidad
 está seleccionada, y por eso conserva su recuadro de cámara.
+
+**El panel se ajusta al dibujo, no al revés.** La escala del mapa es entera, así que en un
+panel de tamaño cualquiera siempre sobra borde muerto — se veía como un marco negro alrededor
+del terreno. Aquí se mira lo que ocupa el dibujo (`MapView.drawn_size()`, avisado por
+`refitted`) y el panel se recorta a esa medida, con el **borde de abajo fijo**: vive en la
+esquina y sólo tiene sentido crecer hacia arriba.
+
+**Se estira arrastrando el borde de arriba** (`GRIP_PX`, 6 px — el borde superior del estilo
+es más grueso justo para eso, y ahí caben las dos rayitas de agarre; dentro las taparía el
+mapa, que se dibuja después). **Estirar elige escala, no píxeles**: el alto pedido se traduce
+a la escala entera que quepa y el panel se pone del tamaño exacto del dibujo a esa escala, así
+que salta de 1x a 2x a 3x sin franjas negras por el camino (`MAX_HEIGHT` limita el tope).
+Estirar sólo a lo alto no bastaba: el ancho también manda sobre la escala, así que crecen los
+dos. El alto pedido se guarda aparte del real (`_wanted_height`) porque si se leyera del panel
+—que salta por escalones— el arrastre se quedaría atascado en vez de seguir al ratón.
+
+En `_resize_to()` **la posición se asigna antes que el tamaño**: cambiar el tamaño avisa a
+quien escuche `resized`, y el HUD usa ese aviso para recolocar el `EventLog` justo encima. Al
+revés, leería el sitio viejo y quedaría un hueco descuadrado.
+
+Su `MapView` tiene `mouse_filter = IGNORE`: todo el input lo atiende el panel, que es quien
+distingue el agarre del resto.
 
 #### `TacticalMap` — `tactical_map.gd`
 ```
@@ -1704,6 +1765,8 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Mandar desde el mapa táctico:** dirigir, atacar y abrir el menú contextual pulsando el mapa, con los mismos gestos que en el mundo (incluida la pulsación mantenida en táctil) y sin cerrarlo. Destino marcado en los dos mapas, unidad seleccionada resaltada y rotulada, y botón `×` para cerrarlo sin teclado
 - [x] Rejilla de coordenadas por zonas que **se agrupan solas** para seguir legibles pase lo que pase con el tamaño del mapa (`A1…H6` hoy)
 - [x] `LongPress`: el mismo detector de pulsación mantenida en la cámara y en el mapa
+- [x] **Registro de eventos vivo:** órdenes, ataques, disparos con código de brevedad OTAN y bajas, con la coordenada del mapa **pulsable** para llevar la mirada allí
+- [x] Columna izquierda que se mide sola: el minimapa se recorta a su dibujo y se estira por escalas enteras, y el registro crece hacia arriba apartándose de él
 
 ### Pendiente
 - [ ] Proyectil balístico para bombas (el mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`)
@@ -1727,7 +1790,7 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [ ] Distinguir en el mapa aire de superficie (`UnitType.Domain`) — la unidad seleccionada ya se resalta
 - [ ] Menú contextual también en el minimapa, o dejarlo como botón: hoy sus puntos de 2 px no se pueden apuntar
 - [ ] Nombres propios de zona por misión ("Bahía Norte") encima de la rejilla, si el registro de eventos gana con ello. El sistema de zonas serviría de rejilla de fondo sin tirar nada — modelo Foxhole / EVE frente a modelo carta náutica
-- [ ] Coordenadas pulsables en el `EventLog`: `MapTerrain.label_at()` y `zone_center()` ya existen para eso, falta que el registro las escriba y las enlace
+- [ ] Registrar el despliegue de aviones en el `EventLog` (ocurre dentro de `FlightDeck`)
 - [ ] Mecánicas de ataque/combate
 - [ ] Unidades enemigas
 - [ ] IA de unidades enemigas y aliadas (`Team.Side.ALLY` existe pero nadie la mueve)

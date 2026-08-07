@@ -2,6 +2,29 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-07 (3)
+
+### El parte de guerra, y una columna que se mide sola
+El registro de eventos existía como cuadro vacío: `add_event(text)` y nadie que lo llamara. Ahora cuenta órdenes, ataques, disparos y bajas.
+
+**Se engancha él solo a cada unidad por el grupo**, como el mapa con sus puntos: nadie tiene que avisarle de quién nace o muere. El repaso inicial va **diferido**, y ahí hubo un fallo que sólo apareció probando: en `_ready()` sólo existen las unidades que van *antes* que el HUD en la escena, y `node_added` tampoco coge a las demás porque ya estaban en el árbol al conectarse. Resultado: el LHD se registraba y los cuatro T-14 no. Difiriendo el repaso al final del frame, todos.
+
+**El código de brevedad OTAN va en el arma, no en una tabla del registro.** `WeaponType.brevity_code`: AGM-65 *Rifle*, AIM-9 *Fox Two*, AIM-120 *Fox Three*, GAU-12 *Guns*, bombas *Pickle*. Es parte de lo que el arma es, así que un arma nueva lo trae puesto y nadie tiene que acordarse de añadirla a una lista aparte.
+
+**Las coordenadas son pulsables y llevan el punto exacto del mundo, no la letra.** La zona es para leerla; la cámara va a donde pasó la cosa. Cada línea es un `RichTextLabel` con BBCode — con `Label` no había forma de hacer pulsable un trozo de texto.
+
+Segundo fallo salido de la prueba: el parte leía las coordenadas del **minimapa**, donde las zonas se agrupan hasta caber en 87 px. Todo el mapa eran dos coordenadas y todo salía como `A1`. Ahora las lee del mapa táctico, que es la rejilla que el jugador ve.
+
+**El minimapa se recorta a su dibujo, no al revés.** Tenía un marco negro alrededor del terreno, y la causa es estructural: la escala es entera, así que un dibujo de 64×45 nunca llena un panel de 87×87. En vez de encajar el dibujo en el panel, el panel se recorta al dibujo.
+
+**Y se estira: arrastrando su borde de arriba, elige escala, no píxeles.** El alto que pide el ratón se traduce a la escala entera que quepa, y el panel se pone del tamaño exacto del dibujo a esa escala — salta 1x → 2x → 3x sin franjas negras. Dos cosas que costaron un intento: estirar sólo a lo alto no hacía nada, porque el ancho también manda sobre la escala (crecen los dos); y el alto pedido hay que guardarlo aparte del real, o el arrastre se atasca en el escalón en vez de seguir al ratón.
+
+**El registro se aparta solo.** Los dos viven en la misma columna y el minimapa crece justo hacia donde está el parte, así que el HUD lo recoloca al oír `resized`. Para que eso funcione, el minimapa asigna **la posición antes que el tamaño**: cambiar el tamaño es lo que dispara el aviso, y al revés el HUD leería el sitio viejo. El parte además se mide por su contenido y crece hacia arriba con el borde de abajo quieto, como una consola; vacío no se dibuja, que un recuadro negro sin nada dentro ocupa sitio y no dice nada.
+
+Tercer fallo de la prueba: una sola línea pedía **308 px de alto**. `RichTextLabel` con `fit_content` calcula su alto mínimo suponiendo ancho cero si no se lo dices; hay que fijarle `custom_minimum_size.x` a mano.
+
+Verificado en headless: las cinco clases de línea con las unidades reales (`LHD Wasp → F4`, `LHD Wasp ataca T-14 Armata B2`, `LHD Wasp: AGM-65 (Rifle!)`, `Splash! T-14 Armata B2`); pulsar `D1` lleva la cámara a (997,3) y suelta el seguimiento; el minimapa sin sobrante a ninguna escala y con el borde inferior clavado en 379; y minimapa y registro sin solaparse ni estirando a 3x.
+
 ## 2026-08-07 (2)
 
 ### Una rejilla que se lee, y un gesto que se reconoce en un solo sitio

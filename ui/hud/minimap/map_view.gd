@@ -19,6 +19,10 @@ class_name MapView
 signal map_clicked(world_position: Vector2, unit: Unit)
 ## Lo mismo con el botón derecho.
 signal map_context_requested(world_position: Vector2, unit: Unit)
+## Se recalculó la escala. Lo escucha quien quiera ajustar su hueco al dibujo:
+## como la escala es entera, el dibujo casi nunca llena un panel de tamaño
+## arbitrario, y lo que sobra se ve como borde muerto.
+signal refitted
 
 ## Rejilla de zonas de coordenadas. **No dibuja las celdas de terreno**: eran
 ## casi 2900 cuadritos de 7 px, y el tamaño del tile no le dice nada a nadie.
@@ -153,6 +157,20 @@ func _world_scale() -> float:
 	return cell_px() / float(_terrain.tile_px.x)
 
 
+## Lo que ocupa el dibujo, que no es lo mismo que lo que ocupa el control.
+func drawn_size() -> Vector2:
+	return _drawn_size() if _terrain != null else Vector2.ZERO
+
+
+## Lo que ocuparía a una escala dada. Lo usa el minimapa para medirse por
+## escalas enteras en vez de por píxeles sueltos: pedir "un poco más alto" no
+## significa nada cuando el dibujo sólo existe a 1x, 2x, 3x…
+func size_for_scale(scale: int) -> Vector2:
+	if _terrain == null:
+		return Vector2.ZERO
+	return Vector2(_terrain.texture.get_size()) * maxi(scale, 1)
+
+
 func _drawn_size() -> Vector2:
 	return Vector2(_terrain.texture.get_size()) * _scale
 
@@ -194,6 +212,7 @@ func _refit() -> void:
 		return
 	_origin = ((size - _drawn_size()) * 0.5).floor()
 	queue_redraw()
+	refitted.emit()
 
 
 ## Misma búsqueda que hace `PanCamera` para sus límites: el mapa no se le pasa a

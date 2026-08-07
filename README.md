@@ -37,6 +37,8 @@ gestos separados por plataforma.
 | **Dirigir la unidad desde el mapa** | Click sobre el mapa, con unidad propia seleccionada | Igual |
 | **Atacar desde el mapa** | Click sobre el punto de un enemigo, con unidad propia seleccionada | Igual |
 | **Menú de unidad ajena desde el mapa** | Click der. sobre su punto | Mantener pulsado sobre su punto |
+| **Ir a donde pasó algo** | Click en la coordenada azul del registro de eventos | Igual |
+| **Agrandar / encoger el minimapa** | Arrastrar su borde superior | Igual |
 
 En el mapa táctico se manda igual que en el mundo: el mismo gesto significa lo mismo, y lo que
 haya bajo el punto decide. **Pulsar no cierra el mapa** — el destino queda marcado en el propio
@@ -86,6 +88,9 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Color de cada bando | `core/team/team.gd` → `_COLORS` |
 | Zona de dibujo del mapa táctico (para que no la pisen los paneles) | nodo `TacticalMap/Map` → `offset_top` / `offset_right` |
 | Sitio del rótulo y del botón de cerrar | nodos `TacticalMap/Hint` y `TacticalMap/CloseButton` → `offset` |
+| Cuánto puede crecer el minimapa | `ui/hud/minimap/minimap.gd` → `MAX_HEIGHT` |
+| Cuántas líneas guarda el registro de eventos | `ui/hud/event_log/event_log.gd` → `MAX_LINES` |
+| Código de brevedad de cada arma (`Rifle!`, `Fox Two!`…) | `core/weapon/<arma>.tres` → `brevity_code` |
 
 Las unidades se marcan con un punto del color de su bando: **azul** el jugador, **rojo** los
 enemigos, **verde** los aliados y **blanco** los neutrales.
@@ -98,6 +103,15 @@ calcula sola — el mayor número entero de píxeles por celda que quepa.
 línea por celda serían casi 2900 cuadritos y se lee como rayado, no como cuadrícula. Y
 `zone_cells` es lo que se *pide*, no lo que sale: si el mapa crece, las zonas se agrupan de dos
 en dos hasta que la coordenada vuelve a leerse. Por eso no hay que retocarlo por misión.
+
+**El registro de eventos** cuenta órdenes, ataques, disparos y bajas, con el arma y su código
+de brevedad OTAN (`LHD Wasp: AGM-65 (Rifle!)`). La coordenada azul del final de cada línea es
+pulsable: lleva la cámara a donde pasó. Se mide por su contenido y crece hacia arriba, y
+vacío no se dibuja.
+
+**La columna de la izquierda se acomoda sola.** El minimapa se recorta a su dibujo —por eso ya
+no tiene marco negro— y al arrastrar su borde superior salta entre escalas enteras (1x, 2x…),
+nunca a medias. El registro se aparta hacia arriba cuando el minimapa crece.
 
 El mapa táctico **no se dibuja encima del HUD**: su área esquiva la barra superior y la columna
 de paneles de la derecha, así que el hangar, las acciones, el zoom y la lista de desplegadas

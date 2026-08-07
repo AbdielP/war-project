@@ -26,9 +26,14 @@ const _FONT_SIZE := 8
 @onready var lines: VBoxContainer = $Lines
 
 var _map: MapView = null
+## El borde de abajo se queda quieto y el parte crece hacia arriba, como una
+## consola: lo último dicho queda siempre a la misma altura.
+var _bottom: float = 0.0
 
 
 func _ready() -> void:
+	_bottom = position.y + size.y
+	hide()
 	_map = get_node_or_null(map_path) as MapView
 	get_tree().node_added.connect(_watch)
 	# El repaso inicial va diferido a propósito: en `_ready()` sólo existen las
@@ -50,8 +55,12 @@ func add_event(text: String) -> void:
 	line.bbcode_enabled = true
 	line.fit_content = true
 	line.scroll_active = false
-	line.autowrap_mode = TextServer.AUTOWRAP_OFF
-	line.clip_contents = true
+	# El panel es estrecho a propósito, así que las líneas parten en vez de
+	# cortarse: perder la coordenada del final sería perder lo pulsable.
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Hay que decirle el ancho a mano. Con `fit_content`, si no lo sabe calcula
+	# su alto mínimo suponiendo ancho cero — una línea pedía 300 px de alto.
+	line.custom_minimum_size.x = size.x - _panel_padding()
 	line.add_theme_color_override("default_color", TEXT_COLOR)
 	line.add_theme_font_size_override("normal_font_size", _FONT_SIZE)
 	line.meta_clicked.connect(_on_coordinate_clicked)
@@ -59,6 +68,30 @@ func add_event(text: String) -> void:
 	lines.add_child(line)
 	if lines.get_child_count() > MAX_LINES:
 		lines.get_child(0).queue_free()
+	show()
+	# Diferido: la línea que se acaba de tirar no desaparece del recuento hasta
+	# el final del frame, y hasta entonces el alto mínimo sale de más.
+	_hug_content.call_deferred()
+
+
+## El panel mide lo que midan sus líneas. Vacío no se dibuja: un recuadro negro
+## sin nada dentro ocupa sitio y no dice nada.
+## Dónde acaba el parte por abajo. Lo mueve el HUD cuando el minimapa cambia de
+## tamaño: los dos viven en la misma columna y el minimapa manda, porque es el
+## que el jugador estira a mano.
+func set_bottom(y: float) -> void:
+	_bottom = y
+	_hug_content()
+
+
+func _hug_content() -> void:
+	size.y = get_combined_minimum_size().y
+	position.y = _bottom - size.y
+
+
+func _panel_padding() -> float:
+	var box := get_theme_stylebox("panel")
+	return box.get_margin(SIDE_LEFT) + box.get_margin(SIDE_RIGHT)
 
 
 ## La coordenada lleva pegado el punto exacto del mundo, no la letra: la zona es

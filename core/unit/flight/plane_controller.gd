@@ -18,13 +18,22 @@ signal committed(side: int)
 @export var brake_in_turns: bool = true
 
 @export_group("Giro")
-## Grados por segundo a velocidad mínima. Cuanto más rápido vuela, más
-## abierto le queda el viraje.
-@export var base_turn_deg: float = 150.0
+## Ancho del círculo que traza el avión virando a tope, en px. ESTE es el
+## parámetro del viraje y de aquí sale todo lo demás: un avión no elige cuántos
+## grados gira por segundo, elige cuánto se inclina, y eso le da un círculo de
+## un ancho fijo que recorre más despacio si va más lento.
+##
+## Antes estaba al revés — el parámetro eran los grados por segundo y el radio
+## salía de dividir — y eso hacía que volar más lento cerrara el viraje, que es
+## justo lo contrario de lo que pasa de verdad. Un avión al ralentí no pivota:
+## tarda lo mismo en cruzar el mismo círculo, sólo que más despacio.
+@export var turn_radius: float = 130.0
 ## Ganancia de la corrección fina cuando ya va casi alineado.
 @export var fine_gain: float = 2.0
-## Qué tan rápido responde el timón. Bajo = avión pesado.
-@export var turn_inertia: float = 5.0
+## Cuánto tarda en meterse en el viraje. No se alabea de golpe: hay un momento
+## de entrada antes de que el giro sea el pedido, y otro de salida al nivelar.
+## Bajo = avión pesado, tarda en tumbarse.
+@export var turn_inertia: float = 2.0
 ## Retraso del vector de velocidad frente al morro: da sensación de derrape.
 @export var velocity_align: float = 4.5
 
@@ -128,14 +137,16 @@ func clear_target() -> void:
 	_lock = 0
 
 
-## Giro disponible ahora mismo: más rápido = más abierto.
-func current_turn_rate() -> float:
-	var f := clampf(min_speed / maxf(speed, 1.0), 0.35, 2.2)
-	return deg_to_rad(base_turn_deg) * f
-
-
+## El círculo que traza virando a tope. Es un dato fijo del avión: no cambia
+## porque vaya más rápido o más lento.
 func min_turn_radius() -> float:
-	return speed / current_turn_rate()
+	return maxf(turn_radius, 1.0)
+
+
+## Grados por segundo disponibles ahora mismo. Sale de recorrer el círculo a la
+## velocidad que lleve: despacio da la misma vuelta, sólo que tardando más.
+func current_turn_rate() -> float:
+	return speed / min_turn_radius()
 
 
 ## Virando hacia ese lado el avión describe un círculo. Si el destino cae
@@ -170,10 +181,19 @@ func _physics_process(delta: float) -> void:
 
 			var want_side := 1 if err >= 0.0 else -1
 
+			# El lado al que apunta el error puede ser justo el que no sirve:
+			# si el destino cae dentro del círculo que trazaría virando hacia
+			# allí, por ahí no llega nunca — le daría vueltas alrededor sin
+			# poder cerrar. Entonces prueba el contrario, que es lo que hace
+			# un piloto con un punto pegado al costado: abrirse por fuera y
+			# entrar de vuelta.
 			if _side_is_blocked(want_side, radius):
-				# El destino cae dentro del círculo de giro: virar hacia él
-				# sólo daría vueltas a su alrededor. Nivela y sale recto
-				# hasta que la geometría permita enfilarlo.
+				want_side = -want_side
+
+			if _side_is_blocked(want_side, radius):
+				# Los dos lados bloqueados: lo tiene tan encima que no hay
+				# viraje que sirva. Nivela y sale recto, que es lo único que
+				# abre la geometría, hasta poder enfilarlo.
 				_lock = 0
 				cmd = 0.0
 			else:

@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://dp27wx16pfjov" path="res://assets/art/sprites/gbu54.tres" id="2"]
+[ext_resource type="PackedScene" path="res://core/weapon/gbu54_bomb.tscn" id="3"]
 
 [resource]
 script = ExtResource("1")
@@ -10,3 +11,11 @@ short_name = "GBU-54"
 brevity_code = "Pickle"
 icon = ExtResource("2")
 targets = 2
+min_range = 350.0
+max_range = 900.0
+firing_arc_deg = 20.0
+damage = 150.0
+blast_radius = 45.0
+projectile_scene = ExtResource("3")
+salvo_size = 1
+reload_time = 2.0

@@ -2,13 +2,13 @@
 
 [ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
 [ext_resource type="Texture2D" uid="uid://c4tlxqkysfxpj" path="res://assets/art/sprites/AV-8B Harrier II.png" id="2"]
-[ext_resource type="Resource" path="res://core/unit/av8b_harrier/av8b_harrier_type.tres" id="3"]
+[ext_resource type="Resource" uid="uid://dt4e6sl6ifbwv" path="res://core/unit/av8b_harrier/av8b_harrier_type.tres" id="3"]
 [ext_resource type="Script" uid="uid://b3c08xr25m8lk" path="res://core/unit/av8b_harrier/av8b_harrier.gd" id="4"]
 [ext_resource type="Script" uid="uid://c1s3dnfi6aan1" path="res://core/unit/flight/plane_controller.gd" id="5"]
 [ext_resource type="Script" uid="uid://d3s0jasumaqvv" path="res://core/unit/flight/orbit_behavior.gd" id="6"]
 [ext_resource type="Script" uid="uid://bim4jv2yqqy6a" path="res://core/weapon/hardpoint_rack.gd" id="7"]
-[ext_resource type="Script" path="res://core/unit/flight/attack_run_behavior.gd" id="8"]
-[ext_resource type="Script" path="res://core/weapon/weapon_system.gd" id="9"]
+[ext_resource type="Script" uid="uid://nm0ui7hib5n3" path="res://core/unit/flight/attack_run_behavior.gd" id="8"]
+[ext_resource type="Script" uid="uid://dqfwj1xrfic38" path="res://core/weapon/weapon_system.gd" id="9"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(28, 32)
@@ -29,8 +29,10 @@ size = Vector2(28, 32)
 
 [node name="PlaneController" type="Node" parent="." index="3" unique_id=266563471]
 script = ExtResource("5")
+min_speed = 75.0
+max_speed = 90.0
+acceleration = 50.0
 brake_in_turns = false
-release_deg = 20.0
 
 [node name="OrbitBehavior" type="Node" parent="." index="4" unique_id=1582074282]
 script = ExtResource("6")

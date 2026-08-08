@@ -1,0 +1,21 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://core/weapon/glide_bomb.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://dp27wx16pfjov" path="res://assets/art/sprites/gbu54.tres" id="2"]
+[ext_resource type="Script" path="res://core/weapon/missile_shadow.gd" id="3"]
+[ext_resource type="SpriteFrames" path="res://core/weapon/missile_shadow_frames.tres" id="4"]
+
+[node name="Gbu54Bomb" type="Node2D"]
+z_index = 9
+script = ExtResource("1")
+direct_hit_radius = 8.0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2")
+
+[node name="Shadow" type="AnimatedSprite2D" parent="."]
+z_index = -2
+sprite_frames = ExtResource("4")
+animation = &"descend"
+script = ExtResource("3")
+ground_px = 8.0

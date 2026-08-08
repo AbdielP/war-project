@@ -1,6 +1,6 @@
-[gd_resource type="SpriteFrames" load_steps=9 format=3]
+[gd_resource type="SpriteFrames" format=3 uid="uid://db7mcwf64ngkf"]
 
-[ext_resource type="Texture2D" path="res://assets/art/sprites/Animations/Missile_shadow_animation_16x16.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://4yvycmbo3iun" path="res://assets/art/sprites/Animations/Missile_shadow_animation_16x16.png" id="1"]
 
 [sub_resource type="AtlasTexture" id="Frame_00"]
 atlas = ExtResource("1")
@@ -33,7 +33,6 @@ region = Rect2(96, 0, 16, 16)
 [resource]
 animations = [{
 "frames": [{
-
 "duration": 1.0,
 "texture": SubResource("Frame_00")
 }, {
@@ -54,9 +53,8 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": SubResource("Frame_06")
-
 }],
-"loop": false,
+"loop": 0,
 "name": &"descend",
 "speed": 1.0
 }]

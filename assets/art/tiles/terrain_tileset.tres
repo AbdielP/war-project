@@ -214,8 +214,8 @@ texture_region_size = Vector2i(32, 32)
 24:2/0/custom_data_0 = "arena"
 
 [resource]
+tile_size = Vector2i(32, 32)
 custom_data_layer_0/name = "tipo"
 custom_data_layer_0/type = 4
-tile_size = Vector2i(32, 32)
 sources/0 = SubResource("TileSetAtlasSource_ground1")
 sources/1 = SubResource("TileSetAtlasSource_sand2")

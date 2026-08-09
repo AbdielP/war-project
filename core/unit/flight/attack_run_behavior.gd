@@ -30,13 +30,6 @@ signal target_lost
 enum Phase { INGRESS, EGRESS }
 
 @export_group("Ataque")
-## Velocidad a la que vuela mientras está dentro del alcance del arma. Más
-## baja = más tiempo en parámetros de tiro y más ocasiones de disparar, a
-## costa de ser un blanco más fácil.
-##
-## El piloto nunca baja de su `min_speed`, así que poner aquí menos que eso no
-## frena más. Lo brusco del frenado es la `acceleration` del piloto.
-@export var attack_speed: float = 90.0
 ## Margen sobre el alcance mínimo del arma al que rompe el ataque. 1.2 = corta
 ## un 20% antes de quedarse corto, para no entrar en la zona donde el arma ya
 ## no sirve mientras completa el viraje.
@@ -106,7 +99,10 @@ func stop() -> void:
 	target = null
 	set_process(false)
 	if _pilot != null:
-		_pilot.clear_speed_limit()
+		# Suelta el gas al soltar el mando: si quien coja el avión ahora quiere
+		# que corra, ya lo pedirá. Dejarlo acelerado sería dejar puesta una
+		# orden que ya no existe.
+		_pilot.set_cruising(false)
 
 
 func _process(_delta: float) -> void:
@@ -115,7 +111,7 @@ func _process(_delta: float) -> void:
 		# avión sin que este nodo se la pise en el frame siguiente.
 		target = null
 		set_process(false)
-		_pilot.clear_speed_limit()
+		_pilot.set_cruising(false)
 		target_lost.emit()
 		return
 
@@ -130,7 +126,7 @@ func _process(_delta: float) -> void:
 			if distance >= _reengage_at:
 				_start_ingress()
 
-	_hold_attack_speed(distance)
+	_set_throttle(distance)
 
 
 func _start_ingress() -> void:
@@ -162,13 +158,17 @@ func _start_egress() -> void:
 	_pilot.set_target(_egress_point)
 
 
-## Frena al entrar en el alcance del arma. Fuera de él no hay nada que hacer
-## despacio: cuanto antes llegue a la envolvente, mejor.
-func _hold_attack_speed(distance: float) -> void:
-	if _max_range > 0.0 and distance <= _max_range:
-		_pilot.set_speed_limit(attack_speed)
-	else:
-		_pilot.clear_speed_limit()
+## Gas sí o no. Sólo se vuela despacio en un sitio: metiéndose hacia el blanco
+## y ya dentro del alcance del arma, que es cuando hay que alinearse para tirar
+## y cada segundo de más en parámetros es otra ocasión de disparar.
+##
+## Fuera de eso, gas: acercarse hasta la envolvente cuanto antes, y romper
+## cuanto antes una vez soltada el arma. No hay ninguna velocidad "de ataque"
+## que ajustar — es la mínima del propio avión, que él ya se sabe.
+func _set_throttle(distance: float) -> void:
+	var lining_up := _phase == Phase.INGRESS \
+		and _max_range > 0.0 and distance <= _max_range
+	_pilot.set_cruising(not lining_up)
 
 
 ## Distancia a la que corta la pasada. Sin alcance mínimo no hay nada de lo que

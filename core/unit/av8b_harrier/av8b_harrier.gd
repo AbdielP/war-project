@@ -42,6 +42,16 @@ func get_velocity() -> Vector2:
 	return pilot.velocity
 
 
+## Deja la cubierta a su velocidad mínima de vuelo. Es lo más despacio que
+## puede sostenerse en el aire y, por tanto, lo antes que puede irse: no hay
+## motivo para gastar más pista de la necesaria. La cubierta lo acelera hasta
+## aquí y el piloto lo recoge volando ya a esta velocidad, así que el relevo no
+## se nota. Y como es la misma a la que espera en el circuito, tampoco hay un
+## acelerón inútil nada más despegar.
+func get_takeoff_speed() -> float:
+	return pilot.min_speed
+
+
 func get_time_to_impact() -> float:
 	return weapons.time_to_impact()
 
@@ -51,8 +61,8 @@ func get_time_to_impact() -> float:
 ## El circuito de espera es lo que hace un avión SIN órdenes. Si le dieron una
 ## mientras estaba en cubierta, al soltarlo hay que cumplirla: mandarlo a dar
 ## vueltas al barco sería ignorarla.
-func start_flight(orbit_center: Node2D, initial_speed: float = -1.0) -> void:
-	pilot.enable(initial_speed)
+func start_flight(orbit_center: Node2D) -> void:
+	pilot.enable()
 	weapons.set_active(true)
 	if is_instance_valid(attack_target):
 		receive_attack_order(attack_target)

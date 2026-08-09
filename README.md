@@ -70,9 +70,13 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Largo de la estela (duración por frame) | `core/weapon/missile_smoke_frames.tres` |
 | Altura de la sombra del misil (diagonal) | nodo `Shadow` de `agm65_missile.tscn` → `altitude_drop_px` |
 | Cuándo empieza a bajar la sombra | mismo nodo → `descent_px` |
-| Velocidad de crucero y viraje del avión | nodo `PlaneController` de `av8b_harrier.tscn` |
-| Velocidad de ataque y distancias de las pasadas | nodo `AttackRun` de `av8b_harrier.tscn` |
-| Circuito de espera (tamaño del óvalo) | nodo `OrbitBehavior` de `av8b_harrier.tscn` |
+| Vuelo de la bomba planeadora (caída, planeo, espoleta) | `core/weapon/gbu54_bomb.tscn` (nodo raíz) |
+| Alcance real de la bomba | mismo nodo → `fall_time` (es su altura), junto con `max_range` del `.tres` |
+| Velocidades del avión (mínima, máxima, aceleración) | nodo `PlaneController` de `av8b_harrier.tscn` |
+| Radio de giro del avión | mismo nodo → `turn_radius`. **Es el parámetro maestro del vuelo**: manda sobre el viraje y sobre el tamaño mínimo del circuito de espera |
+| Distancias de las pasadas de ataque | nodo `AttackRun` de `av8b_harrier.tscn` |
+| A qué distancia del barco esperan los aviones | nodo `OrbitBehavior` de `av8b_harrier.tscn` → `radius` |
+| A qué velocidad despega un avión | no se ajusta: es su `min_speed`, y la cubierta se la pregunta |
 | Resistencia de cada unidad | `<unidad>_type.tres` → `max_health` |
 
 ## Dónde se ajusta el mapa
@@ -127,7 +131,7 @@ paneles del HUD, ajusta los dos `offset` de la tabla o volverán a solaparse.
 
 # PENDIENTES:
 - [ ] Los sprites se ven pixelados cuando se mueven. se ponen borrosos a medida que giran y maniobran.
-- [ ] Relentizar vuelo y mejorar agilidad del avión. Los giros deben verse mas naturales.
+- [X] Relentizar vuelo y mejorar agilidad del avión. Los giros deben verse mas naturales.
 	- Mantener frenado durante el ataque.
 	- Velocidad normal de vuelo.
 	- Aceleración al ir hacia un target o durante combate aereo.
@@ -160,5 +164,5 @@ paneles del HUD, ajusta los dos `offset` de la tabla o volverán a solaparse.
 - [X] Las unidades desplegadas como escuadron deben salir en el menú deu nidades como una sola y un multiplicador de la cantidad: x2, x3.. xN
 - [X] Minimapa y mapa tactico — terreno, rejilla de 32x32 y coordenadas por zonas (A1…P12). Falta:
 	- [X] Unidades en el mapa (puntos por bando)
-	- [ ] Coordenadas pulsables en el log de eventos (`label_at` / `zone_center` ya existen)
+	- [X] Coordenadas pulsables en el log de eventos (`label_at` / `zone_center` ya existen)
 	- [X] Distinguir en el mapa la unidad seleccionada, y quizá aire de superficie

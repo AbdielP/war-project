@@ -3,7 +3,6 @@ extends Node2D
 @export var taxi_speed: float = 30.0
 @export var elevator_cycle_time: float = 2.0
 @export var launch_delay: float = 2.0
-@export var takeoff_speed: float = 120.0
 @export var post_bow_distance: float = 80.0
 @export var climb_duration: float = 2.5
 
@@ -41,7 +40,7 @@ func _hand_over_control(unit: Node2D) -> void:
 	if not is_instance_valid(unit):
 		return
 	if unit.has_method("start_flight"):
-		unit.start_flight(get_parent(), takeoff_speed)
+		unit.start_flight(get_parent())
 
 
 func request_deploy(scene: PackedScene, squad: Squad = null,
@@ -163,9 +162,15 @@ func _launch_next(order: Array) -> void:
 	_units[slot] = null
 	_occupied[slot] = false
 
+	var launch_speed := _launch_speed_of(unit)
 	var runway_dist: float = unit.global_position.distance_to(_launch_point.global_position)
-	var runway_dur: float = 2.0 * runway_dist / maxf(takeoff_speed, 1.0)
-	var post_duration: float = post_bow_distance / maxf(takeoff_speed, 1.0)
+	# Arranca parado y acelera. Con un ease-in cuadrático, recorrer `runway_dist`
+	# en este tiempo deja al avión yendo exactamente a `launch_speed` al llegar
+	# a la proa: el factor 2 es la media de una aceleración constante, no un
+	# número puesto a ojo. De ahí en adelante ya vuela a esa velocidad, que es
+	# la misma con la que el piloto recoge el control.
+	var runway_dur: float = 2.0 * runway_dist / launch_speed
+	var post_duration: float = post_bow_distance / launch_speed
 
 	var tw := unit.create_tween()
 	tw.tween_property(unit, "global_position", _launch_point.global_position, runway_dur) \
@@ -180,6 +185,19 @@ func _launch_next(order: Array) -> void:
 		_scale_climb(unit)
 		_launch_next(order)
 	)
+
+
+## A qué velocidad sale de cubierta este avión. Se lo pregunta a él: cada
+## modelo tiene la suya y es la misma con la que el piloto recoge el control.
+##
+## La cubierta no tiene velocidad de despegue propia, y tenerla era justo el
+## problema: lanzaba a 120 a un avión que como mucho vuela a 90, así que el
+## piloto lo recortaba en silencio y el avión "frenaba" al soltar amarras.
+func _launch_speed_of(unit: Node2D) -> float:
+	var speed := 0.0
+	if unit.has_method("get_takeoff_speed"):
+		speed = float(unit.get_takeoff_speed())
+	return maxf(speed, 1.0)
 
 
 ## Sube la escala de `spawn_scale` a 1.0 en tres saltos. Si el avión ya sale

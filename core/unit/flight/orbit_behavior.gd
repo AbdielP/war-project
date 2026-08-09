@@ -1,36 +1,36 @@
 extends Node
 class_name OrbitBehavior
 
-## Decide A DÓNDE va el avión cuando no tiene otra orden: da vueltas
-## alrededor de un centro.
+## Decide A DÓNDE va el avión cuando no tiene otra orden: da vueltas alrededor
+## de un centro. Si ese centro se mueve — el portaaviones navegando — el
+## circuito se va con él, porque el punto se recalcula cada frame desde donde
+## esté el barco ahora, no desde donde estaba al empezar.
 ##
-## El óvalo no es un riel. Se le pone al avión un punto de referencia sobre
-## la elipse siempre un poco por delante de donde está, y el avión lo
-## persigue. La curva que se ve la produce el piloto al volarla, con su
-## inercia y su radio de giro reales — nadie le impone la posición.
+## No hay ninguna figura impuesta. Al avión se le señala el sitio del círculo
+## que tiene más cerca, corrido un poco hacia adelante en el sentido de giro:
+##
+##   - Si está por dentro o por fuera, ese sitio le queda hacia el círculo y
+##     entra hacia él.
+##   - Si ya está encima, le queda por delante y lo va recorriendo.
+##
+## Así el circuito no le impone una curva que a lo mejor no puede volar: le
+## dice dónde tiene que estar, y la vuelta sale de su propio viraje. Por eso
+## funciona con cualquier avión, gire como gire.
 
 ## Llegó al punto que ordenó el jugador. A partir de aquí orbita ahí.
 signal center_reached
 
-@export_group("Óvalo")
-## Semi-eje horizontal, en píxeles.
-@export var semi_x: float = 200.0
-## Semi-eje vertical, en píxeles.
-@export var semi_y: float = 280.0
-## Cuánto por delante se pone el punto de referencia, en grados de recorrido.
-## Poco = el avión ciñe el óvalo pero va nervioso. Mucho = vuelo suelto y
-## suave que corta las curvas.
-@export_range(5.0, 170.0, 1.0) var lead_deg: float = 35.0
+@export_group("Circuito")
+## A qué distancia del barco esperan, en px.
+##
+## Tiene un suelo: nunca se usa un círculo más apretado que unas dos veces y
+## media el viraje del avión. Por debajo de eso el avión no puede rodear nada
+## — cada punto del círculo le cae dentro de su propio giro, así que endereza,
+## se abre, y acaba dando vueltas donde no debe. Es lo que rompía el circuito
+## viejo. Con el suelo puesto, tocar el viraje del avión ya no lo estropea.
+@export var radius: float = 330.0
 ## Sentido de giro visto en pantalla.
 @export var clockwise: bool = false
-
-@export_group("Avanzado")
-## Por debajo de esta fracción del óvalo, la posición del avión no dice hacia
-## dónde va el circuito: en el centro exacto el ángulo es indeterminado y
-## saltaría 180° de un frame a otro. Ahí manda el rumbo del avión.
-@export_range(0.05, 0.9, 0.01) var center_deadzone: float = 0.25
-## Con qué rapidez el punto de referencia se engancha a dónde está el avión.
-@export var sync_rate: float = 2.5
 
 @export_group("Enlace")
 @export var pilot_path: NodePath = ^"../PlaneController"
@@ -39,7 +39,6 @@ var _pilot: PlaneController
 var _body: Node2D
 var _center_node: Node2D = null
 var _center_pos: Vector2 = Vector2.ZERO
-var _phase: float = 0.0
 var _approaching: bool = false
 var _running: bool = false
 
@@ -49,7 +48,7 @@ func _ready() -> void:
 	_pilot = get_node_or_null(pilot_path) as PlaneController
 	if _pilot != null:
 		_pilot.target_reached.connect(_on_target_reached)
-	set_process(false)
+	set_physics_process(false)
 
 
 ## Orbita alrededor de un nodo que puede moverse (el portaaviones).
@@ -60,9 +59,11 @@ func orbit_around(node: Node2D) -> void:
 	_center_pos = node.global_position
 	_approaching = false
 	_running = true
-	_reset_phase()
-	_pilot.set_target(_point_at(_phase))
-	set_process(true)
+	# Esperar es lo que hace un avión cuando no hay nada que hacer: se va al
+	# ralentí. Sin esto daría vueltas a tope de gas sin ir a ningún sitio.
+	_pilot.set_cruising(false)
+	_pilot.set_target(_aim_point())
+	set_physics_process(true)
 
 
 ## Va al punto indicado y, al llegar, orbita ahí. Es la orden del jugador.
@@ -73,8 +74,10 @@ func orbit_at(pos: Vector2) -> void:
 	_center_pos = pos
 	_approaching = true
 	_running = true
+	# Esto sí es una orden: hay a dónde ir, así que mete gas hasta llegar.
+	_pilot.set_cruising(true)
 	_pilot.set_target(pos)
-	set_process(true)
+	set_physics_process(true)
 
 
 ## ¿Está yendo a un punto que ordenó el jugador? Sirve para que quien suelte al
@@ -85,73 +88,54 @@ func has_pending_order() -> bool:
 
 func stop() -> void:
 	_running = false
-	set_process(false)
+	set_physics_process(false)
 	if _pilot != null:
 		_pilot.clear_target()
 
 
-func _process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	if not _running or _approaching:
 		return
 	if is_instance_valid(_center_node):
 		_center_pos = _center_node.global_position
-
-	# La fase avanza sola, al ritmo al que vuela el avión. Nunca da saltos.
-	_phase += _step() * (_pilot.speed / maxf(_arc_scale(_phase), 1.0)) * delta
-
-	# Y se engancha a dónde está el avión de verdad — pero sólo si está lo
-	# bastante lejos del centro para que su posición signifique algo.
-	var off: float = _off_center()
-	if off > center_deadzone:
-		var want: float = _phase_of_body() + deg_to_rad(lead_deg) * _step()
-		_phase += angle_difference(_phase, want) * clampf(sync_rate * delta, 0.0, 1.0)
-
 	# Corrige el punto sin replantear el viraje que ya tiene comprometido.
-	_pilot.update_target(_point_at(_phase))
+	_pilot.update_target(_aim_point())
 
 
 func _on_target_reached() -> void:
-	# Sólo importa durante la aproximación: en órbita el punto se desliza
-	# solo y nunca hay que "llegar" a nada.
+	# Sólo importa durante la aproximación: en órbita el punto se desliza solo
+	# y nunca hay que "llegar" a nada.
 	if _running and _approaching:
 		_approaching = false
 		center_reached.emit()
-		_reset_phase()
-		_pilot.set_target(_point_at(_phase))
+		# Llegó: se acabó la orden y con ella el gas. De aquí en adelante sólo
+		# está esperando, y esperar se hace despacio.
+		_pilot.set_cruising(false)
+		_pilot.set_target(_aim_point())
 
 
-## Engancha el circuito. Si el avión está sobre el óvalo, por donde está; si
-## está en el centro (recién llegado a un punto ordenado), por delante del
-## morro — ahí su posición no define ningún ángulo.
-func _reset_phase() -> void:
-	if _off_center() > center_deadzone:
-		_phase = _phase_of_body() + deg_to_rad(lead_deg) * _step()
-	else:
-		var h: float = _pilot.heading
-		_phase = atan2(semi_x * sin(h), semi_y * cos(h))
-
-
-func _point_at(a: float) -> Vector2:
-	return _center_pos + Vector2(semi_x * cos(a), semi_y * sin(a))
-
-
-## Fase de la elipse que corresponde a la posición actual del avión.
-func _phase_of_body() -> float:
+## Dónde mandarlo ahora mismo: sobre el círculo, en la dirección en la que el
+## avión ya está respecto al barco, adelantado en el sentido de giro.
+func _aim_point() -> Vector2:
 	var rel: Vector2 = _body.global_position - _center_pos
-	return atan2(rel.y / maxf(semi_y, 1.0), rel.x / maxf(semi_x, 1.0))
+	# En el centro exacto su posición no señala ninguna dirección — el ángulo
+	# saltaría de un frame a otro. Ahí manda hacia dónde apunta el morro.
+	var bearing: float = rel.angle() if rel.length() > 1.0 else _pilot.heading
+	var r := _ring_radius()
+	return _center_pos + Vector2.RIGHT.rotated(bearing + _lead() * _step()) * r
 
 
-## Cuán lejos del centro está el avión, en fracciones del óvalo (1.0 = encima).
-func _off_center() -> float:
-	var rel: Vector2 = _body.global_position - _center_pos
-	return sqrt(
-		pow(rel.x / maxf(semi_x, 1.0), 2.0) + pow(rel.y / maxf(semi_y, 1.0), 2.0))
+## El círculo que se vuela de verdad: el pedido, o el mínimo que el avión puede
+## rodear si le pidieron uno más apretado de la cuenta.
+func _ring_radius() -> float:
+	return maxf(radius, 2.5 * _pilot.min_turn_radius())
 
 
-## Cuánto avanza el punto por radián de fase: la elipse no es un círculo, así
-## que la velocidad angular tiene que variar para que la lineal sea constante.
-func _arc_scale(a: float) -> float:
-	return sqrt(pow(semi_x * sin(a), 2.0) + pow(semi_y * cos(a), 2.0))
+## Cuánto adelantar el punto, en radianes de recorrido. Sale del viraje del
+## avión y no de un número fijo: hay que dejarle sitio para llegar girando, y
+## ese sitio es más grande cuanto más abierto vira.
+func _lead() -> float:
+	return clampf(1.5 * _pilot.min_turn_radius() / _ring_radius(), 0.15, 1.4)
 
 
 func _step() -> float:

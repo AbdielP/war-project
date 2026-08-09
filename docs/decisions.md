@@ -2,6 +2,48 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-08 (2)
+
+### El avión deja de ser un carrito: el viraje se mide en radio y la velocidad en intención
+Tres cosas que resultaron ser la misma: el avión no sabía volar como un avión porque en tres sitios distintos había números que no le pertenecían.
+
+**El viraje se parametriza por RADIO, no por grados por segundo.** Estaba al revés: `base_turn_deg` mandaba y el radio salía de dividir, así que **volar más lento cerraba el viraje** — lo contrario de lo real. Con los valores del Harrier el radio efectivo eran **41 px** contra un sprite de 32: el avión pivotaba sobre sí mismo, y bajarle la velocidad lo empeoraba. Ahora `turn_radius` es el parámetro y la velocidad de giro sale de él (`speed / turn_radius`), que es como ya lo hacían `GuidedMissile` y `GlideBomb`. El giro pasó de 125°/s a 40°/s y el arco de 82 px a 266. `turn_inertia` bajó de 5 a 2 para que haya entrada en viraje en vez de saltar al alabeo máximo.
+
+**Se probó y se descartó** que al bloquearse un lado del viraje el avión tomase el contrario: geométricamente correcto, pero se siente mal — el avión se abre por fuera cuando el jugador esperaba que fuese al punto. Queda como estaba: nivela y sale recto hasta que la geometría permita enfilarlo.
+
+**El circuito de espera se rehízo entero.** Con el viraje nuevo dejó de funcionar: el avión cortaba por dentro del óvalo y acababa encerrado en un círculo de su propio radio pegado a la proa, justo en el corredor de despegue. Se midió que **ningún parámetro lo arreglaba** — `lead_deg`, `sync_rate`, `fine_gain`, `turn_inertia` y el tamaño del óvalo (hasta 500×600) no movían la aguja; sólo `turn_radius`, que funcionaba hasta 50 y se rompía de 90 en adelante. Era diseño, no ajuste.
+
+Fuera el óvalo con fase propia. Ahora se le señala al piloto el punto del círculo que corresponde a dónde está el avión **ahora**, corrido un poco hacia adelante. Por dentro le queda hacia afuera y entra; encima, le queda delante y lo recorre. **De seis parámetros a dos** (`radius`, `clockwise`); se borraron `semi_x`, `semi_y`, `lead_deg`, `sync_rate` y `center_deadzone`. Sigue al barco gratis, porque el centro se relee cada frame.
+
+Y lleva **suelo automático**: el circuito nunca es más apretado que 2,5 veces el viraje del avión. Ahí estaba la causa real del "dan vueltas frente al barco" — un círculo más pequeño que eso es imposible de rodear, cada punto cae dentro del propio giro. Con el suelo, tocar `turn_radius` ya no rompe nada. Medido: 0.93 con radio 130, 1.02 con radio 50, 1.01 con el barco navegando (1.00 = clavado).
+
+**La velocidad pasó de techo numérico a interruptor.** `speed_limit` en px/s desapareció; queda `cruising` (bool), y el avión ya sabe cuáles son sus dos velocidades. **`min_speed` es el estado normal** — despegue, espera, alineación de tiro — y `max_speed` la excepción, sólo mientras hay orden que cumplir. Al revés el avión despegaba acelerando a tope para frenar acto seguido al entrar en el circuito, que es tonto.
+
+Con eso murieron dos números que estaban donde no debían:
+- **`AttackRunBehavior.attack_speed`** valía 90, exactamente la `max_speed` del Harrier. "Frenar para atacar" no frenaba nada y nadie se había enterado. Lo lento es la `min_speed` del propio avión; no hace falta configurarlo.
+- **`FlightDeck.takeoff_speed`** valía 120 contra un avión que vuela a 90 como mucho: el piloto lo recortaba en silencio y la animación de pista estaba cronometrada con una velocidad imposible. Ahora la cubierta pregunta (`Unit.get_takeoff_speed()`), acelera por la pista desde parado hasta ahí y lo suelta a esa velocidad exacta — que es la misma del circuito, así que despegue y espera son un movimiento continuo sin acelerón ni frenada. De paso, cada avión despega según su propio inspector sin tocar la cubierta.
+
+El ease-in cuadrático que ya tenía la pista **era** una aceleración constante bien hecha: el factor 2 que parecía arbitrario es lo que hace llegar a proa exactamente a la velocidad pedida. Sólo estaba alimentado con el número equivocado.
+
+Verificado en headless el ciclo entero: soltado de cubierta a mínima, espera a mínima, gas al recibir orden, suelta al llegar, gas al atacar, suelta al entrar en la envolvente para alinearse, gas al romper. La rampa completa mínima→máxima midió **2,73 s contra 2,75 teóricos** — 1 % de desvío, o sea que `acceleration` manda la transición entera y nadie salta la velocidad a mano.
+
+**Dos límites conocidos, anotados en `architecture.md`:** con `turn_radius` 130 el circuito mide 660 px de diámetro, más ancho que la pantalla — consecuencia directa del radio de giro elegido. Y si el barco navega a más de ~1/3 de la velocidad máxima del avión, el avión no mantiene el circuito.
+
+La regla que sale de las tres: **a un actuador se le pide la intención, no el número**. Un valor absoluto en otro script duplica algo que no le pertenece y se desincroniza en silencio en cuanto se toca el original.
+
+## 2026-08-08 (1)
+
+### GBU-54: el alcance es altura, no empuje
+Bomba planeadora guiada. **Hermana de `GuidedMissile`, no hija**: una bomba no tiene fases de motor que heredar, y no lleva ni fuego ni estela — se suelta y cae en silencio.
+
+El problema de diseño era cómo simular que se tira de lejos sin que el avión tenga que sobrevolar el blanco, que sería absurdo. La respuesta es que el alcance no venga de un motor sino de la **altura**: `fall_time` (5,5 s) es la altura de la bomba, y lo que recorra picando durante ese rato es hasta dónde llega. Hereda la velocidad del avión al soltarse y va **ganando** velocidad al picar, lo contrario del misil.
+
+**Dos finales y sólo dos:** llegó al blanco, o se le acabó la caída y aterriza donde esté. El segundo es lo que le da sentido al `max_range`: no es una regla ni un muro, es hasta dónde llega. Medido desde parado (el peor caso), el límite físico son 1018 px; con `max_range` en 900 hay margen, y a 1100 cae 82 px corta — fuera del radio de explosión, fallo limpio. El fallo sale de la simulación, no de un dado.
+
+Se detectó al escribirla un doble reparto de daño: el planeo llamaba a `detonate()` y `_physics_process` volvía a llamarlo el mismo frame al agotarse `fall_time`. Los dos finales salen ahora del mismo `if`.
+
+Verificado en headless con el ciclo completo del Harrier: suelta a 898 px, nunca se acerca a menos de 782 (`min_range` 350, así que no sobrevuela nada), gasta una sola por pasada y mata.
+
 ## 2026-08-07 (3)
 
 ### El parte de guerra, y una columna que se mide sola

@@ -10,11 +10,19 @@ signal target_reached
 signal committed(side: int)
 
 @export_group("Velocidad")
-## Velocidad de pérdida: el avión nunca baja de aquí.
+## Velocidad de pérdida, y también la de crucero cuando no hay nada que hacer:
+## el avión nunca baja de aquí, y es a lo que vuela mientras espera. Es la
+## velocidad a la que deja la cubierta al despegar.
 @export var min_speed: float = 70.0
+## A lo que vuela cuando tiene una orden que cumplir: ir a un sitio o entrar
+## contra un blanco. Nunca se usa sin motivo.
 @export var max_speed: float = 150.0
+## Cuánto gana o pierde por segundo al pasar de una a otra. Es lo único que
+## separa un cambio de régimen creíble de un tirón: bajo = el avión tarda en
+## coger y en soltar velocidad, que es lo que hace un avión.
 @export var acceleration: float = 90.0
-## Suelta gas al maniobrar: vira más cerrado a costa de velocidad.
+## Suelta gas al maniobrar: vira más cerrado a costa de velocidad. Sólo tiene
+## efecto yendo a máxima — a mínima ya no hay gas que soltar.
 @export var brake_in_turns: bool = true
 
 @export_group("Giro")
@@ -69,10 +77,15 @@ var turn_rate: float = 0.0
 var velocity: Vector2 = Vector2.ZERO
 var target: Vector2 = Vector2.ZERO
 var has_target: bool = false
-## Techo temporal de velocidad, en px/s. 0 = sin límite. Lo pone quien manda al
-## avión — atacar se hace más despacio que desplazarse —, no el piloto: aquí
-## sólo se obedece. Nunca baja de `min_speed`: un avión no puede pararse.
-var speed_limit: float = 0.0
+## ¿Está metiendo gas? Lo pone quien manda al avión, no el piloto: aquí sólo se
+## obedece. Es un interruptor y no un número porque sólo hay dos regímenes —
+## `min_speed` y `max_speed` — y el avión ya sabe cuáles son los suyos. Antes
+## esto era un techo en px/s que cada comportamiento fijaba a mano, y acabó
+## como tenía que acabar: alguien puso el "despacio" del ataque en el mismo
+## valor que la máxima y el avión nunca frenó.
+##
+## Empieza apagado. Lo normal en un avión sin órdenes es ir despacio.
+var cruising: bool = false
 
 var _body: Node2D
 var _bank_sprite: AnimatedSprite2D
@@ -87,19 +100,18 @@ func _ready() -> void:
 
 
 ## Toma el control del avión. El rumbo inicial se deduce de cómo quedó
-## orientado tras el despegue.
-func enable(initial_speed: float = -1.0) -> void:
+## orientado tras el despegue, y la velocidad es la mínima: la cubierta lo
+## acelera hasta ahí y lo suelta justo a esa velocidad, así que recogerlo a
+## cualquier otra sería un tirón en el momento del relevo.
+func enable() -> void:
 	if _body == null:
 		return
 	heading = wrapf(_body.global_rotation - deg_to_rad(sprite_offset_deg), -PI, PI)
-	speed = clampf(
-		initial_speed if initial_speed > 0.0 else (min_speed + max_speed) * 0.5,
-		min_speed, max_speed
-	)
+	speed = min_speed
 	velocity = Vector2.RIGHT.rotated(heading) * speed
 	turn_rate = 0.0
 	_lock = 0
-	speed_limit = 0.0
+	cruising = false
 	set_physics_process(true)
 
 
@@ -107,15 +119,13 @@ func disable() -> void:
 	set_physics_process(false)
 	has_target = false
 	_lock = 0
-	speed_limit = 0.0
+	cruising = false
 
 
-func set_speed_limit(value: float) -> void:
-	speed_limit = maxf(0.0, value)
-
-
-func clear_speed_limit() -> void:
-	speed_limit = 0.0
+## Meter o soltar gas. No cambia la velocidad de golpe: marca a cuál de las dos
+## se dirige, y `acceleration` se encarga de llevarlo allí.
+func set_cruising(value: bool) -> void:
+	cruising = value
 
 
 ## Destino nuevo: vuelve a decidir el lado del viraje desde cero.
@@ -181,19 +191,10 @@ func _physics_process(delta: float) -> void:
 
 			var want_side := 1 if err >= 0.0 else -1
 
-			# El lado al que apunta el error puede ser justo el que no sirve:
-			# si el destino cae dentro del círculo que trazaría virando hacia
-			# allí, por ahí no llega nunca — le daría vueltas alrededor sin
-			# poder cerrar. Entonces prueba el contrario, que es lo que hace
-			# un piloto con un punto pegado al costado: abrirse por fuera y
-			# entrar de vuelta.
 			if _side_is_blocked(want_side, radius):
-				want_side = -want_side
-
-			if _side_is_blocked(want_side, radius):
-				# Los dos lados bloqueados: lo tiene tan encima que no hay
-				# viraje que sirva. Nivela y sale recto, que es lo único que
-				# abre la geometría, hasta poder enfilarlo.
+				# El destino cae dentro del círculo de giro: virar hacia él
+				# sólo daría vueltas a su alrededor. Nivela y sale recto
+				# hasta que la geometría permita enfilarlo.
 				_lock = 0
 				cmd = 0.0
 			else:
@@ -209,11 +210,15 @@ func _physics_process(delta: float) -> void:
 	turn_rate = lerpf(turn_rate, cmd, minf(1.0, turn_inertia * delta))
 	heading = wrapf(heading + turn_rate * delta, -PI, PI)
 
-	var wanted := max_speed
-	if brake_in_turns and has_target:
+	# Sin gas se vuela a la mínima. Es el estado normal de un avión sin nada
+	# que hacer, no un castigo: la máxima cuesta combustible y sólo se pide
+	# cuando hay a dónde ir.
+	var wanted := max_speed if cruising else min_speed
+	if cruising and brake_in_turns and has_target:
 		wanted = lerpf(min_speed, max_speed, clampf(1.0 - abs_err / 2.2, 0.0, 1.0))
-	if speed_limit > 0.0:
-		wanted = minf(wanted, speed_limit)
+	# `move_toward` es lo que impide el tirón: la velocidad no salta al régimen
+	# nuevo, se va hacia él a `acceleration` por segundo. Subir ese número es
+	# exactamente lo que vuelve brusco el cambio.
 	speed = clampf(move_toward(speed, wanted, acceleration * delta), min_speed, max_speed)
 
 	var thrust := Vector2.RIGHT.rotated(heading) * speed

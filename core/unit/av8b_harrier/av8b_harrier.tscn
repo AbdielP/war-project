@@ -30,7 +30,7 @@ size = Vector2(28, 32)
 [node name="PlaneController" type="Node" parent="." index="3" unique_id=266563471]
 script = ExtResource("5")
 min_speed = 75.0
-max_speed = 90.0
+max_speed = 115.0
 acceleration = 50.0
 brake_in_turns = false
 

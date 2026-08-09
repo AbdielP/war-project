@@ -110,6 +110,13 @@ func get_velocity() -> Vector2:
 	return Vector2.ZERO
 
 
+## A qué velocidad deja la cubierta al despegar. Lo pregunta el portaaviones
+## para acelerarla por la pista hasta ahí y soltarla justo a esa velocidad. Las
+## unidades que no vuelan no despegan, así que no tienen ninguna.
+func get_takeoff_speed() -> float:
+	return 0.0
+
+
 ## Segundos hasta que impacte lo que tenga disparado, o -1 si no tiene nada en
 ## el aire. Las unidades armadas lo delegan en su sistema de armas.
 func get_time_to_impact() -> float:

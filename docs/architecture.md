@@ -401,8 +401,20 @@ Gestiona el ciclo de cubierta: Elevador → Taxi → Despegue → entrega de con
 **No vuela aviones.** Al terminar la carrera de proa suelta el avión y no vuelve a tocarlo.
 
 **Exports clave:**
-- `taxi_speed`, `elevator_cycle_time`, `launch_delay`, `takeoff_speed`
+- `taxi_speed`, `elevator_cycle_time`, `launch_delay`
 - `post_bow_distance`, `climb_duration`
+
+**La cubierta no tiene velocidad de despegue propia.** Se la pregunta al avión
+(`Unit.get_takeoff_speed()`, que el Harrier resuelve como su `min_speed`) y con ella
+calcula la carrera. Tenerla costó un bug: `takeoff_speed` valía 120 contra un avión
+que vuela a 90 como mucho, así que el piloto lo recortaba en silencio al recoger el
+control y el avión "frenaba" al soltar amarras — y encima la animación de la pista
+estaba cronometrada con una velocidad que el avión nunca llegaba a volar.
+
+**La carrera de pista es una aceleración constante de verdad.** `EASE_IN` +
+`TRANS_QUAD` desde parado recorre `runway_dist` en `2 × runway_dist / launch_speed`
+y llega a proa exactamente a `launch_speed`: el factor 2 es la media de una rampa
+lineal, no un número a ojo.
 
 **Estado interno:**
 - `_occupied[4]`, `_units[4]` — slots de cubierta
@@ -412,7 +424,7 @@ Gestiona el ciclo de cubierta: Elevador → Taxi → Despegue → entrega de con
 - `request_deploy(scene: PackedScene, squad: Squad = null) → bool` — inicia ciclo de despliegue; si se pasa `squad`, el avión se suma a ese `Squad` al spawnear (ver `Squad` más arriba)
 - `has_free_slot() → bool`
 
-**`_hand_over_control(unit)`:** Si la unidad tiene `start_flight()`, se la llama pasándole el barco como centro de órbita y `takeoff_speed` como velocidad inicial. A partir de ahí el avión se pilota solo.
+**`_hand_over_control(unit)`:** Si la unidad tiene `start_flight()`, se la llama pasándole el barco como centro de órbita. El piloto arranca a su `min_speed`, que es justo la velocidad a la que la cubierta lo soltó: el relevo no se nota. A partir de ahí el avión se pilota solo.
 
 ---
 
@@ -434,17 +446,40 @@ Mueve al nodo padre desde `_physics_process`. Arranca inactivo.
 | Grupo | Exports |
 |-------|---------|
 | Velocidad | `min_speed` (70), `max_speed` (150), `acceleration` (90), `brake_in_turns` |
-| Giro | `base_turn_deg` (150), `fine_gain`, `turn_inertia`, `velocity_align` |
+| Giro | `turn_radius` (130), `fine_gain`, `turn_inertia` (2), `velocity_align` |
 | Compromiso | `release_deg` (22), `reengage_deg` (45), `dead_circle_hysteresis` (1.12) |
 | Navegación | `arrive_radius` (40), `flyby_capture`, `sprite_offset_deg` (−90) |
 | Alabeo | `bank_sprite_path` (opcional, `AnimatedSprite2D` de 5 frames) |
 
-**API:** `enable(initial_speed)`, `disable()`, `set_target(pos)`, `update_target(pos)`, `clear_target()`, `set_speed_limit(v)`, `clear_speed_limit()`, `current_turn_rate()`, `min_turn_radius()`.
+**API:** `enable()`, `disable()`, `set_target(pos)`, `update_target(pos)`, `clear_target()`, `set_cruising(bool)`, `current_turn_rate()`, `min_turn_radius()`.
 
-**`speed_limit`** es un techo temporal (0 = sin límite) que nunca baja de `min_speed` —
-un avión no puede pararse. El piloto sólo obedece: quién y cuándo lo pone es de quien
-manda al avión (hoy `AttackRunBehavior`, que frena al entrar en alcance). Se limpia solo
-en `enable()` y `disable()`.
+**El viraje se parametriza por RADIO, no por grados/segundo.** `turn_radius` es el ancho
+del círculo que traza el avión virando a tope, y `current_turn_rate()` sale de dividir:
+`speed / turn_radius`. Antes era al revés — `base_turn_deg` mandaba y el radio se
+deducía — y eso hacía que **volar más lento cerrase el viraje**, justo lo contrario de
+lo real. Con `min_speed` 75 y `max_speed` 90 el radio efectivo era de 41 px: el sprite
+mide 32, así que el avión pivotaba sobre sí mismo como un coche teledirigido. Ahora un
+avión al ralentí traza el mismo círculo, sólo que tardando más en recorrerlo, y subir
+`max_speed` **no** abre el viraje. Mismo criterio que en `GuidedMissile` y `GlideBomb`,
+que ya llevaban `min_turn_radius`.
+
+**Dos regímenes de velocidad y un interruptor, no un techo numérico.** `cruising` (bool)
+elige entre `min_speed` y `max_speed`; `acceleration` hace la transición y es lo único
+que separa un cambio creíble de un tirón (medido: rampa completa con 1 % de desvío
+sobre el teórico, o sea que nadie salta la velocidad a mano). El piloto sólo obedece:
+quién lo pone es de quien manda al avión.
+
+**Lo normal es ir despacio.** `cruising` arranca en `false` y `enable()` lo devuelve ahí:
+`min_speed` es el estado de reposo — despegue, circuito de espera, alineación de tiro —
+y `max_speed` la excepción, sólo mientras hay una orden que cumplir. Al revés (crucero
+por defecto, frenar bajo petición) el avión despegaba acelerando a tope para frenar
+inmediatamente al entrar en el circuito.
+
+Esto sustituyó a `speed_limit`, un techo en px/s que cada comportamiento fijaba a mano.
+Acabó como tenía que acabar: `AttackRunBehavior.attack_speed` valía 90, exactamente la
+`max_speed` del Harrier, así que "frenar para atacar" no frenaba nada y nadie se enteró.
+Un número absoluto en otro script duplica el rango de velocidades del avión y se
+desincroniza en cuanto se toca. El interruptor no puede.
 
 `set_target` replantea el viraje desde cero; `update_target` corrige el punto
 sin soltar el compromiso en curso — para objetivos que se mueven.
@@ -470,11 +505,8 @@ Decide **a dónde** va cuando no hay órdenes: vueltas alrededor de un centro.
 
 | Export | Default |
 |--------|---------|
-| `semi_x` / `semi_y` | 200 / 280 px |
-| `lead_deg` | 35° — cuánto por delante se pone el punto de referencia |
+| `radius` | 330 px — a qué distancia del barco esperan |
 | `clockwise` | false |
-| `center_deadzone` | 0.25 — dentro de esa fracción del óvalo manda el rumbo, no la posición |
-| `sync_rate` | 2.5 — con qué rapidez la fase se engancha a dónde está el avión |
 | `pilot_path` | `../PlaneController` |
 
 **API:** `orbit_around(node)` (centro móvil, el barco), `orbit_at(pos)` (orden del
@@ -484,28 +516,53 @@ jugador: va al punto y luego orbita ahí), `has_pending_order()`, `stop()`.
 `Av8bHarrier.start_flight()` para no pisar una orden dada mientras el avión estaba en
 cubierta — evita duplicar el punto ordenado en otra variable sólo para poder preguntarlo.
 
-**El óvalo no es un riel.** Se mantiene una fase propia (`_phase`) que avanza sola
-cada frame al ritmo al que vuela el avión, y el punto de esa fase sobre la elipse es
-lo que persigue el piloto. La curva que se ve la produce él con su inercia y su radio
-de giro reales.
+**No hay ninguna figura impuesta.** Cada frame se le señala al piloto el punto del
+círculo que corresponde a **dónde está el avión ahora** respecto al barco, corrido un
+poco hacia adelante en el sentido de giro. Por dentro o por fuera, ese punto le queda
+hacia el círculo y entra; ya encima, le queda por delante y lo recorre. Converge desde
+cualquier sitio y con cualquier radio de giro, porque no le impone una curva: le dice
+dónde tiene que estar y la vuelta sale de su propio viraje.
 
-**La fase avanza sola, no se deduce de la posición.** Deducirla con
-`atan2(rel.y/semi_y, rel.x/semi_x)` parece natural pero es indeterminada en el centro
-del óvalo: al pasar por ahí saltaba 180° en un frame y el punto objetivo se movía
-450 px de golpe — el avión amagaba a un lado y viraba al otro. Ocurría justo al
-terminar una orden del jugador, que es cuando el avión queda en el centro exacto.
-La posición sólo se usa para enganchar la fase (`sync_rate`) y sólo más allá de
-`center_deadzone`; dentro, manda el rumbo del avión.
+**Sigue al barco gratis:** el centro se relee de `_center_node.global_position` cada
+frame, así que el circuito navega con el LHD sin código de seguimiento.
 
-Waypoints discretos tampoco funcionan aquí: un avión que no puede frenar nunca "llega"
+**El adelanto sale del viraje del avión** (`1.5 × min_turn_radius() / radio`), no de un
+número fijo. Hay que dejarle sitio para llegar girando, y ese sitio crece con lo abierto
+que vire.
+
+**El circuito tiene suelo: `max(radius, 2.5 × min_turn_radius())`.** Es la lección cara
+de esta sección. Un círculo más apretado que eso es **imposible de rodear**: cada punto
+cae dentro del propio giro del avión, el piloto endereza en vez de virar (círculo
+muerto), se abre, y acaba encerrado dando vueltas donde no debe — pegado a la proa, en
+el corredor de despegue. Con el suelo puesto, tocar `turn_radius` ya no rompe el
+circuito.
+
+**Reposo, no crucero:** `orbit_around()` pone `set_cruising(false)` — esperar se hace a
+`min_speed`. `orbit_at()` sí mete gas, porque ir a un punto ordenado es una orden; lo
+suelta al llegar.
+
+Waypoints discretos no funcionan aquí: un avión que no puede frenar nunca "llega"
 a un punto que tiene al costado — se queda orbitándolo.
 
-Medido en headless: el avión ciñe el óvalo con error < 9 %, y 0 amagues en el ciclo
-completo y en un barrido de 16 órdenes.
+Medido en headless (1.00 = clavado en el círculo): 0.93 con el avión de radio 130, 1.02
+con radio 50, 1.01 con el barco navegando a 25 px/s.
 
-**Coherencia de parámetros:** `min_turn_radius()` a velocidad de crucero debe ser
-menor que el radio de curvatura del óvalo (`semi_x²/semi_y` en el punto más cerrado).
-Si el avión es demasiado rápido para el óvalo, vuela por fuera.
+**Dos límites conocidos:**
+- Con `turn_radius` 130 el suelo da un circuito de 660 px de diámetro, **más ancho que
+  la pantalla** (640). Es consecuencia directa del radio de giro: un avión que vira así
+  no puede rodear nada más pequeño. Para meterlo en pantalla hay que bajar `turn_radius`.
+- Si el barco navega a más de ~1/3 de la `max_speed` del avión, el avión no mantiene el
+  circuito y queda rezagado (a 45 px/s contra 90 de máxima, se rompe).
+
+**Lo que había antes y por qué se fue:** una elipse (`semi_x`/`semi_y`) con una fase
+propia (`_phase`) que avanzaba sola y se enganchaba parcialmente a la posición del avión
+(`sync_rate`, `center_deadzone`, `lead_deg`). Funcionaba mientras el avión virase mucho
+más cerrado que el óvalo — con el radio efectivo de 41 px lo hacía. Al pasar el viraje a
+130 px se rompió: el punto se le escapaba y el avión cortaba por dentro, quedando
+atrapado en un círculo de su propio radio. Se midió que **ningún parámetro lo
+arreglaba** — `lead_deg`, `sync_rate`, `fine_gain`, `turn_inertia` y el tamaño del óvalo
+(probado hasta 500×600) no movían la aguja; sólo `turn_radius`. Era un fallo de diseño,
+no de ajuste.
 
 #### `AttackRunBehavior` — `attack_run_behavior.gd`
 Decide **a dónde** va cuando ataca a alguien. Sustituyó a `ChaseBehavior` (perseguir sin
@@ -528,7 +585,6 @@ envolvente ya resuelta. Ciclo de dos fases:
 
 | Export | Default | Uso |
 |--------|---------|-----|
-| `attack_speed` | 90 | Velocidad mientras está dentro del alcance. El piloto nunca baja de su `min_speed`; lo brusco del frenado es su `acceleration` |
 | `break_off_margin` | 1.2 | Corta la pasada ese % antes del alcance mínimo |
 | `reengage_fraction` | 0.85 | Fracción del alcance máximo a la que vuelve a encarar |
 | `separation_gain` | 1.15 | Separación mínima al romper, relativa a **dónde** rompió |
@@ -539,7 +595,14 @@ envolvente ya resuelta. Ciclo de dos fases:
 
 `engage()` y cada reencare usan `set_target()` del piloto (destino nuevo, replantea el
 viraje desde cero); dentro de INGRESS se corrige con `update_target()` sin soltar el
-compromiso, igual que `OrbitBehavior` con el óvalo.
+compromiso, igual que `OrbitBehavior` con su punto.
+
+**El gas es una consecuencia de la fase, no un ajuste.** `_set_throttle()` suelta gas en
+un único caso — INGRESS y ya dentro del alcance del arma —, que es cuando hay que
+alinearse para tirar y cada segundo en parámetros es otra ocasión de disparar. Fuera de
+ahí mete gas: llegar cuanto antes a la envolvente, y romper cuanto antes tras soltar el
+arma. No existe ninguna velocidad "de ataque" configurable: la lenta es la `min_speed`
+del propio avión (ver `PlaneController`, por qué se fue `attack_speed`).
 
 **`separation_gain` existe por un bug real:** romper justo en el borde del alcance máximo
 no servía de nada, porque la condición de reencarar ya estaba cumplida en el mismo frame
@@ -897,6 +960,51 @@ reproduce esta animación.
 > Pendiente de arte: redibujarla **ovalada y de 3 px de ancho** en vez de barra de 2. Hoy
 > mide exactamente lo mismo que el cuerpo del misil, así que en los dos últimos frames se
 > funden y parece que el misil engordó, no que la sombra llegó.
+
+#### `GlideBomb` — `glide_bomb.gd` (`extends Projectile`)
+```
+extends Projectile   class_name GlideBomb
+```
+La GBU-54 y las que vengan detrás. **Hermana de `GuidedMissile`, no hija suya**: una bomba
+no tiene fases de motor que heredar. Se suelta y cae, sin fuego y sin estela — la escena
+`gbu54_bomb.tscn` reutiliza sólo `MissileShadow`.
+
+**Lo que la hace un arma de largo alcance es ALTURA, no empuje.** `fall_time` (5,5 s) es su
+altura, y de ahí sale el alcance: lo que recorra picando durante ese rato es hasta dónde
+llega. No sale con velocidad propia — hereda la del avión (`shooter.get_velocity()`) — y
+va **ganando** velocidad al picar hacia `terminal_speed` (280), lo contrario del misil,
+que arranca fuerte y se apaga.
+
+| Exportado | Por defecto | Qué hace |
+|-----------|-------------|----------|
+| `separation_time` / `separation_drag` | 0.35 / 0.9 | cae del pilón sin guiar, frenando |
+| `terminal_speed` / `dive_acceleration` | 280 / 90 | velocidad que alcanza picando y cuánto gana por segundo |
+| `min_turn_radius` | 220 | muy por encima de los 90 del misil: unas aletas corrigen deriva, no viran |
+| `nav_gain` | 3.0 | ganancia del guiado proporcional |
+| `fall_time` | 5.5 | segundos hasta tocar suelo — **su altura** |
+| `proximity_radius` | 10 | espoleta de máximo acercamiento |
+
+**Dos finales y sólo dos:** llegó al blanco, o se le acabó la caída y aterriza donde esté.
+Los dos salen del mismo `if` en `_physics_process`, no de dentro del planeo: dos caminos a
+`detonate()` en el mismo frame repartirían el daño dos veces.
+
+El segundo final es lo que da sentido al `max_range` del arma. No es una regla ni un muro:
+es hasta dónde llega picando. Medido soltándola desde parado (el peor caso, sin heredar
+velocidad), el límite físico son **1018 px**; con `max_range` en 900 quedan ~118 px de
+margen y a 1100 cae **82 px corta** — fuera de los 45 de radio de explosión, o sea un fallo
+limpio y visible. El fallo sale de la simulación, no de un dado.
+
+**`get_distance_to_aim()` devuelve la menor de dos cuentas** — lo que le falta para llegar
+y lo que le queda de caída — porque manda la que se agote antes. Así la sombra se junta con
+la bomba en el impacto tanto si acierta como si se queda corta, que es lo que hace legible
+el fallo: se ve tocar tierra lejos del blanco.
+
+A diferencia del misil **guía hasta el final**: unas aletas no gastan combustible. Lo que
+se le acaba es el sitio para maniobrar, no el mando.
+
+Verificado en headless con el ciclo completo del Harrier (blanco a 1400 px): suelta a
+**898 px**, nunca se acerca a menos de **782** (el `min_range` es 350, así que el avión no
+sobrevuela nada), gasta **una sola** por pasada (`salvo_size = 1`) y mata.
 
 #### `WeaponSystem` — `weapon_system.gd`
 ```
@@ -1551,8 +1659,32 @@ uno sólo llama `set_target`/`update_target` sobre el piloto. Quien los posee (`
 es el árbitro — para uno explícitamente antes de arrancar el otro, porque si los dos
 procesan a la vez se pisan el objetivo cada frame.
 
-El actuador tampoco decide límites: `set_speed_limit()` lo pone quien manda al avión, no
+El actuador tampoco decide el régimen: `set_cruising()` lo pone quien manda al avión, no
 el piloto. El piloto sabe volar; **cuándo** hay que ir despacio es de quien da la orden.
+
+### Lo que se le pide a un actuador es la intención, no el número
+Corolario del anterior, y la regla que más veces se ha roto en este proyecto. Un
+comportamiento dice "despacio", no "a 90 px/s"; la cubierta pregunta a qué velocidad
+despega el avión en vez de tener la suya. Un número absoluto en otro script duplica algo
+que no le pertenece y se desincroniza en cuanto se toca el original — y en silencio,
+porque nada falla: sencillamente deja de significar lo que significaba.
+
+Tres casos reales, los tres del mismo día:
+- `AttackRunBehavior.attack_speed` = 90, igual que la `max_speed` del Harrier: frenar
+  para atacar no frenaba nada.
+- `FlightDeck.takeoff_speed` = 120 contra una `max_speed` de 90: el piloto lo recortaba
+  sin avisar y la animación de pista iba a una velocidad imposible.
+- El óvalo de `OrbitBehavior` con medidas fijas que no sabían nada del radio de giro del
+  avión: al cambiarlo, el circuito se rompió entero.
+
+El contraejemplo está en el mismo archivo: `break_off_margin`, `separation_gain` y
+`egress_overshoot` son **multiplicadores** sobre valores que llegan de fuera (el alcance
+del arma, la distancia actual). No duplican nada, así que no pueden desincronizarse.
+Cuando haga falta un número que depende de otro sistema, que sea relativo o preguntado.
+
+Excepción que no lo es: `sprite_offset_deg` se repite en `PlaneController`,
+`GuidedMissile` y `GlideBomb` con el mismo −90, pero es un dato **de cada dibujo** — tres
+sprites distintos que podrían estar orientados de tres maneras. Está bien donde está.
 
 ### Catálogo y estado no pueden ser el mismo objeto
 `WeaponLoadout` describe una configuración (catálogo, compartido) y también la carga real
@@ -1733,7 +1865,7 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] Marcador de destino (se queda donde se ordenó, como referencia para ajustar el vuelo)
 - [x] Deselección: Escape + botón × en HUD
 - [x] AV-8B Harrier: vuelo al punto → órbita CCW
-- [x] LHD Wasp: despliegue completo (elevador → taxi → despegue → óvalo)
+- [x] LHD Wasp: despliegue completo (elevador → taxi → despegue → circuito de espera)
 - [x] HangarWindow: selector cantidad + misión + DESPLEGAR
 - [x] HUD base: event log, minimapa, selection panel, actions panel
 - [x] Vuelo separado en `PlaneController` (cómo vuela) + `OrbitBehavior` (a dónde va); la cubierta cede el control con `start_flight()` y no vuelve a tocar al avión
@@ -1767,9 +1899,14 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] `LongPress`: el mismo detector de pulsación mantenida en la cámara y en el mapa
 - [x] **Registro de eventos vivo:** órdenes, ataques, disparos con código de brevedad OTAN y bajas, con la coordenada del mapa **pulsable** para llevar la mirada allí
 - [x] Columna izquierda que se mide sola: el minimapa se recorta a su dibujo y se estira por escalas enteras, y el registro crece hacia arriba apartándose de él
+- [x] **Bomba planeadora (`GlideBomb` / GBU-54):** el alcance sale de la altura (`fall_time`), no de un motor; cae corta de verdad si se suelta demasiado lejos
+- [x] **Viraje del avión por radio** (`turn_radius`) en vez de grados/segundo: volar más lento ya no cierra el giro, y hay entrada en viraje
+- [x] **Circuito de espera que rodea al barco y navega con él**, con suelo automático ligado al radio de giro para que no se pueda pedir un círculo imposible de volar
+- [x] **Dos regímenes de velocidad con un interruptor** (`cruising`): mínima en despegue, espera y alineación de tiro; máxima sólo con una orden en curso. Sin velocidades de avión repartidas por otros scripts
 
 ### Pendiente
-- [ ] Proyectil balístico para bombas (el mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`)
+- [ ] Proyectil balístico para bombas tontas (Mk-82). La GBU-54 planea y guía; una bomba sin guía es otro vuelo. El mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`
+- [ ] Alabeo e inclinación del avión al virar y al cambiar de régimen: el enganche existe (`bank_sprite_path`, `AnimatedSprite2D` de 5 frames), falta el arte
 - [ ] Cañón: hace falta resolver antes cómo dibujar una ráfaga sin instanciar un nodo por bala (impacto por cálculo + trazadoras)
 - [ ] Efectos: explosión y caída. Los enganches existen (`detonated`), falta el arte. Fuego, humo y sombra ya están — `MissileExhaust`, `MissileSmokeTrail` y `MissileShadow` sirven de patrón
 - [ ] Redibujar la sombra del misil ovalada y de 3 px de ancho: hoy mide lo mismo que el cuerpo y se funden en los últimos frames (ver `MissileShadow`)

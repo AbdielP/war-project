@@ -17,5 +17,4 @@ firing_arc_deg = 20.0
 damage = 150.0
 blast_radius = 45.0
 projectile_scene = ExtResource("3")
-salvo_size = 1
 reload_time = 2.0

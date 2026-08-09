@@ -2,6 +2,29 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-08 (3)
+
+### Los efectos del cañón: un fogonazo de dos tiempos y un humo que ya existía
+Primer trozo del cañón del Harrier. Sólo los efectos — quién abre fuego y cómo ataca el avión con cañón queda para mañana.
+
+**El fogonazo tiene dos animaciones, no una.** La primera versión metía los 11 fotogramas en un solo bucle, y eso está mal: el arranque volvía a aparecer en cada vuelta. La tira son en realidad dos cosas — **0–5 el arma poniéndose en marcha** (una vez) y **6–10 la ráfaga sostenida** (en bucle) —, que es la misma estructura que ya tenía `MissileExhaust` con `ignite` / `burn`.
+
+El sostenido cicla por un motivo físico: un cañón de rotación suelta cientos de proyectiles por minuto, así que el fogonazo mantenido no puede ser un destello por bala — a esa cadencia sería un parpadeo ilegible. Es una llama que titila. Pero arrancar se ve **una sola vez**: volver a enseñar ese crecimiento en mitad de la ráfaga delataría el bucle. Cortar el fuego apaga en seco incluso a mitad del arranque, porque el arma dejó de disparar y una llama creciendo sería mentira.
+
+**El humo del cañón no llevó código nuevo.** La estela del misil ya hacía exactamente lo que hacía falta: soltar bocanadas que **se quedan en el mundo** con el rumbo congelado, que es lo que hace que el rastro se doble solo al virar. Lo único distinto entre los dos humos era el dibujo, la densidad y quién los enciende.
+
+Así que `MissileSmokeTrail` pasó a **`SmokeTrail`** y esas tres cosas son datos del inspector: `puff_scene`, `spacing_px` y los nombres de las dos señales del padre (`start_signal` / `stop_signal`). El misil no se tocó — sus valores por defecto siguen siendo `motor_ignited` / `fuel_spent`. Un humo nuevo cuesta ahora dos ficheros de datos y cero código.
+
+**Se descartó heredar.** `CannonSmokeTrail extends SmokeTrail` habría sido un archivo entero para no hacer más que enchufar dos señales distintas. Poner los nombres en `@export` deja una sola clase y lo mueve al sitio donde se decide de verdad: la escena.
+
+La bocanada (`SmokePuff`) tampoco se tocó: el dibujo y la duración son de la escena, no de la clase. El humo del cañón es **10 fotogramas y 0,67 s** contra los 23 y 1,47 s del misil — medido, un rastro de **45 px** frente a ~440. Es humo de boca de arma, no una estela que marque una trayectoria.
+
+**Los dos efectos se enganchan por señal al avión, y el avión todavía no las emite.** `cannon_firing_started` / `cannon_firing_stopped`. Si el padre no las tiene, no se conecta nada y se encienden a mano — que es como se han probado. Eso deja el "cuándo" para mañana sin bloquear nada, y cuando el avión las emita, los dos efectos y la trazadora se suman solos sin tocarse entre ellos.
+
+Verificado en headless: el fogonazo se ve en orden `start` → `sustain` y no vuelve al arranque; el humo siembra 10 bocanadas vivas, la primera a 47 px por detrás del avión (o sea que no viaja con él), con **9° de abanico en los rumbos** estando el avión en viraje; al cortar el fuego no nacen más. Regresión del misil tras el renombrado: sigue sembrando 95 bocanadas en vuelo.
+
+Pendiente de mirar en el editor: nada de esto se ha visto en juego todavía, sólo medido.
+
 ## 2026-08-08 (2)
 
 ### El avión deja de ser un carrito: el viraje se mide en radio y la velocidad en intención

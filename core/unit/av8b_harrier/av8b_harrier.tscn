@@ -9,6 +9,10 @@
 [ext_resource type="Script" uid="uid://bim4jv2yqqy6a" path="res://core/weapon/hardpoint_rack.gd" id="7"]
 [ext_resource type="Script" uid="uid://nm0ui7hib5n3" path="res://core/unit/flight/attack_run_behavior.gd" id="8"]
 [ext_resource type="Script" uid="uid://dqfwj1xrfic38" path="res://core/weapon/weapon_system.gd" id="9"]
+[ext_resource type="Script" uid="uid://dj8ko3tggrbdb" path="res://core/weapon/muzzle_flash.gd" id="10"]
+[ext_resource type="SpriteFrames" path="res://core/weapon/cannon_flash_frames.tres" id="11"]
+[ext_resource type="Script" uid="uid://1do5br64c6er" path="res://core/weapon/smoke_trail.gd" id="12"]
+[ext_resource type="PackedScene" path="res://core/weapon/cannon_smoke_puff.tscn" id="13"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(28, 32)
@@ -75,3 +79,18 @@ position = Vector2(13, 0)
 
 [node name="R1" type="Marker2D" parent="Hardpoints" index="9" unique_id=554350331]
 position = Vector2(15, -2)
+
+[node name="CannonFlash" type="AnimatedSprite2D" parent="." index="8" unique_id=1787461107]
+z_index = 1
+position = Vector2(8, 13)
+sprite_frames = ExtResource("11")
+animation = &"start"
+script = ExtResource("10")
+
+[node name="CannonSmoke" type="Node2D" parent="." index="9" unique_id=1787461108]
+position = Vector2(12, -2)
+script = ExtResource("12")
+puff_scene = ExtResource("13")
+spacing_px = 5.0
+start_signal = &"cannon_firing_started"
+stop_signal = &"cannon_firing_stopped"

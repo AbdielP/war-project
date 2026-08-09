@@ -68,6 +68,10 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Velocidad y corte de frames del fuego | `core/weapon/missile_exhaust_frames.tres` |
 | Densidad de la estela de humo | nodo `SmokeTrail` de `agm65_missile.tscn` → `spacing_px` |
 | Largo de la estela (duración por frame) | `core/weapon/missile_smoke_frames.tres` |
+| Sitio del fogonazo del cañón | nodo `CannonFlash` de `av8b_harrier.tscn` → `position` |
+| Velocidad del fogonazo y reparto arranque/ráfaga | `core/weapon/cannon_flash_frames.tres` (`start` = frames 0-5, `sustain` = 6-10) |
+| Sitio y densidad del humo del cañón | nodo `CannonSmoke` de `av8b_harrier.tscn` → `position` / `spacing_px` |
+| Largo del humo del cañón | `core/weapon/cannon_smoke_frames.tres` (hoy 0,67 s ≈ 45 px) |
 | Altura de la sombra del misil (diagonal) | nodo `Shadow` de `agm65_missile.tscn` → `altitude_drop_px` |
 | Cuándo empieza a bajar la sombra | mismo nodo → `descent_px` |
 | Vuelo de la bomba planeadora (caída, planeo, espoleta) | `core/weapon/gbu54_bomb.tscn` (nodo raíz) |

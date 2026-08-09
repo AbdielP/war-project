@@ -790,7 +790,7 @@ siempre que llegue cerca.
 | `fuel_spent` | Apagar la estela |
 | `detonated(where)` | Explosión (heredada de `Projectile`) |
 
-Los enganches con arte son el escape (`MissileExhaust`), la estela (`MissileSmokeTrail`) y
+Los enganches con arte son el escape (`MissileExhaust`), la estela (`SmokeTrail`) y
 la sombra (`MissileShadow`), abajo. Siguen sin arte la **explosión y la caída**.
 
 | Método | Para qué |
@@ -847,41 +847,95 @@ o impar el cuerpo del misil—, no de la posición.
 `z_index = -1` dentro del misil: la llama se dibuja por detrás del fuselaje, misma
 convención que `Hardpoints` bajo el `Sprite2D` de una unidad.
 
-#### `MissileSmokeTrail` — `missile_smoke_trail.gd`
+#### `SmokeTrail` — `smoke_trail.gd`
 ```
-extends Node2D   class_name MissileSmokeTrail
+extends Node2D   class_name SmokeTrail
 ```
-La estela. **No dibuja nada**: colocado en la tobera (`position = (0, -12)`), va soltando
-`SmokePuff` sueltas por el mundo mientras haya motor. Se engancha solo a `motor_ignited` /
-`fuel_spent` del padre, igual que `MissileExhaust`, y `guided_missile.gd` no lo conoce.
+El rastro de humo, **de cualquier cosa que eche humo**. No dibuja nada: va soltando
+`SmokePuff` sueltas por el mundo mientras esté encendido.
 
-**Cada bocanada se queda donde nació, con el rumbo congelado del misil en ese instante.**
-De ahí que la estela se doble sola en las curvas: no hay una cola que deformar, hay un
-rastro de piezas que ya salieron apuntando a donde el misil iba entonces.
+Se llamaba `MissileSmokeTrail` y era del misil. Al llegar el cañón resultó que la mecánica
+era la misma —algo empieza, algo termina, y mientras tanto sale humo— y lo único distinto
+era el dibujo, la densidad y quién lo enciende. Las tres son datos ahora, así que un humo
+nuevo no cuesta código: son dos ficheros `.tres`/`.tscn` y un nodo.
 
-**Cuelgan del mundo, no del misil** — se añaden a `get_parent().get_parent()`, el mismo
-nodo donde `WeaponSystem` suelta los proyectiles. Hijas del misil viajarían con él, que es
-lo contrario de una estela; y así la cola **sobrevive al impacto** y termina de deshacerse
-sola después de que el misil desaparezca.
+| Exportado | Misil | Cañón | Qué hace |
+|-----------|-------|-------|----------|
+| `puff_scene` | `smoke_puff.tscn` | `cannon_smoke_puff.tscn` | qué se suelta |
+| `spacing_px` | `4.0` | `5.0` | cada cuántos píxeles **recorridos** sale una |
+| `start_signal` | `motor_ignited` | `cannon_firing_started` | qué lo enciende |
+| `stop_signal` | `fuel_spent` | `cannon_firing_stopped` | qué lo apaga |
 
-| Exportado | Hoy | Qué hace |
-|-----------|-----|----------|
-| `puff_scene` | `smoke_puff.tscn` | qué se suelta |
-| `spacing_px` | `4.0` | cada cuántos píxeles **recorridos** sale una |
+**Cada bocanada se queda donde nació, con el rumbo congelado de quien la escupió en ese
+instante.** De ahí que el rastro se doble solo en las curvas: no hay una cola que deformar,
+hay un reguero de piezas que ya salieron apuntando a donde se iba entonces. Vale igual para
+un misil virando que para un avión metido en un giro con el cañón abierto — medido, 9° de
+abanico en el rastro del Harrier virando.
+
+**Cuelgan del mundo, no de quien las echa** — se añaden a `get_parent().get_parent()`, el
+mismo nodo donde `WeaponSystem` suelta los proyectiles. Hijas del misil viajarían con él,
+que es lo contrario de una estela; y así la cola **sobrevive al impacto** y termina de
+deshacerse sola después de que el misil desaparezca.
 
 **Se siembra por distancia, no por tiempo**, y a lo largo del tramo recorrido, no en el
 punto actual: a velocidad de crucero el misil avanza 5 px por frame, así que una bocanada
 por frame dejaría la cola a trozos. Se interpolan posición (`lerp`) y rumbo (`lerp_angle`)
 dentro del segmento. El portero es `set_physics_process()`, no una bandera aparte.
 
+**El enganche por nombre de señal es opcional.** Si el padre no emite esa señal, no se
+conecta nada y el nodo se enciende llamando a `start()` / `stop()`. Así se puede probar un
+efecto antes de que exista quien lo dispare — que es justo el estado del cañón hoy.
+
+#### `MuzzleFlash` — `muzzle_flash.gd`
+```
+extends AnimatedSprite2D   class_name MuzzleFlash
+```
+El fogonazo de un arma automática. Cuelga de la boca del cañón y sólo sabe encenderse
+mientras se dispara: no conoce armas, ni munición, ni a quién se le tira. Mismo enganche
+por señal que `SmokeTrail`, así que quien dispare no tiene que conocerlo.
+
+**Dos animaciones sobre la misma tira, porque un cañón tiene dos momentos:**
+
+| Animación | Fotogramas | Cicla | Qué es |
+|-----------|-----------|-------|--------|
+| `start` | 0–5 | no | el arranque: la llama crece de una chispa a la primera llamarada |
+| `sustain` | 6–10 | sí | la ráfaga: alterna llamaradas grandes y pequeñas |
+
+**El sostenido cicla y el arranque no**, y ahí está todo el efecto. Un cañón de rotación
+suelta cientos de proyectiles por minuto: el fogonazo mantenido no puede ser un destello
+por bala —a esa cadencia sería un parpadeo ilegible— sino una llama que titila. Pero
+arrancar se ve una sola vez, y volver a enseñar ese crecimiento en mitad de la ráfaga
+delataría el bucle.
+
+Cortar el fuego lo apaga en seco **incluso a mitad del arranque**: el arma dejó de
+disparar, y una llama creciendo sería mentira. Y abrir fuego dos veces seguidas no
+reinicia nada — seguir disparando es seguir disparando.
+
+**Arranca invisible en juego pero se sigue viendo en el editor** (`visible = false` en
+`_ready()`, no en la escena), que es lo que permite colocarlo a mano sobre el arte sin
+tener que dispararlo para saber dónde cae. Misma treta que `MissileExhaust`.
+
 #### `SmokePuff` — `smoke_puff.gd`
 ```
 extends AnimatedSprite2D   class_name SmokePuff
 ```
 Una bocanada suelta: se reproduce una vez y `queue_free()` en `animation_finished`. No sabe
-nada del misil que la escupió. Nace **visible** —al revés que `MissileExhaust`, que arranca
+nada de quien la escupió. Nace **visible** —al revés que `MissileExhaust`, que arranca
 oculto porque vive colgado del misil desde antes de encender— y con `z_index = 8`, bajo el
-misil (9).
+misil (9) y bajo el avión (10).
+
+**Un solo script, dos humos.** El dibujo y la duración son de la escena, no de la clase, así
+que el humo del cañón reutiliza este código tal cual:
+
+| Escena | Fotogramas | Vida | Rastro a su velocidad |
+|--------|-----------|------|----------------------|
+| `smoke_puff.tscn` | 23 (`missile_smoke_frames.tres`) | 1,47 s | ~440 px a 300 px/s |
+| `cannon_smoke_puff.tscn` | 10 (`cannon_smoke_frames.tres`) | 0,67 s | ~45 px a ~95 px/s |
+
+El del cañón es corto a propósito: es humo de boca de arma, no una estela que marque una
+trayectoria. Sus 5 primeros fotogramas son la bocanada formándose (duración plana) y los 5
+últimos la disipación, alargándose de 1,2 a 2,2 — misma forma que el del misil pero
+comprimida.
 
 | Exportado | Hoy | Qué hace |
 |-----------|-----|----------|
@@ -1059,10 +1113,18 @@ extends Unit
 **Escena:** `Sprite2D`, `CollisionShape2D`, `SelectionIndicator`, `PlaneController`,
 `OrbitBehavior`, `AttackRun` (`AttackRunBehavior`), `WeaponSystem`, `Hardpoints`
 (`HardpointRack` con 10 `Marker2D`: `L1`, `L2a`, `L2c`, `L3a`, `L3c` y sus simétricos
-`R`). `z_index = 10` en el raíz.
+`R`), `CannonFlash` (`MuzzleFlash`) y `CannonSmoke` (`SmokeTrail`). `z_index = 10` en el
+raíz.
+
+**Los dos efectos del cañón se colocan a ojo en el editor** y no dependen de nada del
+código: `CannonFlash` en la boca del arma (`z_index = 1`, por encima del fuselaje) y
+`CannonSmoke` bajo el ala. Los dos escuchan `cannon_firing_started` /
+`cannon_firing_stopped` **en el avión**, que hoy no las emite — se encienden a mano hasta
+que exista el comportamiento de ataque con cañón. Cuando el avión las emita, los dos se
+enganchan solos y la trazadora podrá sumarse sin tocar ninguno.
 
 **API:**
-- `start_flight(orbit_center, initial_speed)` — la cubierta le cede el control y enciende el armamento. **Sólo entra al circuito de espera si no tiene órdenes**: si hay `attack_target` sale a por él, y si `orbit.has_pending_order()` no toca nada (el destino ya está puesto en el piloto). El circuito es lo que hace un avión sin órdenes, y el jugador pudo darle una mientras estaba en cubierta
+- `start_flight(orbit_center)` — la cubierta le cede el control y enciende el armamento. **Sólo entra al circuito de espera si no tiene órdenes**: si hay `attack_target` sale a por él, y si `orbit.has_pending_order()` no toca nada (el destino ya está puesto en el piloto). El circuito es lo que hace un avión sin órdenes, y el jugador pudo darle una mientras estaba en cubierta
 - `receive_move_order(target)` — para `attack`, delega en `orbit.orbit_at(target)`
 - `receive_attack_order(target)` — para `orbit`, delega en `attack.engage(target, min, max)`
 - `get_facing()` / `get_velocity()` — el rumbo **real** del piloto, no la rotación del nodo: el arte apunta a +Y y el armamento heredaría el desfase, saliendo disparado de lado
@@ -1748,7 +1810,7 @@ Fuego, humo o explosión van en un nodo hijo que se conecta solo a las señales 
 su `_ready()`, por duck-typing (`has_signal`). El padre no guarda referencia ni sabe si el
 efecto está puesto. Así el script que decide *cuándo* pasa algo no crece cada vez que se
 añade arte, y el efecto sirve para cualquier otro nodo que emita las mismas señales.
-Ver `MissileExhaust` y `MissileSmokeTrail`, los dos sobre `GuidedMissile.motor_ignited` /
+Ver `MissileExhaust` y `SmokeTrail`, los dos sobre `GuidedMissile.motor_ignited` /
 `fuel_spent`, ninguno conocido por él.
 
 Cuando el efecto no depende de *que pase algo* sino de *cuánto vale algo* —una altura, una
@@ -1765,7 +1827,7 @@ va a explotar y «esto pasa los últimos 0,3 s» es imposible de escribir. Lo qu
 qué distancia está, y atando el efecto a esa magnitud sale gratis que caiga justo donde
 tiene que caer, a cualquier velocidad y desde cualquier ángulo. Mismo razonamiento que
 sembrar la estela por distancia recorrida y no con temporizador. Ver `MissileShadow` y
-`MissileSmokeTrail`.
+`SmokeTrail`.
 
 ### Sombras: dirección de sol fija en el sprite, no en el mundo
 Convención del proyecto, **asumida a sabiendas de que es incorrecta**. El arte se dibuja
@@ -1795,7 +1857,7 @@ apuntando a donde se iba entonces. Dos condiciones para que funcione: **cuelgan 
 no de quien las suelta** (si no, viajan con él, que es justo lo contrario), y **se siembran
 por distancia recorrida, no por tiempo** — con temporizador el espaciado queda atado a la
 velocidad y a los fps, y sale rala al acelerar y apelmazada al frenar. Ver
-`MissileSmokeTrail` / `SmokePuff`.
+`SmokeTrail` / `SmokePuff`.
 
 ### Un dibujo repetido en fila no es un efecto, es un sello
 Cuando un efecto siembra copias del mismo sprite a intervalos regulares, el ojo lee el
@@ -1887,7 +1949,7 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] Cuenta atrás de impacto sobre el objetivo, ligada a la selección
 - [x] Botones de arma con munición restante, deshabilitados al agotarse
 - [x] Fuego del propulsor del misil (`MissileExhaust`), enganchado a `motor_ignited` / `fuel_spent`
-- [x] Estela de humo del misil (`MissileSmokeTrail` / `SmokePuff`): bocanadas sueltas sembradas por distancia, con fase de disipación por alfa
+- [x] Estela de humo del misil (`SmokeTrail` / `SmokePuff`): bocanadas sueltas sembradas por distancia, con fase de disipación por alfa
 - [x] Sombra del misil (`MissileShadow`): frame por distancia al blanco, se junta con él en el impacto
 - [x] Tres niveles de zoom (0,5x / 1x / 2x) con botones `+` / `−` en el HUD
 - [x] Pausa y play (botón + barra espaciadora); cámara, HUD y selección siguen vivos en pausa
@@ -1903,12 +1965,14 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Viraje del avión por radio** (`turn_radius`) en vez de grados/segundo: volar más lento ya no cierra el giro, y hay entrada en viraje
 - [x] **Circuito de espera que rodea al barco y navega con él**, con suelo automático ligado al radio de giro para que no se pueda pedir un círculo imposible de volar
 - [x] **Dos regímenes de velocidad con un interruptor** (`cruising`): mínima en despegue, espera y alineación de tiro; máxima sólo con una orden en curso. Sin velocidades de avión repartidas por otros scripts
+- [x] **Efectos del cañón, sin comportamiento todavía:** fogonazo de dos tiempos (`MuzzleFlash`) y humo de boca (`SmokeTrail` + `cannon_smoke_puff.tscn`), los dos colocados en la escena del Harrier y a la espera de quien abra fuego
 
 ### Pendiente
 - [ ] Proyectil balístico para bombas tontas (Mk-82). La GBU-54 planea y guía; una bomba sin guía es otro vuelo. El mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`
 - [ ] Alabeo e inclinación del avión al virar y al cambiar de régimen: el enganche existe (`bank_sprite_path`, `AnimatedSprite2D` de 5 frames), falta el arte
-- [ ] Cañón: hace falta resolver antes cómo dibujar una ráfaga sin instanciar un nodo por bala (impacto por cálculo + trazadoras)
-- [ ] Efectos: explosión y caída. Los enganches existen (`detonated`), falta el arte. Fuego, humo y sombra ya están — `MissileExhaust`, `MissileSmokeTrail` y `MissileShadow` sirven de patrón
+- [ ] **Cañón — lo que falta:** quién abre fuego (emitir `cannon_firing_started` / `cannon_firing_stopped` en el avión), cómo ataca el avión con cañón, y la trazadora (`Tracer_16x64.png`, ya importada y sin usar). Sigue en pie la pregunta de fondo: cómo dibujar una ráfaga sin instanciar un nodo por bala — impacto por cálculo + trazadoras
+- [ ] **Revisar en el editor** el fogonazo y el humo del cañón: verificados por medición en headless (fotogramas, encadenado, siembra y curvatura del rastro), pero **no vistos en juego** todavía
+- [ ] Efectos: explosión y caída. Los enganches existen (`detonated`), falta el arte. Fuego, humo y sombra ya están — `MissileExhaust`, `SmokeTrail` y `MissileShadow` sirven de patrón
 - [ ] Redibujar la sombra del misil ovalada y de 3 px de ancho: hoy mide lo mismo que el cuerpo y se funden en los últimos frames (ver `MissileShadow`)
 - [ ] Sombras del resto de unidades. Antes de dibujarlas, releer el patrón de sombras: la convención actual es incorrecta a propósito y cambiarla obliga a rehacer el arte de todas a la vez
 - [ ] Alargar la fase opaca del humo (3–4 frames más antes de que baje el alfa, y algún paso de alfa extra): hoy la estela se disuelve desde el primer tercio (ver `SmokePuff`)

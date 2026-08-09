@@ -22,6 +22,11 @@ func _ready() -> void:
 	add_to_group("unit_air")
 	orbit.center_reached.connect(func() -> void: order_fulfilled.emit())
 	attack.target_lost.connect(_on_target_lost)
+	# Sólo se tira dentro de la pasada. Fuera de ella el avión está maniobrando
+	# y el blanco le cruza el morro de refilón cada vez que vira: sin esto, cada
+	# uno de esos cruces sería un tiro, y el ataque se vería como un baile.
+	attack.attack_run_started.connect(weapons.set_cleared_to_fire.bind(true))
+	attack.attack_run_ended.connect(weapons.set_cleared_to_fire.bind(false))
 	# Disparar y romper el ataque son la misma maniobra: en cuanto sale el arma
 	# el avión deja de meterse hacia el blanco.
 	weapons.fired.connect(func(_weapon: WeaponType) -> void: attack.break_off())
@@ -81,6 +86,10 @@ func receive_move_order(target: Vector2) -> void:
 func receive_attack_order(target: Unit) -> void:
 	super.receive_attack_order(target)
 	orbit.stop()
+	# Se empieza sin permiso: primero se enfila, y el permiso llega con la
+	# pasada. Al revés, el avión abriría fuego mientras todavía está buscando la
+	# línea de ataque.
+	weapons.set_cleared_to_fire(false)
 	attack.engage(target, _weapon_min_range(), _weapon_max_range())
 
 

@@ -75,8 +75,14 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Letalidad del cañón | `core/weapon/gau12_cannon.tres` → `damage` (por bala) × `rounds_per_second` |
 | Cuánto pierde el cañón con la distancia | mismo `.tres` → `long_range_accuracy` (0,25 = en el borde entra 1 de cada 4) |
 | Cuánto cuesta soltar el gatillo | mismo `.tres` → `arc_hysteresis` (abre a 10°, no suelta hasta 20°) |
-| Densidad y velocidad de las trazadoras | nodo `CannonTracers` → `tracers_per_second`; `core/weapon/tracer.tscn` → `speed` / `range_px` |
-| Separación mínima antes de rehacer una pasada | nodo `AttackRun` → `turn_around_margin`, en radios de giro del avión |
+| Densidad y velocidad de las trazadoras | nodo `CannonTracers` → `tracers_per_second`; `core/weapon/tracer.tscn` → `speed` |
+| Hasta dónde llega una trazadora | no se ajusta: se la da el arma (la distancia al blanco). `range_px` es sólo el respaldo sin blanco |
+| Cuánto se dispersa la ráfaga (unas cortas, otras pasadas) | `core/weapon/tracer.tscn` → `reach_spread` (0,12 = ±12%) |
+| Cómo se apaga la trazadora al llegar | mismo nodo → `burn_out_px` (en cuántos px se consume) |
+| Reparto de la animación de la trazadora | `core/weapon/tracer_frames.tres` (`muzzle` = frames 0-6 saliendo, `streak` = el 7, el resto del vuelo) |
+| Cuándo el avión se lanza a la pasada y deja de corregir | nodo `AttackRun` → `aim_tolerance_deg` (6° hoy) |
+| Cuánto sigue recto pasado el blanco | mismo nodo → `strafe_overrun` |
+| Separación mínima antes de rehacer una pasada | mismo nodo → `turn_around_margin`, en radios de giro del avión. Tiene que dar para girar **y salir apuntando** |
 | Altura de la sombra del misil (diagonal) | nodo `Shadow` de `agm65_missile.tscn` → `altitude_drop_px` |
 | Cuándo empieza a bajar la sombra | mismo nodo → `descent_px` |
 | Vuelo de la bomba planeadora (caída, planeo, espoleta) | `core/weapon/gbu54_bomb.tscn` (nodo raíz) |

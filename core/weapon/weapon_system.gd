@@ -42,6 +42,10 @@ var _cooldown: float = 0.0
 var _in_flight: Array[Node] = []
 ## ¿Está el gatillo apretado? Sólo con armas sostenidas.
 var _firing := false
+## ¿Hay permiso para tirar? Lo quita quien lleva el vuelo mientras el avión no
+## está en la pasada. Arranca en `true`: una unidad que no hace pasadas — un
+## tanque, un barco — dispara cuando puede y no espera permiso de nadie.
+var _cleared_to_fire := true
 
 
 func _ready() -> void:
@@ -58,6 +62,27 @@ func set_active(value: bool) -> void:
 		# Apagar el armamento con el gatillo apretado dejaría el cañón
 		# escupiendo fuego para siempre: nadie va a volver a pasar por aquí.
 		_release_trigger()
+
+
+## Autoriza o corta el fuego sin apagar el armamento. Es lo que separa APUNTAR de
+## PODER TIRAR: el avión enfila la pasada, y sólo mientras dura esa pasada tiene
+## permiso. En cuanto rompe y se va virando, el morro le va barriendo el paisaje
+## y cruza el blanco de refilón una y otra vez — con permiso, soltaría un tiro en
+## cada barrido y la pasada parecería un baile en vez de un ametrallamiento.
+func set_cleared_to_fire(value: bool) -> void:
+	if _cleared_to_fire == value:
+		return
+	_cleared_to_fire = value
+	if not value:
+		_release_trigger()
+
+
+## A qué distancia se está tirando ahora mismo, o 0 si no hay a quién. Lo usan
+## los efectos que necesitan saber dónde acaba el tiro y no sólo que lo hay.
+func get_firing_distance() -> float:
+	if _unit == null or not is_instance_valid(_unit.attack_target):
+		return 0.0
+	return _unit.global_position.distance_to(_unit.attack_target.global_position)
 
 
 func _physics_process(delta: float) -> void:
@@ -111,6 +136,8 @@ func _release_trigger() -> void:
 ## proyectil — un cañón no tiene — y con el cono ensanchado si ya se está
 ## disparando, para que la ráfaga no salga a tirones.
 func _should_hold_trigger(weapon: WeaponType, target: Unit) -> bool:
+	if not _cleared_to_fire:
+		return false
 	if not is_instance_valid(target) or not target.is_alive():
 		return false
 	if not _in_parameters(weapon, target):
@@ -178,6 +205,8 @@ func time_to_impact() -> float:
 ## ¿Se dan las condiciones para tirar contra ese blanco ahora mismo? No mira
 ## munición en vuelo ni recarga: eso es cadencia, no puntería.
 func can_fire_at(target: Unit) -> bool:
+	if not _cleared_to_fire:
+		return false
 	var weapon := _unit.active_weapon
 	if weapon == null or weapon.projectile_scene == null:
 		return false

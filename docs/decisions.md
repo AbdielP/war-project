@@ -2,6 +2,43 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-09 (tarde)
+
+### La pasada de ametrallamiento se compromete: enfilar y no volver a corregir
+El avión "bailaba por todos lados" atacando con cañón. Tres causas distintas que se veían como una sola:
+
+**1. Corregía el rumbo cada frame hasta el final.** `AttackRunBehavior` llamaba a `update_target(blanco)` en todo el INGRESS. Cada corrección movía el morro, el blanco entraba y salía del cono, y la ráfaga salía a tirones. Ahora, en cuanto el morro entra en `aim_tolerance_deg` **y** ya está dentro del alcance, el avión **se compromete**: el destino pasa a ser un punto 600 px pasado el blanco y no se vuelve a tocar hasta que rompe. Atraviesa el objetivo y sigue, que es lo que hace un avión ametrallando.
+
+El punto va lejos y no sobre el blanco por el mismo motivo que el circuito de espera: puesto encima, el avión intentaría llegar exactamente ahí y acabaría dando vueltas sobre él.
+
+**2. Disparaba mientras rompía.** El `WeaponSystem` sólo miraba distancia y ángulo, así que en cuanto el avión viraba y el morro cruzaba el blanco de refilón, salía una ráfaga. Y virando lo cruza muchas veces. **Apuntar y tener permiso para tirar son cosas distintas**: `set_cleared_to_fire()`, atado a `attack_run_started` / `attack_run_ended`. Fuera de la pasada no sale un tiro por mucho que el blanco pase por delante. Un `WeaponSystem` suelto arranca con permiso — un tanque no se lo pide a nadie —; es el avión el que se lo quita.
+
+**3. Se alineaba dentro del alcance del arma.** Esto sólo salió midiendo. Reencaraba a 390 px, llegaba de la vuelta todavía torcido y no enfilaba hasta ~300, con la ruptura en 264: **36 px de ventana de fuego**. `turn_around_margin` sube de 3.0 a 4.5. La separación no sólo tiene que dar para girar, tiene que dar para **girar y salir apuntando**.
+
+Medido, con el morro tomado como desvío al blanco durante la ráfaga:
+
+| | pasada 1 | pasada 2 | pasada 3 |
+|---|---|---|---|
+| antes | 54 daño | 18 | 10 |
+| ahora | 37.7 (±0.0°) | 34.5 (−2.7°/+0.9°) | 27.8 (−0.9°/+2.8°) |
+
+Las tres abren fuego en el borde del alcance (~418 px) y el morro se mueve menos de 3°. De regalo, el sobrevuelo del blanco pasó de ~50 px a 220: ya no se le echa encima.
+
+### Las trazadoras se acaban en el blanco, no cuando se les acaba el alcance
+Volaban 420 px fijos. Un tiro abierto a 273 px seguía **150 px más allá del tanque**: balas prometiendo impactos imposibles muy por detrás de lo que se estaba ametrallando.
+
+El trazo ahora recibe en `launch()` la distancia real de tiro, que le da el arma (`WeaponSystem.get_firing_distance()`). Eso además mata un duplicado que ya escocía: el alcance del cañón estaba escrito en el `.tres` **y** en `Tracer.range_px` — el mismo vicio que `attack_speed`, dos sitios para el mismo número.
+
+Y en los últimos 90 px el trazo **se consume**: recorre al revés los mismos frames cortos con los que salió del arma. Con `reach_spread` (±12%) unas se pasan y otras se quedan cortas, que es lo que tiene que pasar en una ráfaga — sin eso la línea de fuego parece una regla. Medido: se pasan 22 px de media, 44 la peor.
+
+### Una tira de dibujos no siempre es una animación
+`Tracer_16x64.png` estaba montado como animación seguida de 8 frames a 20 fps. Son 0,35 s formándose, que a 900 px/s son **315 px de los 360**: la bala se pasaba el 87% del viaje saliendo del arma y el trazo de verdad sólo aparecía los últimos 45 px, justo antes de borrarse.
+
+No eran 8 pasos de un ciclo: eran **dos estados**. Los frames 0–6 son la bala saliendo del cañón y el 7 es la trazadora, que hace el resto del recorrido. Separados en `muzzle` y `streak`: 105 px formándose y 315 de trazo. La lección es de proceso — cuando el arte no encaja, preguntar qué representa cada frame antes de asumir que es una secuencia.
+
+### Pendiente reconocido: el daño es provisional
+Un Harrier destruye un T-14 en tres pasadas de cañón. Es demasiado fácil para lo que debería costar, y se deja así a sabiendas. El daño se definirá en serio junto con las barras de vida y las marcas de impacto, por unidad y por arma — no ajustando el `damage` del cañón hasta que quede bien.
+
 ## 2026-08-09
 
 ### El cañón: un chorro, no un lanzador

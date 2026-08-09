@@ -6,5 +6,5 @@
 [node name="Tracer" type="AnimatedSprite2D"]
 z_index = 9
 sprite_frames = ExtResource("2")
-animation = &"streak"
+animation = &"muzzle"
 script = ExtResource("1")

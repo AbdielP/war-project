@@ -64,13 +64,19 @@ animations = [{
 {
 "duration": 1.0,
 "texture": SubResource("Frame_06")
-},
+}
+],
+"loop": false,
+"name": &"muzzle",
+"speed": 60.0
+}, {
+"frames": [
 {
 "duration": 1.0,
 "texture": SubResource("Frame_07")
 }
 ],
-"loop": false,
+"loop": true,
 "name": &"streak",
-"speed": 20.0
+"speed": 1.0
 }]

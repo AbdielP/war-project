@@ -38,10 +38,14 @@ class_name EffectEmitter
 @export var stop_signal: StringName = &""
 
 var _world: Node = null
+## Quien enciende y apaga esto. Se guarda porque algún efecto necesita algo más
+## que el encendido: la trazadora le pregunta al arma a qué distancia tira.
+var _source: Node = null
 
 
 func _ready() -> void:
 	set_physics_process(false)
+	_source = get_node_or_null(source_path)
 	hook_up(self, source_path, start_signal, stop_signal, start, stop)
 
 

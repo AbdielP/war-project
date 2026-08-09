@@ -576,12 +576,15 @@ envolvente ya resuelta. Ciclo de dos fases:
 
 | Fase | Qué hace | Cuándo cambia |
 |------|----------|---------------|
-| `INGRESS` | Encara el blanco, corrigiendo el punto cada frame | Al llegar a `min_range × break_off_margin`, o al disparar (`break_off()`) |
+| `INGRESS` **sin enfilar** | Encara el blanco corrigiendo el punto cada frame | Al enfilar (pasa a comprometido), o al llegar a `min_range × break_off_margin` |
+| `INGRESS` **comprometido** | Vuela **recto**: el destino ya no se toca | Al llegar a `min_range × break_off_margin`, o al disparar (`break_off()`) |
 | `EGRESS` | Se aleja recto hacia un punto de fuga fijado al romper | Al alcanzar la distancia de reencare |
 
 | Señal | Cuándo |
 |-------|--------|
 | `target_lost` | El objetivo dejó de ser válido (murió). Se apaga a sí mismo **antes** de emitirla, para que quien escuche pueda darle otra orden al avión sin que este nodo se la pise en el frame siguiente |
+| `attack_run_started` | Enfiló y se lanza: empieza la pasada recta. **Única ventana en la que tiene sentido tirar** |
+| `attack_run_ended` | Se acabó la pasada (rompió, perdió el blanco o le quitaron la orden). Lo que venga después es maniobra, no ataque |
 
 | Export | Default | Uso |
 |--------|---------|-----|
@@ -589,8 +592,34 @@ envolvente ya resuelta. Ciclo de dos fases:
 | `reengage_fraction` | 0.85 | Fracción del alcance máximo a la que vuelve a encarar |
 | `separation_gain` | 1.15 | Separación mínima al romper, relativa a **dónde** rompió |
 | `egress_overshoot` | 1.3 | Cuánto más allá del reencare apunta el punto de fuga |
-| `turn_around_margin` | 3.0 | Separación mínima antes de reencarar, **en radios de giro del avión** |
+| `turn_around_margin` | 4.5 | Separación mínima antes de reencarar, **en radios de giro del avión** |
+| `aim_tolerance_deg` | 6.0 | Desvío máximo del morro para dar la pasada por enfilada |
+| `strafe_overrun` | 600.0 | Cuánto más allá del blanco vuela la pasada comprometida |
 | `pilot_path` | `../PlaneController` | |
+
+**La pasada se compromete y deja de corregir.** Mientras encara, el nodo va llamando a
+`update_target(blanco)` cada frame. En cuanto el morro entra en `aim_tolerance_deg` **y**
+ya está dentro del alcance, `_commit()` cambia el destino por un punto a
+`distancia + strafe_overrun` en la línea actual avión→blanco, y **no se vuelve a tocar**.
+El avión atraviesa el objetivo y sigue, que es lo que hace un avión ametrallando.
+
+Corregir frame a frame hasta el final era lo que hacía que el avión culebrease encima del
+blanco: cada corrección movía el morro, el blanco entraba y salía del cono de tiro, y la
+"pasada" salía a tirones. Medido antes y después, con el morro tomado como desvío al
+blanco durante la ráfaga:
+
+| | pasada 1 | pasada 2 | pasada 3 |
+|---|---|---|---|
+| corrigiendo | 54 daño | 18 | 10 |
+| comprometido | 37.7 (morro ±0.0°) | 34.5 (−2.7°/+0.9°) | 27.8 (−0.9°/+2.8°) |
+
+Menos daño de golpe en la primera, pero las tres pasadas abren fuego en el borde del
+alcance (~418 px) y el morro se mueve **menos de 3°** en toda la ráfaga. El tanque muere
+en 3 pasadas en vez de estancarse.
+
+**El punto de la pasada va lejos, no sobre el blanco.** Puesto encima, el avión intentaría
+llegar exactamente ahí y acabaría dando vueltas sobre el objetivo — el mismo problema del
+circuito de espera, y por el mismo motivo (`arrive_radius` y el radio de giro).
 
 **El reencare tiene suelo, y es la misma lección que el circuito de espera.**
 `_reengage_distance()` sale del alcance del arma, pero nunca baja de
@@ -601,14 +630,23 @@ de giro de 130. Llegaba torcido a cada pasada: medido, la primera quitaba 54 y l
 siguientes de 1 a 4. Con el suelo puesto: 54, 39, 6 y muerto.
 
 Con un arma de largo alcance el suelo no se nota (el Maverick reencara a 850 y el suelo
-son 390), así que sólo actúa donde hace falta. Una distancia fija que no sabe nada del
+son 585), así que sólo actúa donde hace falta. Una distancia fija que no sabe nada del
 viraje del avión se rompe en cuanto el viraje cambia.
+
+**Subió de 3.0 a 4.5 al llegar la pasada comprometida**, y por una razón que sólo se ve
+midiendo: el avión se estaba **alineando dentro del alcance del arma**. Reencaraba a
+390 px, llegaba de la vuelta todavía torcido y no enfilaba hasta ~300 px — con la ruptura
+en 264, le quedaban **36 px de ventana de fuego**. Con 585 px de separación llega enfilado
+de sobra y abre fuego en el borde de la envolvente, que es donde toca. La separación no
+sólo tiene que dar para girar: tiene que dar para girar **y salir apuntando**.
 
 **API:** `engage(target, min_range, max_range)`, `set_envelope(min, max)`, `break_off()`, `stop()`.
 
 `engage()` y cada reencare usan `set_target()` del piloto (destino nuevo, replantea el
-viraje desde cero); dentro de INGRESS se corrige con `update_target()` sin soltar el
-compromiso, igual que `OrbitBehavior` con su punto.
+viraje desde cero); mientras encara se corrige con `update_target()` sin soltar el
+compromiso, igual que `OrbitBehavior` con su punto. `_commit()` también usa
+`update_target()`: el rumbo ya es prácticamente el de la pasada, y replantear el viraje
+desde cero justo al enfilar sería pegar un tirón en el peor momento posible.
 
 **El gas es una consecuencia de la fase, no un ajuste.** `_set_throttle()` suelta gas en
 un único caso — INGRESS y ya dentro del alcance del arma —, que es cuando hay que
@@ -660,12 +698,14 @@ Mk-82 y GBU-54 `Pickle`. Vacío = el parte sólo dice el nombre.
 `get_short_name()` cae al nombre largo si el corto está vacío.
 `can_engage_domain(domain)` e `in_range(distance)` responden las dos preguntas que hace
 `WeaponSystem` antes de disparar. El cañón (`gau12_cannon.tres`) es un `WeaponType` más,
-sin icono ni `projectile_scene`: no cuelga de ninguna estación y aún no dispara nada.
+sin icono ni `projectile_scene`: no cuelga de ninguna estación y no instancia nada al
+disparar — es `SUSTAINED` y reparte el daño por geometría.
 
 **Las cifras de combate están aquí y las de vuelo en la escena del proyectil.** Así la
 misma escena de misil sirve para dos armas con pegada distinta, y la cifra que se
 enseñaría en el hangar es exactamente la que se aplica. Valores del AGM-65: superficie,
-300–1000 px, arco 25°, daño 120, radio 20, de uno en uno, recarga 1,5 s.
+300–1000 px, arco 25°, daño 120, radio 20, de uno en uno, recarga 1,5 s. Del GAU-12: todos
+los dominios, 220–420 px, arco 10°, daño 0,62 por bala × 60 balas/s, munición ilimitada.
 
 **`WeaponMount`** (`weapon_mount.gd`, `extends RefCounted`) — un tipo de arma sobre un
 grupo de estaciones simétricas. `weapon: WeaponType`, `stations: PackedStringArray`
@@ -881,6 +921,11 @@ es "el mundo", parir allí y encenderse/apagarse. **Lo único que hereda cada su
 cañón cuelgan del avión pero los enciende su `WeaponSystem`. Alternativa descartada: que el
 avión reemitiera las señales — un salto de más para nada.
 
+La fuente se guarda en `_source` además de engancharse, porque **algún efecto necesita algo
+más que el encendido**: `TracerStream` le pregunta a qué distancia está tirando para que
+sus trazos no se pasen del blanco. Se pregunta con `has_method()`, nunca dando por hecho
+que la fuente sea un `WeaponSystem`.
+
 **`_emit_heading()`, y el bug que lo trajo.** El rumbo de quien emite **no** es la rotación
 de su nodo: el arte del avión apunta a +Y, así que su rotación lleva −90 de desfase. Usarla
 mandaba las trazadoras perpendiculares al morro. Ahora se pregunta `get_facing()`, que es
@@ -979,27 +1024,59 @@ parase en seco el humo dejaría de salir pero la ráfaga no.
 una, que es lo que es una trazadora. El `while` del reparto suelta más de una en el mismo
 frame si hace falta, así que la cadencia no queda limitada por los fps.
 
+**Le pregunta al arma hasta dónde tiene que llegar** (`_reach()` → `get_firing_distance()`
+del `_source`), y se lo pasa a cada trazo en `launch()`. El alcance del cañón ya está
+escrito en el `WeaponType`; repetirlo aquí sería el mismo número en dos sitios, que es como
+se acaba teniendo dos verdades distintas. Se pregunta con `has_method()` y no se da por
+hecho: esto se cuelga de lo que sea que dispare, y no todo lo que dispara es un
+`WeaponSystem`.
+
 #### `Tracer` — `tracer.gd`
 ```
 extends AnimatedSprite2D   class_name Tracer
 ```
 Un trazo. **No es una bala: no hace daño y no comprueba nada.** El daño lo reparte el arma.
-Nace en la boca, sale recto y se borra por lo que ocurra antes — agotar `range_px` o
-terminar el dibujo.
+
+**Tres tiempos, todos de la misma tira de 8 dibujos** (`Tracer_16x64.png`), que es como
+está pensado el arte: los frames 0–6 son una bala corta que se va alargando, y el 7 es la
+trazadora entera.
+
+| Tiempo | Animación | Frames | Cuánto dura |
+|--------|-----------|--------|-------------|
+| Sale del arma | `muzzle` (60 fps, sin bucle) | 0→6 | los primeros ~105 px |
+| Vuela | `streak` (en bucle) | sólo el 7 | el grueso del camino |
+| Se consume | `muzzle` a mano, **al revés** | 6→0 | los últimos `burn_out_px` |
 
 | Exportado | Hoy | Nota |
 |-----------|-----|------|
 | `speed` | 900 | muy por encima del avión, o se quedaría pegado al morro |
-| `range_px` | 360 | ajustado al alcance del cañón: un trazo que sigue más allá promete un impacto que no va a pasar |
+| `range_px` | 420 | **sólo el respaldo**: lo normal es que el arma le pase la distancia real al blanco |
+| `reach_spread` | 0.12 | ±% del recorrido de cada trazo. Sin esto la ráfaga entera parece una regla |
+| `burn_out_px` | 90 | en cuántos px se consume al final |
 | `sprite_offset_deg` | −90 | el trazo está dibujado apuntando a +Y |
+
+**El trazo muere donde está el blanco, no donde se le acaba el alcance.** `launch(heading,
+reach)` recibe la distancia al objetivo en el momento del disparo. Volando 420 px fijos, un
+tiro abierto a 273 px seguía **150 px más allá del tanque**: balas prometiendo impactos
+imposibles muy por detrás de lo que se está ametrallando. Medido con el alcance real y la
+dispersión puestos: se pasan **22 px de media, 44 la peor**, y aproximadamente la mitad se
+queda corta — que es lo que tiene que pasar.
+
+**El consumo final se maneja por distancia, no reproduciendo la animación al revés.** Lo
+que manda es lo que queda de recorrido, no un reloj: así el trazo se acaba al ritmo al que
+llega, aunque vaya más rápido o más lento.
 
 **`launch()` va aparte de `_ready()`**, y no es un capricho: el nodo entra en el árbol antes
 de que se le coloque, así que en `_ready()` todavía no sabe hacia dónde mira — leerlo ahí
 mandaba todos los trazos hacia +X y de lado. Es lo mismo que hace `Projectile.launch()`:
 nacer y salir disparado son dos momentos distintos.
 
-Los 8 fotogramas a 20 fps duran 0,4 s, que a 900 px/s son justo los 360 px de alcance: el
-dibujo y el recorrido se acaban a la vez.
+**La tira estuvo mal montada al principio**, y merece la pena por lo poco evidente que era:
+los 8 frames iban como una animación seguida a 20 fps. Eso son 0,35 s de "formándose", que
+a 900 px/s son **315 px de los 360** — la bala se pasaba el 87% del viaje saliendo del arma
+y el trazo de verdad sólo aparecía los últimos 45 px, justo antes de borrarse. Con los dos
+tiempos separados es al revés: 105 px formándose y 315 de trazo. Una tira de dibujos no
+siempre es una animación; a veces son dos estados y hay que preguntarle al que la dibujó.
 
 #### `SmokePuff` — `smoke_puff.gd`
 ```
@@ -1159,9 +1236,22 @@ decide a quién se ataca (eso es la orden, y vive en `Unit`) ni cómo vuela lo q
 | `can_fire_at(target)` | Arma válida contra ese dominio, munición, distancia y ángulo |
 | `time_to_impact()` | La primera de sus armas en llegar, −1 si no tiene nada volando |
 | `set_active(bool)` | Encender/apagar. Arranca encendido. Apagar suelta el gatillo |
+| `set_cleared_to_fire(bool)` | Permiso de tiro sin apagar el armamento. Arranca en `true`. Quitarlo suelta el gatillo |
+| `get_firing_distance()` | A qué distancia se está tirando, 0 si no hay blanco. Lo usan los efectos que necesitan saber dónde **acaba** el tiro |
 | `fired(weapon)` | Señal. La escucha el vuelo para romper el ataque |
 | `firing_started` / `firing_stopped` | Señales. Las escuchan los efectos del cañón |
 | `rack_path` | Export, `../Hardpoints` |
+
+**Apuntar y poder tirar son cosas distintas.** `set_cleared_to_fire()` es lo que las
+separa. Un `WeaponSystem` suelto dispara siempre que las condiciones se den — un tanque no
+le pide permiso a nadie —, pero el avión sólo tiene permiso **dentro de la pasada**
+(`AttackRunBehavior.attack_run_started` / `attack_run_ended`).
+
+Sin eso, en cuanto rompía y se iba virando el morro le barría el paisaje y cruzaba el
+blanco de refilón una y otra vez; cada cruce cumplía las condiciones y salía una ráfaga.
+Visto desde fuera, el avión parecía **bailar alrededor del objetivo disparando a todos
+lados** en vez de ametrallarlo. El permiso es de todo el armamento, no sólo del cañón: un
+misil tampoco debe salir a mitad de un viraje.
 
 **No dispara mientras tenga algo suyo en el aire.** De ahí sale solo el "si no muere,
 lanza el otro": se lanza, se espera a que explote, y si el blanco sigue vivo sale el
@@ -1261,6 +1351,13 @@ barco. Lo enciende `start_flight()`.
 **Disparar rompe el ataque:** `weapons.fired` → `attack.break_off()`. Y
 `active_weapon_changed` → `attack.set_envelope(...)`, porque cambiar de arma en pleno
 ataque cambia a qué distancia hay que volar.
+
+**Sólo se tira dentro de la pasada:** `attack.attack_run_started` / `attack_run_ended` →
+`weapons.set_cleared_to_fire(true/false)`. Y `receive_attack_order()` lo pone en `false` de
+entrada: **primero se enfila, el permiso llega con la pasada**. Al revés, el avión abriría
+fuego mientras todavía busca la línea de ataque. Aquí es donde se cierra el reparto: el
+comportamiento sabe *cuándo hay pasada*, el `WeaponSystem` sabe *si desde aquí se acierta*,
+y el Harrier es el único que conoce a los dos.
 
 **`_on_target_lost()`** (conectado a `attack.target_lost`): el objetivo murió en pleno
 vuelo. El avión no puede pararse en seco, así que orbita **donde llegó**
@@ -2091,14 +2188,17 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Circuito de espera que rodea al barco y navega con él**, con suelo automático ligado al radio de giro para que no se pueda pedir un círculo imposible de volar
 - [x] **Dos regímenes de velocidad con un interruptor** (`cruising`): mínima en despegue, espera y alineación de tiro; máxima sólo con una orden en curso. Sin velocidades de avión repartidas por otros scripts
 - [x] **Cañón (GAU-12) completo:** fuego sostenido (`WeaponType.FireMode.SUSTAINED`) con el daño saliendo de la geometría —distancia y puntería—, **sin un nodo por bala**; histéresis en el gatillo; fogonazo de dos tiempos, humo de boca y trazadoras, los tres enganchados al `WeaponSystem` y sin conocerse entre ellos
-- [x] **Suelo de separación en las pasadas** (`turn_around_margin`): el avión se aleja lo bastante para darse la vuelta y llegar alineado a la pasada siguiente, en vez de orbitar el blanco picoteando
+- [x] **Suelo de separación en las pasadas** (`turn_around_margin`): el avión se aleja lo bastante para darse la vuelta **y salir apuntando**, en vez de orbitar el blanco picoteando o gastarse la envolvente alineándose
+- [x] **Pasada de ametrallamiento recta:** el avión se compromete al enfilar y deja de corregir hasta que rompe, atravesando el blanco. Medido, el morro se mueve **menos de 3°** durante toda la ráfaga
+- [x] **Sólo se dispara dentro de la pasada** (`set_cleared_to_fire`): al romper hay alto el fuego, así que el morro puede barrer el blanco mientras vira sin que salga un tiro
+- [x] **Trazadoras que se acaban en el blanco:** el trazo recibe del arma la distancia real de tiro, lleva dispersión propia y se consume con los frames cortos al revés en vez de seguir de largo
 
 ### Pendiente
 - [ ] Proyectil balístico para bombas tontas (Mk-82). La GBU-54 planea y guía; una bomba sin guía es otro vuelo. El mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`
 - [ ] Alabeo e inclinación del avión al virar y al cambiar de régimen: el enganche existe (`bank_sprite_path`, `AnimatedSprite2D` de 5 frames), falta el arte
 - [ ] Marcas de impacto en el terreno y barras de vida. Con eso se afinan las ráfagas del cañón para que varíen y no dejen siempre el mismo patrón
-- [ ] El avión **sobrevuela el blanco a ~50 px** en cada pasada de cañón: rompe a 180 como debe, pero con radio de giro 130 no puede evitar pasar por encima. Honesto para un ametrallamiento; si molesta, subir el `min_range` del cañón
-- [ ] **Revisar en el editor** los efectos del cañón: verificados por medición (fotogramas, encadenado, siembra, rumbo de los trazos, curvatura del rastro y las tres pasadas hasta matar), pero la lectura visual final no
+- [ ] **Definir el daño en serio.** Los números de hoy son de trabajo: un Harrier destruye un T-14 en tres pasadas de cañón, que es demasiado fácil para lo que debería costar. Va junto con las barras de vida, y hay que decidirlo por unidad y por arma, no ajustando el `damage` del cañón hasta que "quede bien"
+- [ ] **Revisar en el editor** los efectos del cañón: verificados por medición (fotogramas, encadenado, siembra, rumbo de los trazos, dónde muere cada trazo, curvatura del rastro y las tres pasadas hasta matar), pero la lectura visual final no
 - [ ] Efectos: explosión y caída. Los enganches existen (`detonated`), falta el arte. Fuego, humo y sombra ya están — `MissileExhaust`, `SmokeTrail` y `MissileShadow` sirven de patrón
 - [ ] Redibujar la sombra del misil ovalada y de 3 px de ancho: hoy mide lo mismo que el cuerpo y se funden en los últimos frames (ver `MissileShadow`)
 - [ ] Sombras del resto de unidades. Antes de dibujarlas, releer el patrón de sombras: la convención actual es incorrecta a propósito y cambiarla obliga a rehacer el arte de todas a la vez

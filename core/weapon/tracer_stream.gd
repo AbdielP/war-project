@@ -34,11 +34,25 @@ func _physics_process(delta: float) -> void:
 	# más de uno en el mismo frame, y el resto se arrastra al siguiente en vez
 	# de perderse — así la cadencia real no queda limitada por los fps.
 	var heading := _emit_heading()
+	var reach := _reach()
 	while _until_next <= 0.0:
 		var tracer := _spawn(global_position, heading) as Tracer
 		if tracer != null:
 			# El rumbo se le da aparte de colocarlo: cuando entra en el árbol
 			# todavía no está puesto, y leerlo de su rotación en `_ready()` lo
 			# mandaría siempre hacia +X.
-			tracer.launch(heading)
+			tracer.launch(heading, reach)
 		_until_next += interval
+
+
+## Hasta dónde tienen que llegar los trazos de este momento: donde esté el
+## blanco. Se le pregunta al arma en vez de llevarlo apuntado aquí — el alcance
+## del cañón ya está escrito en el arma y repetirlo sería tener el mismo número
+## en dos sitios, que es como se acaba con dos verdades distintas.
+##
+## Se pregunta por si acaso y no se da por hecho: esto se cuelga de lo que sea
+## que dispare, y no todo lo que dispara es un `WeaponSystem`.
+func _reach() -> float:
+	if _source != null and _source.has_method(&"get_firing_distance"):
+		return _source.get_firing_distance()
+	return 0.0

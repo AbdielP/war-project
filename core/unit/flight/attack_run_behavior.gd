@@ -27,6 +27,12 @@ class_name AttackRunBehavior
 ## aquí ya se apagó solo.
 signal target_lost
 
+## Enfiló el blanco y empieza la pasada: de aquí hasta que rompa vuela RECTO.
+## Es la única ventana en la que tiene sentido tirar.
+signal attack_run_started
+## Se acabó la pasada. Todo lo que venga después es maniobra, no ataque.
+signal attack_run_ended
+
 enum Phase { INGRESS, EGRESS }
 
 @export_group("Ataque")
@@ -51,7 +57,19 @@ enum Phase { INGRESS, EGRESS }
 ## Es el sitio que necesita para invertir el rumbo y llegar a la pasada
 ## siguiente ya alineado, en vez de entrar torcido. Por debajo de 2 no le da ni
 ## para el semicírculo.
-@export var turn_around_margin: float = 3.0
+@export var turn_around_margin: float = 4.5
+
+@export_subgroup("Pasada")
+## Cuánto puede desviarse el morro del blanco, en grados, para dar la pasada por
+## enfilada. Es el momento en que el avión deja de corregir y se lanza recto:
+## demasiado grande entra torcido, demasiado pequeño no se decide nunca y llega
+## al final de la envolvente corrigiendo.
+@export var aim_tolerance_deg: float = 6.0
+## Cuánto más allá del blanco vuela la pasada. El destino se pone lejos, pasado
+## el objetivo, porque una pasada de ametrallamiento no termina EN el blanco: lo
+## atraviesa. Puesto en el blanco, el avión intentaría llegar exactamente ahí y
+## acabaría dando vueltas encima.
+@export var strafe_overrun: float = 600.0
 
 @export_group("Enlace")
 @export var pilot_path: NodePath = ^"../PlaneController"
@@ -64,6 +82,8 @@ var _min_range: float = 0.0
 var _max_range: float = 0.0
 var _phase: Phase = Phase.INGRESS
 var _egress_point: Vector2 = Vector2.ZERO
+## ¿Ya está enfilado y lanzado? Mientras lo esté no se toca el destino.
+var _committed := false
 ## Distancia a la que termina la separación actual. Se fija al romper porque
 ## depende de dónde se rompió, no sólo del alcance del arma.
 var _reengage_at: float = 0.0
@@ -100,9 +120,20 @@ func break_off() -> void:
 		_start_egress()
 
 
+## Cierra la pasada si había una abierta. Aquí es donde se corta el fuego: a
+## partir de este momento el avión maniobra, y lo que cruce el morro lo cruza de
+## refilón.
+func _end_run() -> void:
+	if not _committed:
+		return
+	_committed = false
+	attack_run_ended.emit()
+
+
 func stop() -> void:
 	target = null
 	set_process(false)
+	_end_run()
 	if _pilot != null:
 		# Suelta el gas al soltar el mando: si quien coja el avión ahora quiere
 		# que corra, ya lo pedirá. Dejarlo acelerado sería dejar puesta una
@@ -116,6 +147,7 @@ func _process(_delta: float) -> void:
 		# avión sin que este nodo se la pise en el frame siguiente.
 		target = null
 		set_process(false)
+		_end_run()
 		_pilot.set_cruising(false)
 		target_lost.emit()
 		return
@@ -123,8 +155,14 @@ func _process(_delta: float) -> void:
 	var distance := _body.global_position.distance_to(target.global_position)
 	match _phase:
 		Phase.INGRESS:
-			# Corrige el punto sin replantear el viraje ya comprometido.
-			_pilot.update_target(target.global_position)
+			# Sólo se corrige ANTES de enfilar. Una vez lanzado, el destino se
+			# queda quieto: corregir frame a frame es lo que hacía que el avión
+			# fuese culebreando encima del blanco en vez de pasarle por encima
+			# en línea recta, y con el morro moviéndose no hay ráfaga que valga.
+			if not _committed:
+				_pilot.update_target(target.global_position)
+				if distance <= _max_range and _on_the_nose():
+					_commit(distance)
 			if distance <= _break_off_distance():
 				_start_egress()
 		Phase.EGRESS:
@@ -136,13 +174,37 @@ func _process(_delta: float) -> void:
 
 func _start_ingress() -> void:
 	_phase = Phase.INGRESS
+	_committed = false
 	# `set_target` y no `update_target`: es un destino nuevo, y el avión tiene
 	# que replantear hacia qué lado vira desde cero.
 	_pilot.set_target(target.global_position)
 
 
+## ¿Apunta ya al blanco? Es la condición para lanzarse: no basta con estar a
+## distancia, hay que estar mirándolo.
+func _on_the_nose() -> bool:
+	var to_target := (target.global_position - _body.global_position).angle()
+	return absf(angle_difference(_pilot.heading, to_target)) \
+		<= deg_to_rad(aim_tolerance_deg)
+
+
+## Se lanza a la pasada. El destino deja de ser el blanco y pasa a ser un punto
+## MUY por detrás de él, en la misma línea: así el avión vuela recto, atraviesa
+## el objetivo y sigue, que es lo que hace un avión ametrallando.
+##
+## `update_target` y no `set_target`: el rumbo ya es prácticamente ese, y
+## replantear el viraje desde cero justo al enfilar sería pegar un tirón en el
+## peor momento.
+func _commit(distance: float) -> void:
+	_committed = true
+	var axis := (target.global_position - _body.global_position).normalized()
+	_pilot.update_target(_body.global_position + axis * (distance + strafe_overrun))
+	attack_run_started.emit()
+
+
 func _start_egress() -> void:
 	_phase = Phase.EGRESS
+	_end_run()
 	# Romper cerca del alcance mínimo y romper en el borde del máximo son la
 	# misma maniobra, pero desde sitios muy distintos: en el primer caso basta
 	# con recuperar la distancia de tiro, en el segundo hay que separarse de

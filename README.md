@@ -72,6 +72,11 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Velocidad del fogonazo y reparto arranque/ráfaga | `core/weapon/cannon_flash_frames.tres` (`start` = frames 0-5, `sustain` = 6-10) |
 | Sitio y densidad del humo del cañón | nodo `CannonSmoke` de `av8b_harrier.tscn` → `position` / `spacing_px` |
 | Largo del humo del cañón | `core/weapon/cannon_smoke_frames.tres` (hoy 0,67 s ≈ 45 px) |
+| Letalidad del cañón | `core/weapon/gau12_cannon.tres` → `damage` (por bala) × `rounds_per_second` |
+| Cuánto pierde el cañón con la distancia | mismo `.tres` → `long_range_accuracy` (0,25 = en el borde entra 1 de cada 4) |
+| Cuánto cuesta soltar el gatillo | mismo `.tres` → `arc_hysteresis` (abre a 10°, no suelta hasta 20°) |
+| Densidad y velocidad de las trazadoras | nodo `CannonTracers` → `tracers_per_second`; `core/weapon/tracer.tscn` → `speed` / `range_px` |
+| Separación mínima antes de rehacer una pasada | nodo `AttackRun` → `turn_around_margin`, en radios de giro del avión |
 | Altura de la sombra del misil (diagonal) | nodo `Shadow` de `agm65_missile.tscn` → `altitude_drop_px` |
 | Cuándo empieza a bajar la sombra | mismo nodo → `descent_px` |
 | Vuelo de la bomba planeadora (caída, planeo, espoleta) | `core/weapon/gbu54_bomb.tscn` (nodo raíz) |

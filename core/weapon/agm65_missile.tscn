@@ -28,7 +28,9 @@ script = ExtResource("3")
 [node name="SmokeTrail" type="Node2D" parent="."]
 position = Vector2(0, -12)
 script = ExtResource("5")
-puff_scene = ExtResource("6")
+spawn_scene = ExtResource("6")
+start_signal = &"motor_ignited"
+stop_signal = &"fuel_spent"
 
 [node name="Shadow" type="AnimatedSprite2D" parent="."]
 z_index = -2

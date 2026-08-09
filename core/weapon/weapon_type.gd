@@ -10,6 +10,21 @@ class_name WeaponType
 ## asunto de la escena del proyectil, que tiene sus propios parámetros — así el
 ## mismo misil se puede reutilizar con otras cifras de daño y viceversa.
 
+## Cómo se dispara. No es un detalle de presentación: cambia quién hace el daño
+## y cuándo el avión rompe el ataque.
+##
+## Las firmas usan `WeaponType.FireMode` y no `FireMode` a secas, por lo mismo
+## que `UnitType.Domain`.
+enum FireMode {
+	## Suelta un proyectil que vuela solo: misiles, bombas, cohetes. El daño lo
+	## hace el proyectil al llegar.
+	LAUNCHER,
+	## Chorro continuo mientras se aguante el gatillo: cañones. No hay proyectil
+	## que instanciar — un GAU-12 son ~60 balas por segundo, y sesenta nodos por
+	## segundo no se sostienen. El daño se aplica desde el arma.
+	SUSTAINED,
+}
+
 @export var display_name: String = ""
 ## Nombre para los botones de la barra de armas. Ahí sólo caben ~6 caracteres,
 ## así que se escribe a mano en vez de recortar el nombre largo: un arma nueva
@@ -48,6 +63,7 @@ class_name WeaponType
 @export var blast_radius: float = 0.0
 
 @export_group("Lanzamiento")
+@export var fire_mode: FireMode = FireMode.LAUNCHER
 @export var projectile_scene: PackedScene
 ## Cuántas armas salen de una vez. 1 = una a una, esperando a ver si hace
 ## falta la siguiente. 0 = todas las que queden — un bombardeo suelta la
@@ -59,6 +75,25 @@ class_name WeaponType
 @export var salvo_spread: float = 0.0
 ## Segundos de espera entre andanadas.
 @export var reload_time: float = 1.0
+
+@export_group("Fuego sostenido")
+## Proyectiles por segundo. Sólo con `SUSTAINED`. Junto con `damage`, que sigue
+## siendo el daño de UN proyectil, sale lo que hace el arma por segundo — pero
+## sólo si entrasen todos, y casi nunca entran todos.
+@export var rounds_per_second: float = 60.0
+## Qué fracción de la ráfaga entra en el borde del alcance máximo. De cerca
+## entra todo; según se abre la distancia, la dispersión reparte los impactos
+## alrededor del blanco en vez de encima.
+##
+## Es lo que hace que la pasada importe y no baste con aguantar el gatillo:
+## acercarse bien encarado mata, hostigar desde lejos hace cosquillas. El fallo
+## sale de la geometría, no de una tirada.
+@export_range(0.0, 1.0, 0.05) var long_range_accuracy: float = 0.25
+## Cuánto se ensancha el cono una vez abierto fuego, para soltar el gatillo.
+## Mismo truco que el compromiso de viraje del piloto: cuesta más empezar a
+## disparar que seguir. Sin esto el blanco entra y sale del cono mientras el
+## avión corrige y la ráfaga sale a tirones.
+@export var arc_hysteresis: float = 2.0
 
 
 ## El nombre corto si lo tiene; si no, el largo — un botón sin texto no se

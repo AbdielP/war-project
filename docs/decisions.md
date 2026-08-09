@@ -2,6 +2,37 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-09
+
+### El cañón: un chorro, no un lanzador
+El GAU-12 no encajaba en la maquinaria de armas, que estaba construida para disparos discretos. Tres cosas lo bloqueaban: "no vuelvas a tirar hasta que llegue lo anterior" (un cañón no tiene nada en el aire), un nodo por disparo (~60 por segundo, inviable) y romper el ataque al disparar (con el cañón te quedas encima apretando el gatillo).
+
+**`WeaponType.fire_mode`: `LAUNCHER` o `SUSTAINED`.** Explícito y no inferido de "no tiene `projectile_scene`" — esa clase de inferencia implícita es la que nos mordió con `attack_speed`.
+
+**`fired` pasa a significar "ya hay algo en camino, deja de acercarte", y un arma sostenida nunca lo emite.** Con eso el avión sigue metiéndose y rompe por distancia. Convertir una pasada de misil en una de ametrallamiento no costó **ni una línea** en `AttackRunBehavior`.
+
+**El daño se cuenta en proyectiles, no en daño por segundo**, para que `damage` siga significando lo que hace UNA bala en vez de sobrecargar el campo. Cuántas entran lo dice la geometría: la distancia (de cerca la dispersión no ha tenido sitio para abrirse) y la puntería (fuera del cono, cero — se ve el fogonazo y no acierta nada). El fallo sale de la geometría y no de un dado, y la pasada importa: entrar cerca y encarado mata, hostigar de lejos hace cosquillas. **Ninguna bala existe como objeto**; las trazadoras son 12/s de puro adorno contra 60 balas/s reales.
+
+**Histéresis en el gatillo**, igual que el compromiso de viraje del piloto: se abre con 10° y no se suelta hasta 20°. Sin eso el blanco entra y sale del cono mientras el avión corrige y la ráfaga sale a tirones. Medido: una sola apertura por pasada.
+
+### Y el bug que sólo se vio midiendo: el avión orbitaba en vez de rehacer la pasada
+Tras la primera pasada se quedaba dando vueltas a 180 px picoteando 1 a 4 de daño. Rompía a 180 y reencaraba a 297: **117 px para invertir el rumbo con un radio de giro de 130.** Llegaba torcido a cada pasada.
+
+Es literalmente la misma lección que el suelo del circuito de espera: una distancia fija que no sabe nada del viraje del avión se rompe en cuanto el viraje cambia. `turn_around_margin` (3 radios de giro) le pone suelo al reencare. Con un arma de largo alcance no se nota — el Maverick reencara a 850 y el suelo son 390 —, así que sólo actúa donde hace falta.
+
+Contra un tanque de 100, antes: 54, 1, 4 y seguía. Después: **54, 39, 6 y muerto**, las tres abriendo a 349–350 px bien encaradas.
+
+### Un tercer efecto, y una base para no copiarlo
+El humo y las trazadoras compartían todo salvo un punto, así que eso subió a `EffectEmitter`: engancharse por señal, encontrar el mundo, parir allí. **Lo único que heredan las subclases es cuándo toca soltar la siguiente** — el humo por distancia recorrida (para que la densidad no dependa de los fps), la ráfaga por cadencia (un cañón dispara a su ritmo aunque el avión frene). El fogonazo es un sprite y no puede heredar, pero usa la misma función de enganche, que es estática justo por eso.
+
+`source_path` porque quien manda no siempre es de quien cuelgas: los efectos cuelgan del avión y los enciende su `WeaponSystem`. Descartado que el avión reemitiera — un salto de más para nada.
+
+**Segundo bug, este reportado por el usuario: los trazos salían de lado.** La causa es vieja conocida: la rotación del nodo del avión **no es su rumbo**, lleva −90 de desfase porque el arte apunta a +Y. Heredarla mandaba las trazadoras perpendiculares al morro. Ahora se pregunta `get_facing()`, que es lo que ya hacía el armamento por este mismo motivo, y el arreglo vive en `EffectEmitter` para que no vuelva a pasar. Medido: con el avión a 40°, desvío de 0°.
+
+Y un tercero por el camino: `Tracer` leía su rumbo en `_ready()`, pero entra en el árbol antes de que se le coloque — salían todos hacia +X. Ahora tiene `launch()` aparte, igual que `Projectile`: nacer y salir disparado son dos momentos distintos.
+
+Pendiente de mirar en el editor. Y anotado: el avión sobrevuela el blanco a ~50 px en cada pasada, consecuencia directa del radio de giro 130 contra una rotura a 180. Honesto para un ametrallamiento, pero es lo contrario de lo que se buscó con las bombas.
+
 ## 2026-08-08 (3)
 
 ### Los efectos del cañón: un fogonazo de dos tiempos y un humo que ya existía

@@ -13,6 +13,8 @@
 [ext_resource type="SpriteFrames" path="res://core/weapon/cannon_flash_frames.tres" id="11"]
 [ext_resource type="Script" uid="uid://1do5br64c6er" path="res://core/weapon/smoke_trail.gd" id="12"]
 [ext_resource type="PackedScene" path="res://core/weapon/cannon_smoke_puff.tscn" id="13"]
+[ext_resource type="Script" uid="uid://bsjekc6u5xhjv" path="res://core/weapon/tracer_stream.gd" id="14"]
+[ext_resource type="PackedScene" path="res://core/weapon/tracer.tscn" id="15"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(28, 32)
@@ -86,11 +88,22 @@ position = Vector2(8, 13)
 sprite_frames = ExtResource("11")
 animation = &"start"
 script = ExtResource("10")
+source_path = NodePath("../WeaponSystem")
 
 [node name="CannonSmoke" type="Node2D" parent="." index="9" unique_id=1787461108]
 position = Vector2(12, -2)
 script = ExtResource("12")
-puff_scene = ExtResource("13")
+spawn_scene = ExtResource("13")
 spacing_px = 5.0
-start_signal = &"cannon_firing_started"
-stop_signal = &"cannon_firing_stopped"
+source_path = NodePath("../WeaponSystem")
+start_signal = &"firing_started"
+stop_signal = &"firing_stopped"
+
+[node name="CannonTracers" type="Node2D" parent="." index="10" unique_id=1787461109]
+position = Vector2(8, 13)
+script = ExtResource("14")
+spawn_scene = ExtResource("15")
+tracers_per_second = 12.0
+source_path = NodePath("../WeaponSystem")
+start_signal = &"firing_started"
+stop_signal = &"firing_stopped"

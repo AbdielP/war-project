@@ -47,6 +47,11 @@ enum Phase { INGRESS, EGRESS }
 ## fuga se fija al romper y no se recalcula: así se aleja recto en vez de ir
 ## girando mientras el blanco se mueve.
 @export var egress_overshoot: float = 1.3
+## Separación mínima antes de volver a encarar, en radios de giro del avión.
+## Es el sitio que necesita para invertir el rumbo y llegar a la pasada
+## siguiente ya alineado, en vez de entrar torcido. Por debajo de 2 no le da ni
+## para el semicírculo.
+@export var turn_around_margin: float = 3.0
 
 @export_group("Enlace")
 @export var pilot_path: NodePath = ^"../PlaneController"
@@ -177,5 +182,19 @@ func _break_off_distance() -> float:
 	return _min_range * break_off_margin
 
 
+## A qué distancia vuelve a encarar. Sale del alcance del arma, pero con un
+## suelo: **hay que separarse lo bastante para poder darse la vuelta**.
+##
+## Sin ese suelo, un arma de corto alcance deja al avión atrapado. El cañón tira
+## entre 150 y 350 px: rompe a 180, vuelve a encarar a 297 y sólo tiene 117 px
+## para invertir el rumbo — con un radio de giro de 130 no le da, así que llega
+## a la pasada siguiente ya torcido y rozando el blanco en vez de ametrallarlo.
+## Se ve clarísimo midiendo: la primera pasada quita 54 y las siguientes 1 a 4.
+##
+## Es la misma lección que el suelo del circuito de espera: una distancia fija
+## que no sabe nada del viraje del avión se rompe en cuanto el viraje cambia.
+## Con un arma de largo alcance el suelo no se nota — el Maverick reencara a
+## 850 px y el suelo son 390 —, así que sólo actúa donde hace falta.
 func _reengage_distance() -> float:
-	return _max_range * reengage_fraction if _max_range > 0.0 else 0.0
+	var by_weapon := _max_range * reengage_fraction if _max_range > 0.0 else 0.0
+	return maxf(by_weapon, turn_around_margin * _pilot.min_turn_radius())

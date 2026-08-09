@@ -1,8 +1,9 @@
-extends Node2D
+extends EffectEmitter
 class_name SmokeTrail
 
-## Rastro de humo. No dibuja nada: va soltando bocanadas sueltas por el mundo
-## mientras esté encendido, y son ellas las que forman la cola.
+## Rastro de humo, de cualquier cosa que eche humo: el motor de un misil, la
+## boca de un cañón. No dibuja nada — va soltando bocanadas y son ellas las que
+## forman la cola.
 ##
 ## Cada bocanada se queda donde nació con el rumbo que llevaba quien la escupió
 ## en ese instante. Por eso el rastro se dobla solo en las curvas: no hay una
@@ -10,61 +11,23 @@ class_name SmokeTrail
 ## apuntando a donde se iba entonces. Vale igual para un misil virando que para
 ## un avión metido en un giro con el cañón abierto.
 ##
-## Sirve para cualquier cosa que eche humo porque no sabe qué la enciende: se le
-## dicen los nombres de las dos señales del padre y él se engancha. El motor de
-## un misil (`motor_ignited` / `fuel_spent`) y un cañón disparando son el mismo
-## problema — algo empieza, algo termina, y mientras tanto sale humo.
-##
-## Lo que cambia de un humo a otro es el dibujo y la densidad, y las dos son
-## datos: `puff_scene` y `spacing_px`. Nada de esto se hereda ni se copia.
+## Lo suyo, frente a los otros emisores, es que **siembra por distancia y no por
+## tiempo**: así la densidad del rastro no depende de los fps ni de lo rápido
+## que se vaya. Un misil a 300 px/s y un avión a 90 dejan la misma cola de
+## espesa; lo único que cambia es lo deprisa que la van dejando.
 
-## Qué bocanada se siembra. Es lo que distingue el humo de un misil del de un
-## cañón: la misma mecánica con otro dibujo y otra duración.
-@export var puff_scene: PackedScene
 ## Cada cuántos píxeles recorridos sale una bocanada. Más bajo = rastro más
 ## denso y más nodos vivos. Conviene tenerlo por debajo del ancho de la bocanada
 ## recién nacida, o el rastro se lee a trozos en vez de continuo.
 @export var spacing_px: float = 4.0
 
-@export_group("Enganche")
-## Señal del padre que enciende el humo. Vacío = no se engancha a nada y hay que
-## llamar a `start()` a mano.
-@export var start_signal: StringName = &"motor_ignited"
-## Señal del padre que lo apaga.
-@export var stop_signal: StringName = &"fuel_spent"
-
-var _world: Node = null
 var _last_spawn: Vector2 = Vector2.ZERO
 var _last_rotation: float = 0.0
 
 
-func _ready() -> void:
-	set_physics_process(false)
-	# Duck-typing, igual que en el resto del proyecto: quien eche humo no tiene
-	# que heredar de nada, le basta con emitir estas dos señales. Y si no las
-	# emite, tampoco pasa nada — se enciende a mano.
-	var source: Node = get_parent()
-	if start_signal != &"" and source.has_signal(start_signal):
-		source.connect(start_signal, start)
-	if stop_signal != &"" and source.has_signal(stop_signal):
-		source.connect(stop_signal, stop)
-
-
-## Empieza a echar humo desde donde esté ahora.
-func start() -> void:
-	# Las bocanadas cuelgan de donde cuelga quien las echa, no de él: cuando
-	# muera, el rastro que dejó tiene que seguir deshaciéndose solo.
-	_world = get_parent().get_parent()
-	if _world == null or puff_scene == null:
-		return
+func _begin() -> void:
 	_last_spawn = global_position
 	_last_rotation = global_rotation
-	set_physics_process(true)
-
-
-## Deja de echar humo. Las bocanadas que ya salieron terminan su animación.
-func stop() -> void:
-	set_physics_process(false)
 
 
 func _physics_process(_delta: float) -> void:
@@ -85,12 +48,3 @@ func _physics_process(_delta: float) -> void:
 
 	_last_spawn = _last_spawn.lerp(here, (spacing_px * steps) / travelled)
 	_last_rotation = here_rotation
-
-
-func _spawn(at: Vector2, angle: float) -> void:
-	var puff := puff_scene.instantiate() as Node2D
-	if puff == null:
-		return
-	_world.add_child(puff)
-	puff.global_position = at
-	puff.global_rotation = angle

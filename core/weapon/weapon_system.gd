@@ -18,7 +18,18 @@ class_name WeaponSystem
 ## Acaba de soltar una andanada. Quien lleve el vuelo la usa para romper el
 ## ataque: seguir metiéndose hacia un blanco al que ya le mandaste un arma en
 ## camino no aporta nada y tira por la borda la ventaja del alcance.
+##
+## **Un arma sostenida nunca la emite**, y ahí está toda la diferencia de vuelo
+## entre pegar un tiro y hacer una pasada de ametrallamiento: con el cañón no
+## hay nada en camino que esperar, así que el avión sigue metiéndose y rompe
+## cuando la distancia le obliga, no cuando aprieta el gatillo.
 signal fired(weapon: WeaponType)
+
+## Abrió fuego sostenido. Lo escuchan los efectos — fogonazo, humo, trazadora —,
+## que no saben de armas ni de blancos: sólo de que ahora sale fuego.
+signal firing_started
+## Alto el fuego.
+signal firing_stopped
 
 @export_group("Enlace")
 @export var rack_path: NodePath = ^"../Hardpoints"
@@ -29,6 +40,8 @@ var _cooldown: float = 0.0
 ## Lo que este sistema tiene volando ahora mismo. Se vacía solo: los
 ## proyectiles se liberan al explotar.
 var _in_flight: Array[Node] = []
+## ¿Está el gatillo apretado? Sólo con armas sostenidas.
+var _firing := false
 
 
 func _ready() -> void:
@@ -41,18 +54,105 @@ func _ready() -> void:
 ## combaten lo apagan: un avión en cubierta no dispara aunque tenga la orden.
 func set_active(value: bool) -> void:
 	set_physics_process(value)
+	if not value:
+		# Apagar el armamento con el gatillo apretado dejaría el cañón
+		# escupiendo fuego para siempre: nadie va a volver a pasar por aquí.
+		_release_trigger()
 
 
 func _physics_process(delta: float) -> void:
 	_cooldown = maxf(0.0, _cooldown - delta)
 	_forget_spent_shots()
-	if _unit == null or _cooldown > 0.0 or not _in_flight.is_empty():
+	if _unit == null:
 		return
+
+	var weapon := _unit.active_weapon
 	var target := _unit.attack_target
+
+	if weapon != null and weapon.fire_mode == WeaponType.FireMode.SUSTAINED:
+		_work_the_trigger(weapon, target, delta)
+		return
+
+	# Cambió a un arma que se lanza: lo que hubiera abierto se cierra aquí, o el
+	# fogonazo se quedaría encendido al cambiar de cañón a misil disparando.
+	_release_trigger()
+
+	if _cooldown > 0.0 or not _in_flight.is_empty():
+		return
 	if not is_instance_valid(target) or not target.is_alive():
 		return
 	if can_fire_at(target):
 		_fire_salvo(target)
+
+
+## Fuego sostenido: abrir o cerrar el gatillo y, mientras esté abierto, ir
+## repartiendo el daño de la ráfaga.
+##
+## No hay andanadas ni recarga: hay un chorro que dura lo que dure la ocasión de
+## tirar. Por eso tampoco se emite `fired` — no hay nada en el aire que esperar.
+func _work_the_trigger(weapon: WeaponType, target: Unit, delta: float) -> void:
+	if not _should_hold_trigger(weapon, target):
+		_release_trigger()
+		return
+	if not _firing:
+		_firing = true
+		firing_started.emit()
+	_pour_rounds(weapon, target, delta)
+
+
+func _release_trigger() -> void:
+	if not _firing:
+		return
+	_firing = false
+	firing_stopped.emit()
+
+
+## ¿Hay ocasión de tirar ahora mismo? Igual que `can_fire_at` pero sin exigir
+## proyectil — un cañón no tiene — y con el cono ensanchado si ya se está
+## disparando, para que la ráfaga no salga a tirones.
+func _should_hold_trigger(weapon: WeaponType, target: Unit) -> bool:
+	if not is_instance_valid(target) or not target.is_alive():
+		return false
+	if not _in_parameters(weapon, target):
+		return false
+	var arc := deg_to_rad(weapon.firing_arc_deg)
+	if _firing:
+		arc *= maxf(1.0, weapon.arc_hysteresis)
+	return _off_axis(target) <= arc
+
+
+## Reparte lo que ha soltado el arma en este frame. Se cuenta en proyectiles y
+## no en "daño por segundo" para que `damage` siga significando lo de siempre:
+## lo que hace UNA bala. Cuántas de ellas entran lo dice la geometría.
+func _pour_rounds(weapon: WeaponType, target: Unit, delta: float) -> void:
+	var rounds := weapon.rounds_per_second * delta
+	var hits := rounds * _hit_fraction(weapon, target)
+	if hits > 0.0:
+		target.take_damage(weapon.damage * hits)
+
+
+## Qué fracción de la ráfaga entra, de 0 a 1. Dos cosas la bajan, y las dos son
+## la misma: cuánto se abre el cono de balas para cuando llega al blanco.
+##
+##   - La DISTANCIA. De cerca la dispersión no ha tenido sitio para abrirse y
+##     entra casi todo; en el borde del alcance el grupo es más ancho que el
+##     blanco y la mayoría pasa de largo.
+##   - La PUNTERÍA. Centrado en el morro entra todo; rozando el borde del cono
+##     de tiro, sólo pilla el rabo de la ráfaga.
+##
+## Fuera del cono da 0: se sigue viendo el fogonazo, pero no acierta nada. Eso
+## es lo que pasa de verdad cuando se aguanta el gatillo sin apuntar.
+func _hit_fraction(weapon: WeaponType, target: Unit) -> float:
+	var distance := _unit.global_position.distance_to(target.global_position)
+	var reach := clampf(
+		inverse_lerp(weapon.min_range, maxf(weapon.max_range, weapon.min_range + 1.0),
+			distance), 0.0, 1.0)
+	var by_distance := lerpf(1.0, weapon.long_range_accuracy, reach)
+
+	var arc := deg_to_rad(maxf(weapon.firing_arc_deg, 0.01))
+	var by_aim := clampf(1.0 - _off_axis(target) / arc, 0.0, 1.0)
+
+	return by_distance * by_aim
 
 
 ## Segundos que falta para que llegue lo que tiene en el aire, o -1 si no hay
@@ -81,16 +181,27 @@ func can_fire_at(target: Unit) -> bool:
 	var weapon := _unit.active_weapon
 	if weapon == null or weapon.projectile_scene == null:
 		return false
+	if not _in_parameters(weapon, target):
+		return false
+	# El armamento sale hacia adelante: hay que enfilar antes de soltarlo.
+	return _off_axis(target) <= deg_to_rad(weapon.firing_arc_deg)
+
+
+## Lo que da igual cómo se dispare: que el arma sirva contra ese medio, que
+## quede munición y que la distancia dé. Lo comparten el lanzador y el cañón,
+## que sólo se separan en el ángulo y en lo que pasa después.
+func _in_parameters(weapon: WeaponType, target: Unit) -> bool:
 	if not weapon.can_engage_domain(target.get_domain()):
 		return false
 	if not _unit.has_ammo(weapon):
 		return false
+	return weapon.in_range(_unit.global_position.distance_to(target.global_position))
+
+
+## Cuánto se sale el blanco del morro, en radianes.
+func _off_axis(target: Unit) -> float:
 	var to_target := target.global_position - _unit.global_position
-	if not weapon.in_range(to_target.length()):
-		return false
-	# El armamento sale hacia adelante: hay que enfilar antes de soltarlo.
-	var off_axis := absf(angle_difference(_unit.get_facing(), to_target.angle()))
-	return off_axis <= deg_to_rad(weapon.firing_arc_deg)
+	return absf(angle_difference(_unit.get_facing(), to_target.angle()))
 
 
 ## Suelta una andanada entera. Cuántas van es del arma: un misil antitanque

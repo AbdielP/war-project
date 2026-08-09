@@ -589,7 +589,20 @@ envolvente ya resuelta. Ciclo de dos fases:
 | `reengage_fraction` | 0.85 | Fracción del alcance máximo a la que vuelve a encarar |
 | `separation_gain` | 1.15 | Separación mínima al romper, relativa a **dónde** rompió |
 | `egress_overshoot` | 1.3 | Cuánto más allá del reencare apunta el punto de fuga |
+| `turn_around_margin` | 3.0 | Separación mínima antes de reencarar, **en radios de giro del avión** |
 | `pilot_path` | `../PlaneController` | |
+
+**El reencare tiene suelo, y es la misma lección que el circuito de espera.**
+`_reengage_distance()` sale del alcance del arma, pero nunca baja de
+`turn_around_margin × min_turn_radius()`: hay que separarse lo bastante **para poder
+darse la vuelta**. Sin ese suelo un arma de corto alcance deja al avión atrapado — el
+cañón rompe a 180 px y reencaraba a 297, o sea 117 px para invertir el rumbo con un radio
+de giro de 130. Llegaba torcido a cada pasada: medido, la primera quitaba 54 y las
+siguientes de 1 a 4. Con el suelo puesto: 54, 39, 6 y muerto.
+
+Con un arma de largo alcance el suelo no se nota (el Maverick reencara a 850 y el suelo
+son 390), así que sólo actúa donde hace falta. Una distancia fija que no sabe nada del
+viraje del avión se rompe en cuanto el viraje cambia.
 
 **API:** `engage(target, min_range, max_range)`, `set_envelope(min, max)`, `break_off()`, `stop()`.
 
@@ -847,12 +860,46 @@ o impar el cuerpo del misil—, no de la posición.
 `z_index = -1` dentro del misil: la llama se dibuja por detrás del fuselaje, misma
 convención que `Hardpoints` bajo el `Sprite2D` de una unidad.
 
-#### `SmokeTrail` — `smoke_trail.gd`
+#### `EffectEmitter` — `effect_emitter.gd`
 ```
-extends Node2D   class_name SmokeTrail
+extends Node2D   class_name EffectEmitter
+```
+Base de los efectos que van **soltando cosas por el mundo** mientras algo dura: el humo de
+un motor, el humo de boca de un cañón, las trazadoras de una ráfaga.
+
+Lo común está aquí: engancharse por nombre de señal a quien los enciende, averiguar cuál
+es "el mundo", parir allí y encenderse/apagarse. **Lo único que hereda cada subclase es
+*cuándo toca soltar la siguiente*** — es la única diferencia real entre ellas.
+
+| Exportado | Qué hace |
+|-----------|----------|
+| `spawn_scene` | qué se suelta |
+| `source_path` | quién lo enciende (por defecto `..`) |
+| `start_signal` / `stop_signal` | qué señales de esa fuente |
+
+**`source_path` existe porque quien manda no siempre es de quien cuelgas.** Los efectos del
+cañón cuelgan del avión pero los enciende su `WeaponSystem`. Alternativa descartada: que el
+avión reemitiera las señales — un salto de más para nada.
+
+**`_emit_heading()`, y el bug que lo trajo.** El rumbo de quien emite **no** es la rotación
+de su nodo: el arte del avión apunta a +Y, así que su rotación lleva −90 de desfase. Usarla
+mandaba las trazadoras perpendiculares al morro. Ahora se pregunta `get_facing()`, que es
+lo que ya hacía el armamento por este mismo motivo. Si de quien cuelga no es una `Unit` —el
+humo de un misil cuelga del misil— vale la rotación, que es lo que había.
+
+**Que la señal no exista no es un error:** así se puede colocar y probar un efecto antes de
+que exista quien lo dispare.
+
+#### `SmokeTrail` — `smoke_trail.gd` (`extends EffectEmitter`)
+```
+extends EffectEmitter   class_name SmokeTrail
 ```
 El rastro de humo, **de cualquier cosa que eche humo**. No dibuja nada: va soltando
 `SmokePuff` sueltas por el mundo mientras esté encendido.
+
+**Siembra por distancia recorrida** (`spacing_px`), que es lo suyo frente a los demás
+emisores: así la densidad no depende de los fps ni de la velocidad. Un misil a 300 px/s y
+un avión a 90 dejan la misma cola de espesa; sólo cambia lo deprisa que la van dejando.
 
 Se llamaba `MissileSmokeTrail` y era del misil. Al llegar el cañón resultó que la mecánica
 era la misma —algo empieza, algo termina, y mientras tanto sale humo— y lo único distinto
@@ -861,10 +908,11 @@ nuevo no cuesta código: son dos ficheros `.tres`/`.tscn` y un nodo.
 
 | Exportado | Misil | Cañón | Qué hace |
 |-----------|-------|-------|----------|
-| `puff_scene` | `smoke_puff.tscn` | `cannon_smoke_puff.tscn` | qué se suelta |
+| `spawn_scene` | `smoke_puff.tscn` | `cannon_smoke_puff.tscn` | qué se suelta |
 | `spacing_px` | `4.0` | `5.0` | cada cuántos píxeles **recorridos** sale una |
-| `start_signal` | `motor_ignited` | `cannon_firing_started` | qué lo enciende |
-| `stop_signal` | `fuel_spent` | `cannon_firing_stopped` | qué lo apaga |
+| `source_path` | `..` (el misil) | `../WeaponSystem` | quién lo enciende |
+| `start_signal` | `motor_ignited` | `firing_started` | qué lo enciende |
+| `stop_signal` | `fuel_spent` | `firing_stopped` | qué lo apaga |
 
 **Cada bocanada se queda donde nació, con el rumbo congelado de quien la escupió en ese
 instante.** De ahí que el rastro se doble solo en las curvas: no hay una cola que deformar,
@@ -914,6 +962,44 @@ reinicia nada — seguir disparando es seguir disparando.
 **Arranca invisible en juego pero se sigue viendo en el editor** (`visible = false` en
 `_ready()`, no en la escena), que es lo que permite colocarlo a mano sobre el arte sin
 tener que dispararlo para saber dónde cae. Misma treta que `MissileExhaust`.
+
+Un fogonazo es un sprite y no puede heredar de `EffectEmitter`, pero se engancha igual:
+usa su `hook_up()`, que es estática justo por eso — un solo sitio donde se decide cómo se
+engancha un efecto.
+
+#### `TracerStream` — `tracer_stream.gd` (`extends EffectEmitter`)
+```
+extends EffectEmitter   class_name TracerStream
+```
+Las trazadoras de una ráfaga. **Siembra por cadencia y no por distancia**, que es lo único
+que lo separa de `SmokeTrail`: un cañón dispara a su ritmo aunque el avión frene, y si se
+parase en seco el humo dejaría de salir pero la ráfaga no.
+
+`tracers_per_second` (12) **no es la cadencia del cañón** (60): es cada cuántas balas se ve
+una, que es lo que es una trazadora. El `while` del reparto suelta más de una en el mismo
+frame si hace falta, así que la cadencia no queda limitada por los fps.
+
+#### `Tracer` — `tracer.gd`
+```
+extends AnimatedSprite2D   class_name Tracer
+```
+Un trazo. **No es una bala: no hace daño y no comprueba nada.** El daño lo reparte el arma.
+Nace en la boca, sale recto y se borra por lo que ocurra antes — agotar `range_px` o
+terminar el dibujo.
+
+| Exportado | Hoy | Nota |
+|-----------|-----|------|
+| `speed` | 900 | muy por encima del avión, o se quedaría pegado al morro |
+| `range_px` | 360 | ajustado al alcance del cañón: un trazo que sigue más allá promete un impacto que no va a pasar |
+| `sprite_offset_deg` | −90 | el trazo está dibujado apuntando a +Y |
+
+**`launch()` va aparte de `_ready()`**, y no es un capricho: el nodo entra en el árbol antes
+de que se le coloque, así que en `_ready()` todavía no sabe hacia dónde mira — leerlo ahí
+mandaba todos los trazos hacia +X y de lado. Es lo mismo que hace `Projectile.launch()`:
+nacer y salir disparado son dos momentos distintos.
+
+Los 8 fotogramas a 20 fps duran 0,4 s, que a 900 px/s son justo los 360 px de alcance: el
+dibujo y el recorrido se acaban a la vez.
 
 #### `SmokePuff` — `smoke_puff.gd`
 ```
@@ -1072,13 +1158,53 @@ decide a quién se ataca (eso es la orden, y vive en `Unit`) ni cómo vuela lo q
 |---------|-------------|
 | `can_fire_at(target)` | Arma válida contra ese dominio, munición, distancia y ángulo |
 | `time_to_impact()` | La primera de sus armas en llegar, −1 si no tiene nada volando |
-| `set_active(bool)` | Encender/apagar. Arranca encendido |
+| `set_active(bool)` | Encender/apagar. Arranca encendido. Apagar suelta el gatillo |
 | `fired(weapon)` | Señal. La escucha el vuelo para romper el ataque |
+| `firing_started` / `firing_stopped` | Señales. Las escuchan los efectos del cañón |
 | `rack_path` | Export, `../Hardpoints` |
 
 **No dispara mientras tenga algo suyo en el aire.** De ahí sale solo el "si no muere,
 lanza el otro": se lanza, se espera a que explote, y si el blanco sigue vivo sale el
 siguiente. Nadie escribió "reevaluar tras el impacto".
+
+**Dos formas de disparar, según `WeaponType.fire_mode`:**
+
+| | `LAUNCHER` | `SUSTAINED` |
+|---|---|---|
+| Qué hace | instancia un proyectil por disparo | mantiene un chorro |
+| Quién hace el daño | el proyectil al llegar | el arma, mientras dure |
+| Cadencia | andanadas con `reload_time` | continua |
+| Emite `fired` | sí | **no** |
+
+**Un arma sostenida nunca emite `fired`, y ahí está toda la diferencia de vuelo.** `fired`
+significa "ya hay algo en camino, deja de acercarte", y el avión rompe al oírlo. Con el
+cañón no hay nada que esperar: sigue metiéndose y rompe cuando la distancia le obliga.
+Eso convierte una pasada de misil en una de ametrallamiento **sin tocar
+`AttackRunBehavior`**.
+
+**El daño se cuenta en proyectiles, no en "daño por segundo".** Así `damage` sigue
+significando lo de siempre —lo que hace UNA bala— y no hay que sobrecargar el campo.
+Cuántas entran lo dice `_hit_fraction()`, y son dos cosas que en el fondo son la misma:
+cuánto se ha abierto el cono de balas para cuando llega.
+
+- **Distancia:** de cerca la dispersión no ha tenido sitio para abrirse y entra casi todo;
+  en el borde del alcance entra `long_range_accuracy`.
+- **Puntería:** centrado en el morro entra todo; rozando el borde del cono, sólo el rabo
+  de la ráfaga. Fuera del cono, cero — se ve el fogonazo y no acierta nada, que es lo que
+  pasa de verdad cuando se aguanta el gatillo sin apuntar.
+
+Así el fallo sale de la geometría y no de un dado, y **la pasada importa**: entrar cerca y
+encarado mata, hostigar desde lejos hace cosquillas.
+
+**Histéresis en el gatillo**, igual que el compromiso de viraje del piloto: se abre fuego
+con `firing_arc_deg` y no se suelta hasta `× arc_hysteresis`. Sin eso el blanco entra y
+sale del cono mientras el avión corrige y la ráfaga sale a tirones. Medido: **una sola
+apertura por pasada**.
+
+**Ninguna bala existe como objeto.** El cañón tira 60 proyectiles/s; sesenta nodos por
+segundo no se sostienen, y ese era el problema que llevaba tiempo anotado en pendientes.
+Lo que se ve son las trazadoras — 12/s, una de cada cinco, que es lo que es una trazadora
+de verdad — y no hacen daño ni comprueban nada.
 
 **No comprueba hostilidad**: el portero de a-quién-se-ataca es `SelectionManager` /
 `Unit.receive_attack_order`. Ver "Un solo portero por regla".
@@ -1113,15 +1239,14 @@ extends Unit
 **Escena:** `Sprite2D`, `CollisionShape2D`, `SelectionIndicator`, `PlaneController`,
 `OrbitBehavior`, `AttackRun` (`AttackRunBehavior`), `WeaponSystem`, `Hardpoints`
 (`HardpointRack` con 10 `Marker2D`: `L1`, `L2a`, `L2c`, `L3a`, `L3c` y sus simétricos
-`R`), `CannonFlash` (`MuzzleFlash`) y `CannonSmoke` (`SmokeTrail`). `z_index = 10` en el
-raíz.
+`R`), `CannonFlash` (`MuzzleFlash`), `CannonSmoke` (`SmokeTrail`) y `CannonTracers`
+(`TracerStream`). `z_index = 10` en el raíz.
 
-**Los dos efectos del cañón se colocan a ojo en el editor** y no dependen de nada del
-código: `CannonFlash` en la boca del arma (`z_index = 1`, por encima del fuselaje) y
-`CannonSmoke` bajo el ala. Los dos escuchan `cannon_firing_started` /
-`cannon_firing_stopped` **en el avión**, que hoy no las emite — se encienden a mano hasta
-que exista el comportamiento de ataque con cañón. Cuando el avión las emita, los dos se
-enganchan solos y la trazadora podrá sumarse sin tocar ninguno.
+**Los tres efectos del cañón se colocan a ojo en el editor** y no dependen de nada del
+código: `CannonFlash` y `CannonTracers` en la boca del arma, `CannonSmoke` bajo el ala.
+Los tres escuchan `firing_started` / `firing_stopped` en **`../WeaponSystem`**, que es
+quien sabe si se dan las condiciones de tiro. Ninguno conoce a los otros: sumar un cuarto
+efecto no obliga a tocar nada.
 
 **API:**
 - `start_flight(orbit_center)` — la cubierta le cede el control y enciende el armamento. **Sólo entra al circuito de espera si no tiene órdenes**: si hay `attack_target` sale a por él, y si `orbit.has_pending_order()` no toca nada (el destino ya está puesto en el piloto). El circuito es lo que hace un avión sin órdenes, y el jugador pudo darle una mientras estaba en cubierta
@@ -1965,13 +2090,15 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Viraje del avión por radio** (`turn_radius`) en vez de grados/segundo: volar más lento ya no cierra el giro, y hay entrada en viraje
 - [x] **Circuito de espera que rodea al barco y navega con él**, con suelo automático ligado al radio de giro para que no se pueda pedir un círculo imposible de volar
 - [x] **Dos regímenes de velocidad con un interruptor** (`cruising`): mínima en despegue, espera y alineación de tiro; máxima sólo con una orden en curso. Sin velocidades de avión repartidas por otros scripts
-- [x] **Efectos del cañón, sin comportamiento todavía:** fogonazo de dos tiempos (`MuzzleFlash`) y humo de boca (`SmokeTrail` + `cannon_smoke_puff.tscn`), los dos colocados en la escena del Harrier y a la espera de quien abra fuego
+- [x] **Cañón (GAU-12) completo:** fuego sostenido (`WeaponType.FireMode.SUSTAINED`) con el daño saliendo de la geometría —distancia y puntería—, **sin un nodo por bala**; histéresis en el gatillo; fogonazo de dos tiempos, humo de boca y trazadoras, los tres enganchados al `WeaponSystem` y sin conocerse entre ellos
+- [x] **Suelo de separación en las pasadas** (`turn_around_margin`): el avión se aleja lo bastante para darse la vuelta y llegar alineado a la pasada siguiente, en vez de orbitar el blanco picoteando
 
 ### Pendiente
 - [ ] Proyectil balístico para bombas tontas (Mk-82). La GBU-54 planea y guía; una bomba sin guía es otro vuelo. El mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`
 - [ ] Alabeo e inclinación del avión al virar y al cambiar de régimen: el enganche existe (`bank_sprite_path`, `AnimatedSprite2D` de 5 frames), falta el arte
-- [ ] **Cañón — lo que falta:** quién abre fuego (emitir `cannon_firing_started` / `cannon_firing_stopped` en el avión), cómo ataca el avión con cañón, y la trazadora (`Tracer_16x64.png`, ya importada y sin usar). Sigue en pie la pregunta de fondo: cómo dibujar una ráfaga sin instanciar un nodo por bala — impacto por cálculo + trazadoras
-- [ ] **Revisar en el editor** el fogonazo y el humo del cañón: verificados por medición en headless (fotogramas, encadenado, siembra y curvatura del rastro), pero **no vistos en juego** todavía
+- [ ] Marcas de impacto en el terreno y barras de vida. Con eso se afinan las ráfagas del cañón para que varíen y no dejen siempre el mismo patrón
+- [ ] El avión **sobrevuela el blanco a ~50 px** en cada pasada de cañón: rompe a 180 como debe, pero con radio de giro 130 no puede evitar pasar por encima. Honesto para un ametrallamiento; si molesta, subir el `min_range` del cañón
+- [ ] **Revisar en el editor** los efectos del cañón: verificados por medición (fotogramas, encadenado, siembra, rumbo de los trazos, curvatura del rastro y las tres pasadas hasta matar), pero la lectura visual final no
 - [ ] Efectos: explosión y caída. Los enganches existen (`detonated`), falta el arte. Fuego, humo y sombra ya están — `MissileExhaust`, `SmokeTrail` y `MissileShadow` sirven de patrón
 - [ ] Redibujar la sombra del misil ovalada y de 3 px de ancho: hoy mide lo mismo que el cuerpo y se funden en los últimos frames (ver `MissileShadow`)
 - [ ] Sombras del resto de unidades. Antes de dibujarlas, releer el patrón de sombras: la convención actual es incorrecta a propósito y cambiarla obliga a rehacer el arte de todas a la vez

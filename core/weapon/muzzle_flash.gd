@@ -32,11 +32,15 @@ class_name MuzzleFlash
 @export var sustain_anim: StringName = &"sustain"
 
 @export_group("Enganche")
-## Señal del padre que abre fuego. Vacío = no se engancha y hay que llamar a
+## Quién abre y cierra el fuego. Por defecto el padre; se apunta a otro nodo
+## cuando quien manda no es de quien cuelga — el fogonazo cuelga del avión pero
+## lo manda su `WeaponSystem`.
+@export var source_path: NodePath = ^".."
+## Señal de esa fuente que abre fuego. Vacío = no se engancha y hay que llamar a
 ## `start_firing()` a mano.
-@export var start_signal: StringName = &"cannon_firing_started"
-## Señal del padre que lo corta.
-@export var stop_signal: StringName = &"cannon_firing_stopped"
+@export var start_signal: StringName = &"firing_started"
+## Señal que lo corta.
+@export var stop_signal: StringName = &"firing_stopped"
 
 var _firing := false
 
@@ -44,12 +48,10 @@ var _firing := false
 func _ready() -> void:
 	visible = false
 	animation_finished.connect(_on_animation_finished)
-
-	var source: Node = get_parent()
-	if start_signal != &"" and source.has_signal(start_signal):
-		source.connect(start_signal, start_firing)
-	if stop_signal != &"" and source.has_signal(stop_signal):
-		source.connect(stop_signal, stop_firing)
+	# Un fogonazo es un sprite y no puede heredar de [EffectEmitter], pero se
+	# engancha igual que el humo y la trazadora: misma función, un solo sitio.
+	EffectEmitter.hook_up(self, source_path, start_signal, stop_signal,
+		start_firing, stop_firing)
 
 
 ## Abre fuego. Llamarlo mientras ya se dispara no reinicia nada: seguir

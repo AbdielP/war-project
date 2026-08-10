@@ -1,7 +1,9 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://core/weapon/ballistic_bomb.gd" id="1"]
 [ext_resource type="SpriteFrames" path="res://core/weapon/mk82_bomb_frames.tres" id="2"]
+[ext_resource type="Script" path="res://core/weapon/missile_shadow.gd" id="3"]
+[ext_resource type="SpriteFrames" path="res://core/weapon/missile_shadow_frames.tres" id="4"]
 
 [node name="Mk82Bomb" type="Node2D"]
 z_index = 9
@@ -10,3 +12,11 @@ script = ExtResource("1")
 [node name="Body" type="AnimatedSprite2D" parent="."]
 sprite_frames = ExtResource("2")
 animation = &"carried"
+
+[node name="Shadow" type="AnimatedSprite2D" parent="."]
+z_index = -2
+sprite_frames = ExtResource("4")
+animation = &"descend"
+script = ExtResource("3")
+descent_px = 150.0
+ground_px = 3.0

@@ -2,6 +2,46 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-10
+
+### La etiqueta de una unidad es HUD que se mueve, no adorno pegado a la unidad
+`UnitTag` — línea desplegable + nombre al seleccionar. Se construyó primero **dentro de la escena del Harrier**, con dos nodos en `top_level`, y hubo que rehacerlo entero. Vale la pena dejar por qué, porque los tres fallos parecían tres bugs y eran el mismo error de sitio:
+
+1. **Aparecía lejísimos un frame y desaparecía.** `top_level` no hereda posición; se dibujaba donde estaba antes de que el reposicionado la corrigiera.
+2. **Temblaba al volar.** Se reposicionaba en `_physics_process`, pero quien mueve el avión es `PlaneController`, un nodo **hijo**. El padre corre antes, así que leía la posición de un tick atrás, cada tick.
+3. **Vibraba con el zoom y a 0,5x era ilegible.** Ésta ya no se podía parchear: la cámara escala todo lo que vive en el mundo.
+
+La 3 es la decisión de verdad: **una etiqueta que sigue a una unidad no es parte del mundo.** Tiene que medir siempre lo mismo y sólo cambiar de sitio. Va en el `CanvasLayer` y pregunta cada frame dónde cae la unidad en pantalla (`get_global_transform_with_canvas()`). Verificado a 0,5x / 1x / 2x: escala (1,1) y fuente 16 en los tres.
+
+Lo incómodo del asunto es que **el patrón ya estaba escrito tres funciones más arriba**: `HUD._impact_timer` lleva haciéndolo desde siempre. Reusé el patrón que tenía a mano en la escena del avión (`top_level`, como `SelectionIndicator` y los efectos del cañón) sin preguntarme si aplicaba. Regla nueva en `architecture.md`: lo que sigue a una unidad pero se **lee** va en el HUD.
+
+Efecto lateral: al sacarlo del Harrier quedó genérico. Ahora cualquier unidad seleccionada muestra su nombre, y `av8b_harrier.gd` volvió a quedar exactamente como estaba.
+
+### Un `Control` puesto en el mundo vibra, y no es culpa de la fuente
+Perseguí el temblor del texto un buen rato dándole vueltas al import de la fuente. La causa era otra: `snap_controls_to_pixels` está activo por defecto y redondea la posición de **todo `Control`** al píxel. Para un HUD fijo es lo correcto; para un `Label` que viaja por el mundo con zoom, el redondeo cae en el espacio equivocado y cada salto se magnifica.
+
+Hubo un paso intermedio (`FloatingLabel`, un `Node2D` con `_draw()`, como `SelectionIndicator`) que **sí arreglaba la vibración** y se borró igual al mover todo al HUD — donde un `Label` normal está en su sitio y el snap juega a favor. Queda como nota: si alguna vez hace falta texto de verdad en el mundo, se dibuja con `_draw()`, nunca con un `Control`.
+
+### Si un valor se ajusta a ojo, la escena tiene que traer contra qué mirarlo
+`UnitTag` empezó con dos `@export` de offset. Inservibles: se ajustaban contra el vacío, sin nada al lado con que comparar. Ahora la escena trae un `EditorGuide` —el sprite del avión al 50%, apagado en `_ready()`— y la colocación **se lee de dónde quedó el nodo**, así que el ajuste es arrastrar con el ratón y guardar. Misma treta que `MuzzleFlash`.
+
+### La sombra de la bomba tonta, sin tocar la sombra
+`MissileShadow` pide `get_distance_to_aim()` por duck-typing, así que la Mk-82 sólo tuvo que implementarlo. En la planeadora es "lo que falta para llegar al blanco"; en la tonta no hay blanco, así que es "lo que falta para quedarse sin altura" — para una sombra es lo mismo, mide caída y no puntería. No es velocidad × tiempo (la bomba frena todo el rato y la sombra tocaría suelo antes que ella): es la integral del frenado exponencial. Medido: los 7 frames repartidos parejo y el último justo al impactar.
+
+Es prestada. **La Mk-82 necesita su propia sombra** — otra silueta, otra caída — cuando exista el arte.
+
+### La fuente sigue sin decidirse, y el motivo importa
+`ui_theme.tres` está vacío a propósito: sin fuente asignada cae en la del motor. Se probaron Boxel, Tiny5 y Pixelzone; hoy `UnitTag` usa **m5x7 a 16 px**, que es la que convence.
+
+Lo que sí quedó aprendido: **la cobertura de glifos se comprueba antes de enamorarse de una fuente.** La Boxel se descartó tras gustarle al usuario, porque no trae **ninguna** tilde, ni Ñ, ni `¿ ¡` — medido:
+
+```
+tiene: AEIOUaeiou
+le falta: ÁÉÍÓÚáéíóúÑñ¿¡
+```
+
+Sin eso no hay español, y menos aún localización. Y una segunda lección de proceso: pasé varias rondas ajustando tamaños de fuente a ciegas, sin ver nunca la pantalla. Eso se corta con una escena de prueba en el editor, que es donde el usuario puede comparar en vivo.
+
 ## 2026-08-09 (noche)
 
 ### La bomba tonta es tonta de verdad: no apunta a nada

@@ -84,6 +84,26 @@ func get_speed() -> float:
 	return _speed
 
 
+## Cuánto le queda por volar antes de tocar suelo. Lo pide `MissileShadow` para
+## saber a qué altura va: la sombra se junta con la bomba justo al detonar.
+##
+## En la planeadora esto es "lo que falta para llegar al blanco". Aquí no hay
+## blanco al que llegar, así que es **lo que falta para quedarse sin altura** —
+## que para una sombra es lo mismo, porque lo que mide es cuánto le queda de
+## caída, no cuánto le queda de puntería.
+##
+## No es velocidad × tiempo: la bomba está frenando todo el rato, y multiplicar
+## por la velocidad de ahora daría de más. Es la integral del frenado
+## exponencial durante el tiempo que le queda, que es la distancia de verdad.
+func get_distance_to_aim() -> float:
+	var left := maxf(_falls_for - _t, 0.0)
+	if left <= 0.0:
+		return 0.0
+	var rate := drag if _braking else separation_drag
+	return terminal_speed * left \
+		+ (_speed - terminal_speed) / rate * (1.0 - exp(-rate * left))
+
+
 ## Se desprende. Toma el rumbo y la velocidad del avión — no se empuja a sí
 ## misma, que es la diferencia con un misil — y les suma su parte de dispersión.
 ##

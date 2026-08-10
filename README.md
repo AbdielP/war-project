@@ -100,6 +100,17 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | A qué distancia del barco esperan los aviones | nodo `OrbitBehavior` de `av8b_harrier.tscn` → `radius` |
 | A qué velocidad despega un avión | no se ajusta: es su `min_speed`, y la cubierta se la pregunta |
 | Resistencia de cada unidad | `<unidad>_type.tres` → `max_health` |
+| Altura y sombra de la Mk-82 al caer | nodo `Shadow` de `mk82_bomb.tscn` → `descent_px` / `ground_px`. Es la sombra del misil, prestada hasta que tenga la suya |
+
+## Dónde se ajusta la interfaz
+
+| Qué | Dónde |
+|-----|-------|
+| Sitio de la línea y el nombre al seleccionar una unidad | `ui/hud/unit_tag/unit_tag.tscn` → **arrastrar** los nodos `Line` y `Name`. No hay números que escribir: se guarda donde los dejes, y el avión al 50% (`EditorGuide`) está ahí para tener contra qué medir — no sale en el juego |
+| Fuente y tamaño del nombre de unidad | mismo archivo, nodo `Name` (hoy m5x7 a 16) |
+| Ritmo de entrada del nombre | nodo raíz `UnitTag` → `name_delay`, `name_fade_time`, `name_rise_px` |
+| Velocidad de despliegue de la línea | `ui/hud/unit_tag/selection_line_frames.tres` (10 frames a 24 fps) |
+| Fuente del resto del HUD | `assets/fonts/ui_theme.tres` → `default_font`. **Vacío a propósito**: sin decidir, cae en la del motor |
 
 ## Dónde se ajusta el mapa
 

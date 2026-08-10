@@ -1292,6 +1292,27 @@ propósito.
 **El freno cumple su función, medido:** cuando cada bomba estalla, el avión ya está a
 **135–216 px** de ella. No vuela hacia su propia explosión.
 
+**Lleva la sombra del misil sin que nadie tocara la sombra.** `MissileShadow` pide
+`get_distance_to_aim()` a su padre por duck-typing, así que bastó con que la bomba lo
+implemente. En la planeadora eso significa "lo que falta para llegar al blanco"; aquí no hay
+blanco, así que es **lo que falta para quedarse sin altura** — que para una sombra es lo
+mismo, porque lo que mide es caída, no puntería.
+
+No es velocidad × tiempo restante: la bomba viene frenando todo el rato y eso daría de más,
+con la sombra tocando suelo antes que la bomba. Es la integral del frenado exponencial.
+Medido en una caída real (`descent_px` 150, `ground_px` 3):
+
+| Le queda | Frame |
+|---|---|
+| 253,7 px | 0 |
+| 137,5 px | 1 |
+| 87,9 px | 3 |
+| 39,6 px | 5 |
+| 14,9 px | 6 (pegada a la bomba) |
+
+Los 7 frames se reparten parejo y el último cae justo al tocar suelo. Es la sombra del
+misil por ahora: **la Mk-82 tendrá la suya cuando exista el arte**.
+
 **El arte** (`mk82_bomb_frames.tres`, 6 frames de 16×16) va en dos estados, igual que el
 fogonazo y la trazadora: `carried` (frame 0, cola cerrada) y `drop` (0→5, el freno
 abriéndose), que se dispara al separarse y se queda en el último frame — un freno no se
@@ -1527,6 +1548,7 @@ Agregar casos aquí al implementar nuevas acciones.
 **Árbol de `hud.tscn`:**
 ```
 CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en pausa
+├── UnitTag          (Node2D)         — etiqueta de la unidad seleccionada, sigue su posición
 ├── EventLog         (PanelContainer) — columna izquierda, se mide y se coloca solo
 ├── Minimap          (PanelContainer) — esquina inferior izquierda, estirable
 ├── TacticalMap      (Control)        — pantalla completa, visible=false
@@ -1549,6 +1571,62 @@ sino la **colocación**: el área de dibujo del mapa empieza en `y=26` (bajo `De
 acaba en `x=486` (antes de la columna de la derecha), así que ningún panel cruza el terreno y
 la escala no baja por ello. Probarlo moviendo el mapa al final es tentador y sale mal:
 entonces tapa el hangar y la lista de desplegadas.
+
+---
+
+### `UnitTag` — `ui/hud/unit_tag/unit_tag.gd`
+```
+extends Node2D   class_name UnitTag
+```
+La etiqueta que sale al seleccionar una unidad: una línea que se despliega (10 frames a
+24 fps) y el nombre entrando detrás. No conoce ningún tipo de unidad — recibe una `Unit` y
+muestra `get_display_name()`, así que sirve igual para un avión, un barco o un tanque.
+
+**API:** `show_for(unit)` / `clear()`. Lo llama el HUD desde `show_selected_unit()` y
+`clear_selected_unit()`; nadie más lo toca.
+
+**Vive en el HUD, no colgada de la unidad, y ahí está todo el asunto.** Se construyó primero
+al revés — dos nodos dentro de `av8b_harrier.tscn` con `top_level = true` — y esa versión
+falló tres veces seguidas, cada una por un motivo distinto:
+
+| Síntoma | Causa |
+|---|---|
+| Aparecía un frame lejísimos y desaparecía | `top_level` no hereda posición: se dibujaba en el sitio del frame anterior antes de que el reposicionado la corrigiera |
+| Temblaba sin parar al volar | Se reposicionaba en `_physics_process`, pero el piloto mueve el avión en el `_physics_process` de un nodo **hijo** — el padre corre antes, así que leía la posición de un tick atrás, cada tick |
+| **El texto vibraba con el zoom, y a 0,5x era ilegible** | Las dos de arriba se podían parchear. Ésta no: la cámara escala todo lo que vive en el mundo |
+
+La tercera es la que obligó a rehacerlo. **Una etiqueta que sigue a una unidad no es parte
+del mundo: es HUD que se mueve.** Debe medir siempre lo mismo y sólo cambiar de sitio. Eso
+se consigue dejándola en el `CanvasLayer` y preguntándole a la unidad dónde cae en pantalla:
+
+```gdscript
+var on_screen: Vector2 = _unit.get_global_transform_with_canvas().origin
+```
+
+Es exactamente lo que ya hacía `_impact_timer` en `hud.gd` — el patrón estaba escrito al
+lado y no se miró. Medido a tres zooms:
+
+| Zoom | Escala de la línea | Tamaño de fuente |
+|---|---|---|
+| 0,5x | (1,1) | 16 |
+| 1,0x | (1,1) | 16 |
+| 2,0x | (1,1) | 16 |
+
+**La colocación se hace arrastrando los nodos, no escribiendo números.** `_ready()` guarda
+dónde quedaron `Line` y `Name` en la escena y usa eso como separación respecto a la unidad.
+Hubo antes dos `@export` de offset y eran inservibles: se ajustaban contra el vacío, sin
+nada con lo que comparar. Por eso la escena lleva además un `EditorGuide` — el sprite del
+Harrier al 50%, que se apaga en `_ready()`. Misma treta que `MuzzleFlash`: **si algo se
+coloca a ojo, en el editor tiene que verse contra qué**.
+
+Dos detalles del arte que costaron una pasada: la línea va con `centered = false` (centrada,
+su mitad izquierda se metía dentro del avión) y con `frame = 9` fijo en la escena, para que
+en el editor se vea desplegada y no en el primer frame, que está casi vacío.
+
+**La entrada del nombre** (`name_delay` 0,28 s, `name_fade_time` 0,25 s, `name_rise_px` 4)
+va un instante detrás de la línea, como si la trajera ella. El deslizamiento se lleva en una
+variable propia (`_rise`) y no animando la posición: la posición se reescribe entera cada
+frame siguiendo a la unidad, así que un tween sobre ella se pisaría solo.
 
 ---
 
@@ -2000,6 +2078,31 @@ Drag en `TitleBar.gui_input`. Ver `HangarWindow` como referencia.
 ### _draw() con visibilidad
 Si usas `_draw()` en un nodo que puede ocultarse/mostrarse, llamar `queue_redraw()` en `NOTIFICATION_VISIBILITY_CHANGED`.
 
+### Lo que sigue a una unidad pero se lee, va en el HUD
+Nombres flotantes, barras de vida, cuentas atrás: **no cuelgan de la unidad**. Viven en el
+`CanvasLayer` y cada frame preguntan dónde cae la unidad en pantalla
+(`get_global_transform_with_canvas().origin`). Colgarlos de la unidad los mete en el mundo,
+y entonces el zoom los escala: a 0,5x el texto se vuelve ilegible mientras el resto del HUD
+se queda quieto, que es justo lo contrario de lo que espera el jugador. Ver `UnitTag` y
+`HUD._impact_timer`.
+
+Corolario: la separación se mide en **píxeles de pantalla**, no de mundo. Se ve igual con
+cualquier zoom, sin cuentas.
+
+### Un `Control` no es un nodo de mundo
+`snap_controls_to_pixels` (activo por defecto) redondea la posición de todo `Control` al
+píxel — pensado para HUD fijo. Un `Label` colocado en el mundo y visto con zoom vibra por
+eso: el redondeo cae en el espacio equivocado y el zoom lo magnifica. O se dibuja con
+`_draw()` (como `SelectionIndicator`), o se pone en el HUD, que es donde un `Control` está
+en su sitio.
+
+### Si algo se coloca a ojo, poner contra qué mirarlo
+Un `@export` de offset que se ajusta sin referencia visual se ajusta contra el vacío. La
+escena debe traer una guía —el sprite de la unidad, el arma, lo que sea— visible en el
+editor y apagada en `_ready()`. Y mejor todavía: que la colocación se lea de **dónde quedó
+el nodo** en vez de un número aparte, para que arrastrar con el ratón sea el ajuste. Ver
+`UnitTag.EditorGuide` y `MuzzleFlash`.
+
 ### Un solo portero por regla
 Cuando una regla tenga varias vías de entrada, ponerla en el punto por donde pasan todas,
 no en cada una. Ejemplo: "el enemigo no recibe órdenes" vive dentro de
@@ -2290,8 +2393,12 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Bomba tonta (`BallisticBomb` / Mk-82):** se desprende con la velocidad del avión, abre el freno de cola y cae donde la deja la inercia — sin guiado, sin punto de apuntado y sin saber dónde está el blanco
 - [x] **Ristra escalonada** (`salvo_interval`): las 6 bombas salen una detrás de otra y baten una línea de 75 px sobre el blanco. El avión rompe con la última, no con la primera
 - [x] **Velocidad de pasada según el arma** (`slows_to_aim`): el cañón frena para apuntar, el bombardeo cruza a máxima y sale de ahí
+- [x] **Etiqueta de unidad seleccionada (`UnitTag`):** línea desplegable y nombre, en el HUD, siguiendo a la unidad en pantalla — mide igual a cualquier zoom. Sirve para cualquier unidad, no sólo el Harrier
+- [x] Sombra de la Mk-82 al caer, reusando `MissileShadow` por duck-typing (`get_distance_to_aim`) sin tocar su código
 
 ### Pendiente
+- [ ] **Sombra propia para la Mk-82.** Hoy usa la del misil, que no le corresponde: es otra silueta y otra forma de caer
+- [ ] **Elegir la fuente del juego.** `assets/fonts/ui_theme.tres` está vacío a propósito (cae en la del motor) mientras se prueban candidatas. `UnitTag` usa m5x7 a 16 px, que es la que convence por ahora. Ojo con la cobertura: la Boxel se descartó porque no trae **ninguna** tilde ni Ñ ni `¿ ¡` — sin eso no hay español, y menos localización
 - [ ] Alabeo e inclinación del avión al virar y al cambiar de régimen: el enganche existe (`bank_sprite_path`, `AnimatedSprite2D` de 5 frames), falta el arte
 - [ ] Marcas de impacto en el terreno y barras de vida. Con eso se afinan las ráfagas del cañón para que varíen y no dejen siempre el mismo patrón
 - [ ] **Definir el daño en serio.** Los números de hoy son de trabajo: un Harrier destruye un T-14 en tres pasadas de cañón, y **dos Mk-82 bastan** para lo mismo. Demasiado fácil para lo que debería costar. Va junto con las barras de vida, y hay que decidirlo por unidad y por arma, no ajustando el `damage` de cada una hasta que "quede bien"

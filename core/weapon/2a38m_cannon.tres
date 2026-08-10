@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponType" format=3]
+
+[ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "2A38M"
+short_name = "CAÑÓN AA"
+brevity_code = "Guns"
+targets = 1
+min_range = 0.0
+max_range = 250.0
+firing_arc_deg = 8.0
+damage = 0.3
+fire_mode = 1
+rounds_per_second = 50.0
+long_range_accuracy = 0.3
+arc_hysteresis = 1.5
+burst_seconds = 0.8
+burst_pause = 0.7

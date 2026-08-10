@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://core/camera/pan_camera.tscn" id="4_1bvp3"]
 [ext_resource type="PackedScene" path="res://core/selection/selection_manager.tscn" id="5_iy4v0"]
 [ext_resource type="PackedScene" uid="uid://le4hfnagnxy3" path="res://core/unit/t14_armata/t14_armata.tscn" id="6_7mycd"]
+[ext_resource type="PackedScene" uid="uid://dtiu54o6i56f3" path="res://core/unit/2s6_tunguska/2s6_tunguska.tscn" id="7_tung"]
 
 [node name="Node2D" type="Node2D" unique_id=2086690703]
 
@@ -35,3 +36,6 @@ position = Vector2(674, 2)
 
 [node name="T-14 Dummy4" parent="." unique_id=1100005442 instance=ExtResource("6_7mycd")]
 position = Vector2(997, 3)
+
+[node name="2S6 Tunguska" parent="." unique_id=2038326211 instance=ExtResource("7_tung")]
+position = Vector2(810, -5)

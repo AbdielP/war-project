@@ -4,6 +4,109 @@ Registro cronológico (más reciente arriba). Una entrada por decisión: qué se
 
 ## 2026-08-10
 
+### Una unidad antiaérea son tres componentes genéricos y veinte líneas de pegamento
+El 2S6 Tunguska es la primera unidad enemiga con comportamiento. Podía haber sido una clase
+`Tunguska` con todo dentro; se hizo al revés, y la prueba de que la separación es real es
+dónde vive cada archivo:
+
+| pieza | vive en | qué sabe |
+|---|---|---|
+| `RangeRings` | `core/unit/` | dibujar dos círculos |
+| `RadarDish` | `core/unit/` | girar |
+| `TurretTracker` | `core/unit/` | a quién seguir y apuntarle |
+| `tunguska_2s6.gd` | carpeta de la unidad | atar los cabos que ninguno puede atar solo |
+
+En `core/unit/` porque **ninguno menciona al Tunguska** y cualquier batería futura los reusa. En
+la carpeta de la unidad sólo quedan dos cosas que son propias de este vehículo: que lo que el
+radar engancha es a quien se dispara, y que su `get_facing()` es la línea de los cañones.
+
+Es la misma lección que dejó la etiqueta de unidad más abajo en esta misma fecha: lo genérico
+sale solo cuando se construye fuera de la escena concreta, no después a base de mover archivos.
+
+### Detectar por distancia y no con un `Area2D`
+El radar y la torreta podrían haber usado un `Area2D` con un `CircleShape2D`. Se descartó: el
+combate entero ya resuelve alcance por distancia (`WeaponType.in_range()`), y un área nueva
+sería **un segundo mecanismo en paralelo respondiendo a la misma pregunta**, con capas y
+máscaras que mantener. Recorrer el grupo `unit_air` y medir es directo, y `rescan_interval`
+(0,1 s) evita hacerlo 60 veces por segundo — nada cruza un rango entero en una décima.
+
+Efecto lateral bueno: es genérico desde el primer día. Nada nombra al Harrier; cualquier
+aeronave que entre en el grupo entra en la búsqueda.
+
+### El radar de vigilancia no sigue a nadie
+Primera versión: el radar detectaba y seguía al avión. Doble error, y el de fondo no era de
+código.
+
+El técnico: `sprite_offset_deg` invertido, así que apuntaba con la parte de atrás del plato.
+El de diseño, que es el que importa: **un radar de vigilancia barre todo el cielo**; si se para
+a mirar a un avión deja de vigilar el resto, que es lo contrario de para lo que está. En el
+trasto real quien engancha es el radar de puntería de la torreta.
+
+Así que `RadarDish` quedó reducido a girar y ya — quince líneas — y engancharse pasó a
+`TurretTracker`. Menos código y más parecido a la máquina.
+
+### El rango es una mecánica, así que el jugador tiene que poder verlo
+`RangeRings` dibuja los dos círculos con `_draw()` y es `@tool`, para ajustarlos arrastrando un
+número sin ejecutar el juego. Son dos y no uno porque **ver y poder disparar no son lo mismo**:
+la corona entre ambos es la ventana en la que la unidad ya te vio y todavía no te llega, y ése
+es el margen de reacción del jugador.
+
+Dos fallos al montarlo, los dos por no pensar en la pantalla:
+
+1. **`z_index = -1` los metió debajo del suelo.** El terreno es un `TileMapLayer` en 0. En 0
+   basta: el mapa se dibuja antes por orden de árbol y la unidad va en 1.
+2. **No cabían.** Se pusieron en 700 y 400 px de radio cuando a zoom 1x sólo se ven 320 px
+   desde el centro. Los dos círculos caían fuera de cuadro y parecía que no se dibujaba nada.
+
+La regla que queda: **en un mundo de 640×384, cualquier alcance por encima de ~320 px no se ve
+entero**, y un rango que no cabe en pantalla significa que el jugador entra en cobertura sin
+ver la amenaza. Vale para los círculos y vale para las armas.
+
+### Las ráfagas son un dato del arma, y 0 significa "sin ráfagas"
+Un antiaéreo no puede escupir fuego continuo desde que te ve hasta que sales: ni suena ni se ve
+como un antiaéreo, y le quita al jugador el hueco por el que colarse. Pero el cañón del avión
+**sí** debe tirar seguido, porque ahí la pasada ya es la ráfaga.
+
+Se resolvió con dos campos en `WeaponType` — `burst_seconds` y `burst_pause` — y la elección de
+que **`burst_seconds = 0` sea "sin ráfagas"**. Así el arma del avión no cambia sin tocarla, y el
+comportamiento nuevo no es un `if` por unidad sino un número por arma. Medido: 0,80 s de fuego /
+0,70 s de silencio, exactos; y el cañón del Harrier sigue abriendo fuego una sola vez por pasada
+y quitando los mismos 37,7 de daño que antes.
+
+El silencio se implementa soltando el gatillo (`_release_trigger()`), no con una bandera aparte:
+así los efectos apagan el fogonazo por la señal de siempre y **ninguno se entera de que existen
+las ráfagas**.
+
+### Lo que dispara no siempre es de quien cuelga el efecto
+`EffectEmitter` daba por hecho que su padre era la `Unit`: `get_parent() as Unit` para el rumbo,
+y `get_parent().get_parent()` para saber cuál es "el mundo". Cierto en un avión, falso en un
+vehículo con torreta, donde hay un nivel de más. Los dos sitios pasaron a subir por el árbol
+hasta encontrar la `Unit` (`_shooter()`).
+
+El segundo era el peligroso: sin arreglarlo, las trazadoras nacían colgadas de la unidad y
+**habrían girado con la torreta** en vez de quedarse donde se soltaron. Un rastro que sigue a
+quien lo suelta no es un rastro.
+
+### El `get_facing()` de un vehículo con torreta es el de la torreta
+`WeaponSystem` pregunta `get_facing()` para saber si el blanco está en el cono, y los efectos
+para saber hacia dónde sale el fuego. Con la implementación por defecto — la rotación del nodo —
+el Tunguska habría creído apuntar hacia donde mira el casco: no dispararía nunca, o peor,
+dispararía de lado. `tunguska_2s6.gd` lo redirige a la torreta.
+
+Es el mismo problema que el `-90` del Harrier, un escalón más arriba: **la orientación que
+importa para el arma no es la del vehículo, es la de lo que sostiene el arma**.
+
+### Colocar la boca de un arma: contar píxeles, no poner el centro
+El primer emisor del cañón se puso en `(0, 12)` — el centro de la torreta — y la ráfaga salió
+por el radar de seguimiento frontal. Además era **uno solo**, cuando el Tunguska tiene dos tubos.
+
+Los tubos están en `x = ∓7` con la boca en `y = +12`, medido sobre los píxeles del sprite. Hoy
+hay un juego de efectos por cañón (fogonazo, trazadoras y humo), los seis enganchados a las
+mismas señales, así que abren y cierran sincronizados como el cañón gemelo que son.
+
+Refuerza el patrón que ya estaba escrito para el arte sobre arte: **medir los píxeles, no
+ajustar a ojo** — y mirar el sprite antes de decidir cuántos emisores hacen falta.
+
 ### La etiqueta de una unidad es HUD que se mueve, no adorno pegado a la unidad
 `UnitTag` — línea desplegable + nombre al seleccionar. Se construyó primero **dentro de la escena del Harrier**, con dos nodos en `top_level`, y hubo que rehacerlo entero. Vale la pena dejar por qué, porque los tres fallos parecían tres bugs y eran el mismo error de sitio:
 

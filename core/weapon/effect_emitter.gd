@@ -68,7 +68,11 @@ static func hook_up(node: Node, path: NodePath, on_signal: StringName,
 
 ## Empieza a soltar desde donde esté ahora.
 func start() -> void:
-	_world = get_parent().get_parent()
+	# El mundo es donde vive la unidad, no el padre del padre a ciegas: colgando
+	# de una torreta ese atajo daba la propia unidad, y el rastro habría girado
+	# con ella en vez de quedarse donde se soltó.
+	var shooter := _shooter()
+	_world = shooter.get_parent() if shooter != null else get_parent().get_parent()
 	if _world == null or spawn_scene == null:
 		return
 	_begin()
@@ -96,8 +100,21 @@ func _begin() -> void:
 ## Si de quien cuelga no es una unidad — el humo de un misil cuelga del misil —
 ## no hay a quién preguntar y vale la rotación, que es lo que había.
 func _emit_heading() -> float:
-	var shooter := get_parent() as Unit
+	var shooter := _shooter()
 	return shooter.get_facing() if shooter != null else global_rotation
+
+
+## De quién es este efecto. Se sube por el árbol en vez de mirar sólo al padre:
+## en un avión los efectos cuelgan del propio avión, pero en un vehículo con
+## torreta cuelgan de la torreta, y la boca del cañón sigue siendo suya.
+func _shooter() -> Unit:
+	var node: Node = get_parent()
+	while node != null:
+		var unit := node as Unit
+		if unit != null:
+			return unit
+		node = node.get_parent()
+	return null
 
 
 func _spawn(at: Vector2, angle: float) -> Node2D:

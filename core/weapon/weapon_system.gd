@@ -46,6 +46,10 @@ var _firing := false
 ## está en la pasada. Arranca en `true`: una unidad que no hace pasadas — un
 ## tanque, un barco — dispara cuando puede y no espera permiso de nadie.
 var _cleared_to_fire := true
+## Lo que queda de la ráfaga en curso y del silencio que la sigue. A 0 los dos
+## con un arma sin ráfagas: no se usan.
+var _burst_left: float = 0.0
+var _pause_left: float = 0.0
 ## Ristra en curso: armas que quedan por soltar de la andanada, y cuánto falta
 ## para la siguiente. Una andanada escalonada no son N disparos sueltos — es un
 ## solo disparo que dura, y se termina aunque cambien las condiciones a mitad.
@@ -139,11 +143,40 @@ func _physics_process(delta: float) -> void:
 func _work_the_trigger(weapon: WeaponType, target: Unit, delta: float) -> void:
 	if not _should_hold_trigger(weapon, target):
 		_release_trigger()
+		_burst_left = 0.0
+		_pause_left = 0.0
+		return
+	if not _work_the_burst(weapon, delta):
 		return
 	if not _firing:
 		_firing = true
 		firing_started.emit()
 	_pour_rounds(weapon, target, delta)
+
+
+## Corta el chorro en ráfagas, si el arma las pide. Devuelve si toca tirar en
+## este momento.
+##
+## Con `burst_seconds` a 0 no hay nada que cortar y siempre toca: es el cañón del
+## avión, cuya ráfaga la delimita la pasada. Con un valor por encima, el arma
+## alterna sola entre tirar y callar, y el silencio importa tanto como el fuego —
+## es el hueco por el que se cuela el avión.
+func _work_the_burst(weapon: WeaponType, delta: float) -> bool:
+	if weapon.burst_seconds <= 0.0:
+		return true
+	if _pause_left > 0.0:
+		_pause_left -= delta
+		# Se suelta el gatillo al entrar en la pausa, no al salir: los efectos se
+		# enteran de que hay que apagar el fogonazo por la misma señal de
+		# siempre, sin saber que existen las ráfagas.
+		_release_trigger()
+		return false
+	if _burst_left <= 0.0:
+		_burst_left = weapon.burst_seconds
+	_burst_left -= delta
+	if _burst_left <= 0.0:
+		_pause_left = weapon.burst_pause
+	return true
 
 
 func _release_trigger() -> void:

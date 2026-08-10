@@ -177,6 +177,92 @@ bando: azul propio, verde aliado, rojo enemigo. El valor exportado sólo se ve e
 
 ---
 
+### `RangeRings` — `core/unit/range_rings.gd`
+```
+@tool  extends Node2D   class_name RangeRings
+```
+Dibuja los dos círculos de alcance de una unidad antiaérea. **Sólo dibuja**: no detecta, no
+apunta y no dispara.
+
+Son dos y no uno porque **ver y poder disparar no son lo mismo**. La corona entre ambos es la
+franja en la que la unidad ya sabe que estás pero todavía no te llega, y ése es el margen de
+reacción del jugador — por eso conviene que se vea.
+
+| export | por defecto | qué es |
+|---|---|---|
+| `detection_radius` | 400 | hasta dónde ve; lo lee `TurretTracker` |
+| `engagement_radius` | 250 | hasta dónde dispara |
+| `visible_rings` | `true` | apagarlo quita los círculos sin perder los radios |
+| `detection_color` / `engagement_color` | ámbar / rojo | — |
+| `line_width` | 1 | píxeles de mundo |
+| `segments` | 96 | tramos por círculo |
+
+`@tool` a propósito: se ven en el editor sin ejecutar, así que ajustarlos es arrastrar un
+número. Dos trampas ya pisadas y documentadas en el propio script:
+
+- **Nada de `z_index` negativo.** El terreno es un `TileMapLayer` en 0; por debajo, el suelo
+  los tapa. En 0 quedan sobre la hierba y bajo la unidad.
+- **A zoom 1x sólo se ven 320 px desde el centro.** Un radio mayor existe pero cae fuera de
+  cuadro; hay que alejar la cámara para verlo entero.
+
+Es la fuente del alcance para quien la necesite: tenerlo también apuntado en el buscador daría
+una unidad que engancha más lejos de lo que dibuja, y el jugador ajusta lo que ve.
+
+---
+
+### `RadarDish` — `core/unit/radar_dish.gd`
+```
+extends Node2D   class_name RadarDish
+```
+Gira, y nada más. Un export: `scan_speed_deg` (120 = una vuelta cada 3 s).
+
+**No busca ni sigue a nadie, y es deliberado.** Un radar de vigilancia barre todo el cielo; si
+se parase a mirar un avión dejaría de vigilar el resto. Quien engancha es la puntería de la
+torreta (`TurretTracker`). Es decoración honesta: gira porque el trasto de verdad gira.
+
+Montado como hijo de la torreta, así que **gira sobre ella además de girar solo**, igual que
+en el vehículo real.
+
+---
+
+### `TurretTracker` — `core/unit/turret_tracker.gd`
+```
+extends Node2D   class_name TurretTracker
+```
+Engancha la aeronave hostil más cercana dentro del alcance y la sigue con los cañones. **No
+dispara**: apunta y avisa por señal de a quién.
+
+| señal | cuándo |
+|---|---|
+| `target_acquired(unit)` | enganchó a alguien |
+| `target_lost` | se fue de rango o dejó de existir |
+
+| export | por defecto | qué es |
+|---|---|---|
+| `turn_speed_deg` | 60 | velocidad de giro |
+| `sprite_offset_deg` | −90 | cañones dibujados hacia +Y |
+| `target_group` | `unit_air` | dónde busca |
+| `rescan_interval` | 0,1 s | cada cuánto rehace la búsqueda |
+| `rings_path` | `../RangeRings` | de dónde saca el alcance |
+
+Tres decisiones dentro:
+
+- **Gira despacio a propósito.** Una torreta que se planta sobre el blanco en un frame se lee
+  como un número asignado, no como una máquina; y el retardo es lo único que el jugador tiene a
+  favor. Medido: el caso peor —avión apareciendo a la espalda, 180°— tarda **3,07 s** (teoría
+  3,00 a 60°/s). Que llegue tarde con un avión rápido no es un fallo, es la mecánica.
+- **Busca por distancia, no con un `Area2D`**, igual que `WeaponSystem` resuelve su alcance.
+- **Ignora a los suyos** (`is_hostile_to`). Sin esto, en cuanto haya aviones en los dos bandos
+  seguiría al aliado que pase más cerca.
+
+Sin blanco **se queda donde quedó**: volver sola a una posición de reposo sería inventarse una
+maniobra que nadie pidió.
+
+`get_facing()` devuelve la línea de los cañones — es lo que la unidad debe reexportar para que
+el armamento y los efectos sepan hacia dónde sale el fuego.
+
+---
+
 ### `PanCamera` — `core/camera/pan_camera.gd`
 ```
 extends Camera2D   class_name PanCamera
@@ -949,6 +1035,20 @@ mandaba las trazadoras perpendiculares al morro. Ahora se pregunta `get_facing()
 lo que ya hacía el armamento por este mismo motivo. Si de quien cuelga no es una `Unit` —el
 humo de un misil cuelga del misil— vale la rotación, que es lo que había.
 
+**`_shooter()` sube por el árbol, no mira sólo al padre.** Al montar el Tunguska se vio que
+las dos suposiciones de este nodo valían para un avión y no para un vehículo con torreta,
+donde los efectos cuelgan de la torreta y hay un nivel de más:
+
+| se preguntaba | daba en un avión | daba con torreta |
+|---|---|---|
+| `get_parent() as Unit` (rumbo) | la `Unit` ✓ | `null` → rotación del nodo ✗ |
+| `get_parent().get_parent()` (el mundo) | el mundo ✓ | la propia `Unit` ✗ |
+
+El segundo era el peligroso: las trazadoras habrían nacido colgadas de la unidad y **habrían
+girado con la torreta** en vez de quedarse donde se soltaron. Un rastro que sigue a quien lo
+suelta no es un rastro. Ahora los dos suben hasta encontrar la `Unit`, y el mundo es el padre
+de ésta. El avión no nota el cambio: su padre ya era la `Unit`.
+
 **Que la señal no exista no es un error:** así se puede colocar y probar un efecto antes de
 que exista quien lo dispare.
 
@@ -1412,6 +1512,16 @@ segundo no se sostienen, y ese era el problema que llevaba tiempo anotado en pen
 Lo que se ve son las trazadoras — 12/s, una de cada cinco, que es lo que es una trazadora
 de verdad — y no hacen daño ni comprueban nada.
 
+**Ráfagas: `burst_seconds` y `burst_pause`, con 0 = sin ráfagas.** Un cañón de avión debe
+tirar seguido porque **la pasada ya es la ráfaga**; una batería antiaérea no tiene pasada que
+le marque el ritmo, y si no cortara se quedaría escupiendo fuego desde que te ve hasta que
+sales. Con `burst_seconds = 0` el arma tira mientras haya ocasión —comportamiento de siempre,
+el del Harrier, sin tocar nada—; por encima de 0 corta sola y espera.
+
+El silencio se hace **soltando el gatillo** (`_release_trigger()`), no con una bandera aparte:
+los efectos apagan el fogonazo por la señal de siempre y ninguno se entera de que existen las
+ráfagas. Medido en el Tunguska: 0,80 s de fuego / 0,70 s de pausa, exactos.
+
 **No comprueba hostilidad**: el portero de a-quién-se-ataca es `SelectionManager` /
 `Unit.receive_attack_order`. Ver "Un solo portero por regla".
 
@@ -1426,6 +1536,49 @@ tenga IA.
 
 Sirve de patrón para cualquier unidad estática: **una unidad no necesita script propio
 hasta que tenga comportamiento**.
+
+---
+
+### `2S6 Tunguska` — `core/unit/2s6_tunguska/`
+
+Batería antiaérea enemiga. Primera unidad hostil **con** comportamiento, y el contraejemplo del
+T-14: aquí sí hace falta script, pero sólo veinte líneas.
+
+**Arte:** un PNG de 50×50 con tres piezas, recortadas con `AtlasTexture` sin trocear el archivo.
+
+| nodo | región | jerarquía |
+|---|---|---|
+| `Sprite2D` (casco) | `(1,1)` 24×35 | raíz |
+| `Turret` | `(26,25)` 24×24 | hijo de la unidad — lleva `TurretTracker` |
+| `Radar` | `(29,1)` 20×11 | hijo de `Turret` — lleva `RadarDish` |
+
+Escena completa: casco + `Turret` (con el `Radar` dentro) + `RangeRings` + `WeaponSystem` + seis
+emisores de efectos colgados de la torreta.
+
+**`tunguska_2s6.gd`** ata los dos cabos que ningún componente puede atar solo:
+
+```
+extends Unit
+```
+1. **Lo que el radar engancha es a quien se dispara.** `TurretTracker` sabe a quién sigue y
+   `WeaponSystem` sabe cuándo puede tirar, pero ninguno conoce al otro:
+   `turret.target_acquired → set_attack_target`.
+2. **`get_facing()` devuelve la línea de los cañones**, no la del casco. Sin esto el armamento
+   creería apuntar al frente del vehículo y no dispararía nunca — o dispararía de lado.
+
+No recibe órdenes: es del otro bando y se defiende sola.
+
+**Arma:** `2a38m_cannon.tres` — `SUSTAINED`, alcance 250, arco 8°, 50 disparos/s, ráfagas de
+0,8 s con 0,7 s de pausa, sólo contra objetivos `Aire`.
+
+**Efectos:** hoy usa prestados los del Harrier (`cannon_flash_frames`, `tracer.tscn`,
+`cannon_smoke_puff`) hasta que tenga los suyos. Son **dos juegos, uno por cañón**, en
+`x = ∓7, y = +12` — la boca de cada tubo, medida sobre el sprite. Los seis escuchan
+`firing_started`/`firing_stopped`, así que los dos tubos abren y cierran sincronizados.
+
+> Cambiar el arte después no toca código: `MuzzleFlash` recibe un `SpriteFrames` y
+> `TracerStream` un `PackedScene`, los dos apuntados desde la escena. Lo único heredado es la
+> estructura de animación (`start`/`sustain` en el fogonazo, `muzzle`/`streak` en la trazadora).
 
 ---
 
@@ -2358,6 +2511,9 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] `WeaponBar`: elegir arma activa al seleccionar un avión (cañón siempre presente)
 - [x] Arma por defecto según el loadout — un avión armado no sale seleccionando el cañón
 - [x] Bandos (`Team`): jugador/aliado/enemigo, color en el contorno, enemigo seleccionable pero no controlable ni listado en la UI del jugador
+- [x] **2S6 Tunguska**: primera unidad enemiga con comportamiento — radar girando, torreta que engancha y sigue al avión más cercano, y cañón gemelo con ráfagas cortas. Construida con tres componentes genéricos (`RangeRings`, `RadarDish`, `TurretTracker`) y veinte líneas de pegamento
+- [x] Círculos de alcance visibles y ajustables en el editor (`RangeRings`, `@tool`): detección y tiro por separado
+- [x] Ráfagas por arma (`burst_seconds` / `burst_pause`), con 0 = fuego continuo para no tocar el cañón del avión
 - [x] Primer enemigo en el mapa: T-14 Armata (estático, sin IA)
 - [x] Atacar: click/tap sobre un enemigo con unidad propia seleccionada, o "Atacar" en `TargetMenu`; al morir el objetivo, el Harrier orbita donde llegó
 - [x] Menú contextual (`TargetMenu`) sobre unidad ajena: click derecho en PC, pulsación mantenida en táctil (`PanCamera.long_pressed`)
@@ -2408,6 +2564,10 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [ ] Redibujar la sombra del misil ovalada y de 3 px de ancho: hoy mide lo mismo que el cuerpo y se funden en los últimos frames (ver `MissileShadow`)
 - [ ] Sombras del resto de unidades. Antes de dibujarlas, releer el patrón de sombras: la convención actual es incorrecta a propósito y cambiarla obliga a rehacer el arte de todas a la vez
 - [ ] Alargar la fase opaca del humo (3–4 frames más antes de que baje el alfa, y algún paso de alfa extra): hoy la estela se disuelve desde el primer tercio (ver `SmokePuff`)
+- [ ] **Efectos propios del Tunguska**: fogonazo, trazadoras y humo son los del Harrier prestados. Cambiarlos es reasignar dos recursos por emisor, sin tocar código
+- [ ] **Probabilidad de impacto contra aeronaves.** El cañón AA usa hoy el mismo `_hit_fraction` por geometría que el del avión, que no modela lo que cuesta acertarle a un blanco aéreo rápido. Va junto con el daño en serio: hoy baja un Harrier de 100 a 47 en dos ráfagas
+- [ ] **Misiles de radar del Tunguska.** Sólo tiene cañón; los misiles son la mitad de lo que es la unidad
+- [ ] Duplicación pendiente de decidir: `RangeRings.engagement_radius` (250) y `max_range` del arma (250) dicen lo mismo en dos sitios. Mover el círculo no cambia el arma
 - [ ] Contramedidas (bengalas, chaff, ECM) como blancos falsos y degradación del guiado
 - [ ] Qué hace el avión cuando se queda sin munición y el blanco sigue vivo (hoy sigue haciendo pasadas)
 - [ ] Cadena de repliegue de arma: usar la siguiente cuando se acaba una, cañón como último recurso

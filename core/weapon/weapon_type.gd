@@ -114,6 +114,19 @@ enum FireMode {
 ## avión corrige y la ráfaga sale a tirones.
 @export var arc_hysteresis: float = 2.0
 
+@export_subgroup("Ráfagas")
+## Segundos que dura una ráfaga antes de soltar el gatillo. **0 = sin ráfagas**:
+## el arma tira sin parar mientras haya ocasión, que es como se comporta un
+## cañón de avión durante la pasada — la pasada ya es la ráfaga.
+##
+## Con un valor por encima de 0 el arma corta sola y espera. Es lo propio de una
+## batería antiaérea, que no tiene una pasada que le marque el ritmo: si no
+## cortara, se quedaría escupiendo fuego continuo desde que te ve hasta que
+## salgas, y ni suena ni se ve como un antiaéreo.
+@export var burst_seconds: float = 0.0
+## Segundos de silencio entre ráfagas. Sólo cuenta si `burst_seconds` > 0.
+@export var burst_pause: float = 0.6
+
 
 ## El nombre corto si lo tiene; si no, el largo — un botón sin texto no se
 ## puede pulsar a ciegas.

@@ -98,6 +98,14 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Radio de giro del avión | mismo nodo → `turn_radius`. **Es el parámetro maestro del vuelo**: manda sobre el viraje y sobre el tamaño mínimo del circuito de espera |
 | Distancias de las pasadas de ataque | nodo `AttackRun` de `av8b_harrier.tscn` |
 | A qué distancia del barco esperan los aviones | nodo `OrbitBehavior` de `av8b_harrier.tscn` → `radius` |
+| **Hasta dónde ve el Tunguska** | nodo `RangeRings` de `2s6_tunguska.tscn` → `detection_radius` (400). Se ve dibujado en el editor |
+| **Hasta dónde dispara el Tunguska** | mismo nodo → `engagement_radius` (250). Hoy hay que mantenerlo a mano igual al `max_range` del arma |
+| Quitar los círculos de la pantalla | mismo nodo → `visible_rings` (no borra los radios) |
+| Velocidad del radar girando | nodo `Radar` → `scan_speed_deg` (120 = una vuelta cada 3 s) |
+| **Rapidez de la torreta** | nodo `Turret` → `turn_speed_deg` (60). Es el tiempo de reacción de la unidad: a 60°/s tarda 3 s en darse la vuelta entera, y ése es el margen para cruzar |
+| Cada cuánto rebusca blancos | mismo nodo → `rescan_interval` (0,1 s) |
+| Largo de las ráfagas del antiaéreo | `core/weapon/2a38m_cannon.tres` → `burst_seconds` / `burst_pause` (0,8 / 0,7). **`burst_seconds = 0` = fuego continuo**, que es lo que usa el cañón del avión |
+| Bocas de los cañones del Tunguska | nodos `CannonFlashL/R`, `CannonTracersL/R`, `CannonSmokeL/R` de la torreta → `position` (∓7, 12) |
 | A qué velocidad despega un avión | no se ajusta: es su `min_speed`, y la cubierta se la pregunta |
 | Resistencia de cada unidad | `<unidad>_type.tres` → `max_health` |
 | Altura y sombra de la Mk-82 al caer | nodo `Shadow` de `mk82_bomb.tscn` → `descent_px` / `ground_px`. Es la sombra del misil, prestada hasta que tenga la suya |

@@ -38,6 +38,8 @@ class_name EffectEmitter
 @export var stop_signal: StringName = &""
 
 var _world: Node = null
+## Lo que falta para soltar lo siguiente, para quien siembre por cadencia.
+var _until_next: float = 0.0
 ## Quien enciende y apaga esto. Se guarda porque algún efecto necesita algo más
 ## que el encendido: la trazadora le pregunta al arma a qué distancia tira.
 var _source: Node = null
@@ -86,8 +88,33 @@ func stop() -> void:
 
 ## Punto de partida de la cuenta que lleve la subclase. El portero es
 ## `set_physics_process()`, no una bandera aparte.
+##
+## Por defecto pone el reloj a cero, que es lo que quiere cualquiera que siembre
+## por cadencia: **el primero sale ya**, porque esperar el intervalo dejaría un
+## hueco entre el fogonazo y lo primero que salga por la boca. Quien siembre por
+## distancia lo sobrescribe.
 func _begin() -> void:
-	pass
+	_until_next = 0.0
+
+
+## Cuántas cosas toca soltar en este frame, sembrando a `per_second`.
+##
+## Devuelve un número y no un sí/no porque **con cadencias por encima de los fps
+## toca soltar más de una en el mismo frame**; el resto se arrastra al siguiente
+## en vez de perderse, así que la cadencia real no queda limitada por los fps.
+##
+## Está aquí y no en cada emisor porque las trazadoras y los casquillos llevan la
+## misma cuenta: lo único que cambia es qué sale.
+func _due(delta: float, per_second: float) -> int:
+	if per_second <= 0.0:
+		return 0
+	_until_next -= delta
+	var interval := 1.0 / per_second
+	var count := 0
+	while _until_next <= 0.0:
+		count += 1
+		_until_next += interval
+	return count
 
 
 ## El rumbo REAL de quien emite, no la rotación de este nodo.

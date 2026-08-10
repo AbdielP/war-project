@@ -15,6 +15,8 @@
 [ext_resource type="PackedScene" path="res://core/weapon/cannon_smoke_puff.tscn" id="13"]
 [ext_resource type="Script" uid="uid://bsjekc6u5xhjv" path="res://core/weapon/tracer_stream.gd" id="14"]
 [ext_resource type="PackedScene" path="res://core/weapon/tracer.tscn" id="15"]
+[ext_resource type="Script" uid="uid://bv57amugr3vv0" path="res://core/weapon/casing_ejector.gd" id="16"]
+[ext_resource type="PackedScene" path="res://core/weapon/casing_25mm.tscn" id="17"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(28, 32)
@@ -22,7 +24,6 @@ size = Vector2(28, 32)
 [node name="Av8bHarrier" unique_id=1 instance=ExtResource("1")]
 z_index = 10
 script = ExtResource("4")
-
 unit_type = ExtResource("3")
 
 [node name="Sprite2D" parent="." index="0"]
@@ -104,6 +105,15 @@ stop_signal = &"firing_stopped"
 position = Vector2(8, 13)
 script = ExtResource("14")
 spawn_scene = ExtResource("15")
+source_path = NodePath("../WeaponSystem")
+start_signal = &"firing_started"
+stop_signal = &"firing_stopped"
+
+[node name="CannonCasings" type="Node2D" parent="." index="11" unique_id=970960894]
+position = Vector2(9, 7)
+script = ExtResource("16")
+eject_angle_deg = -90.0
+spawn_scene = ExtResource("17")
 source_path = NodePath("../WeaponSystem")
 start_signal = &"firing_started"
 stop_signal = &"firing_stopped"

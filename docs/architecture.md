@@ -1052,6 +1052,14 @@ de ésta. El avión no nota el cambio: su padre ya era la `Unit`.
 **Que la señal no exista no es un error:** así se puede colocar y probar un efecto antes de
 que exista quien lo dispare.
 
+**`_due(delta, per_second)` — la cuenta de quien siembra por cadencia.** `TracerStream` y
+`CasingEjector` llevaban la misma, y sólo cambiaba qué sale. Devuelve **cuántos** tocan en este
+frame, no un sí/no: con cadencias por encima de los fps hay que soltar más de uno en el mismo
+frame, y el resto se arrastra al siguiente en vez de perderse, así que **la cadencia real no
+queda limitada por los fotogramas**. El `_begin()` de la base pone el reloj a cero para que el
+primero salga ya —esperar el intervalo dejaría un hueco entre el fogonazo y lo primero que sale
+por la boca—; quien siembra por distancia (`SmokeTrail`) lo sobrescribe.
+
 #### `SmokeTrail` — `smoke_trail.gd` (`extends EffectEmitter`)
 ```
 extends EffectEmitter   class_name SmokeTrail
@@ -1194,6 +1202,61 @@ a 900 px/s son **315 px de los 360** — la bala se pasaba el 87% del viaje sali
 y el trazo de verdad sólo aparecía los últimos 45 px, justo antes de borrarse. Con los dos
 tiempos separados es al revés: 105 px formándose y 315 de trazo. Una tira de dibujos no
 siempre es una animación; a veces son dos estados y hay que preguntarle al que la dibujó.
+
+#### `CasingEjector` — `casing_ejector.gd` (`extends EffectEmitter`)
+```
+extends EffectEmitter   class_name CasingEjector
+```
+Va escupiendo casquillos mientras dure el fuego. Hermano de `TracerStream`: los dos siembran
+por cadencia y esa cuenta la lleva la base (`_due()`). Lo suyo es que **lo que sale no va hacia
+adelante**.
+
+| export | por defecto | qué es |
+|---|---|---|
+| `casings_per_second` | 8–10 | cada cuántos disparos se ve caer uno, no la cadencia del arma |
+| `eject_angle_deg` | 90 | por qué lado salen (ver abajo) |
+| `angle_spread_deg` | 25 | cuánto se abre el chorro |
+| `inherit_velocity` | 0,5 | qué fracción de la velocidad del vehículo se llevan |
+
+**El lado es del arma, no del cartucho.** Vivía en `Casing` y no servía: un cañón gemelo usa el
+mismo cartucho en los dos tubos y escupe a lados opuestos. `Casing.launch()` recibe la dirección
+ya resuelta.
+
+> ⚠ **`−90` es la izquierda de quien va dentro; `+90`, su derecha.** No es la izquierda del
+> dibujo. El arte apunta a +Y —al sur—, y quien mira al sur tiene el este a su izquierda: el
+> lado +X, que en la imagen se ve a la **derecha**. Mirar el sprite quieto en el editor para
+> elegir el signo lleva justo al error contrario.
+
+**`inherit_velocity` ni 0 ni 1.** A 1 volarían pegados al avión; a 0 quedarían clavados en el
+aire como si el avión no llevara inercia. A la mitad salen acompañando y **se van quedando
+atrás** — medido, hasta 68 px por detrás del morro. La velocidad se le pregunta a la unidad
+(`get_velocity()`) y no se deduce del movimiento del nodo: **la torreta gira, y girar no es
+desplazarse**.
+
+---
+
+#### `Casing` — `casing.gd`
+```
+extends Sprite2D   class_name Casing
+```
+Un casquillo: sale de lado, da vueltas, frena rápido y se apaga en el suelo con un fundido.
+**No es munición y no hace nada** — la bala ya salió por el otro extremo.
+
+| export | por defecto |
+|---|---|
+| `eject_speed` / `speed_spread` | 70 px/s / ±35% |
+| `drag` | 6 (frenada exponencial) |
+| `spin_deg` | 720, sentido al azar |
+| `lifetime` / `fade_fraction` | 0,9 s / último 35% |
+
+Deja de girar a la vez que deja de moverse: un casquillo quieto dando vueltas en el sitio se
+lee como un error. Y **cuelga del mundo**, así que se queda donde cayó aunque el que disparó se
+vaya o muera.
+
+Las escenas van por **calibre y no por unidad** —`casing_30mm.tscn`, `casing_25mm.tscn`—, las
+dos recortadas del mismo PNG de 5×6: regiones `(1,1)` 1×4 y `(3,2)` 1×3.
+
+---
 
 #### `SmokePuff` — `smoke_puff.gd`
 ```
@@ -1573,8 +1636,13 @@ No recibe órdenes: es del otro bando y se defiende sola.
 
 **Efectos:** hoy usa prestados los del Harrier (`cannon_flash_frames`, `tracer.tscn`,
 `cannon_smoke_puff`) hasta que tenga los suyos. Son **dos juegos, uno por cañón**, en
-`x = ∓7, y = +12` — la boca de cada tubo, medida sobre el sprite. Los seis escuchan
+`x = ∓7, y = +12` — la boca de cada tubo, medida sobre el sprite. Todos escuchan
 `firing_started`/`firing_stopped`, así que los dos tubos abren y cierran sincronizados.
+
+Más los **casquillos de 30 mm**: `CasingsL` / `CasingsR` en `(∓9, −7)`, la culata de cada
+cañón, escupiendo **cada uno hacia afuera** (`+90` el izquierdo, `−90` el derecho). Aquí el
+criterio es "hacia afuera" y no izquierda/derecha del vehículo, así que no depende de la
+convención que confunde en el Harrier. `inherit_velocity` da igual: el vehículo no se mueve.
 
 > Cambiar el arte después no toca código: `MuzzleFlash` recibe un `SpriteFrames` y
 > `TracerStream` un `PackedScene`, los dos apuntados desde la escena. Lo único heredado es la
@@ -1598,14 +1666,18 @@ extends Unit
 **Escena:** `Sprite2D`, `CollisionShape2D`, `SelectionIndicator`, `PlaneController`,
 `OrbitBehavior`, `AttackRun` (`AttackRunBehavior`), `WeaponSystem`, `Hardpoints`
 (`HardpointRack` con 10 `Marker2D`: `L1`, `L2a`, `L2c`, `L3a`, `L3c` y sus simétricos
-`R`), `CannonFlash` (`MuzzleFlash`), `CannonSmoke` (`SmokeTrail`) y `CannonTracers`
-(`TracerStream`). `z_index = 10` en el raíz.
+`R`), `CannonFlash` (`MuzzleFlash`), `CannonSmoke` (`SmokeTrail`), `CannonTracers`
+(`TracerStream`) y `CannonCasings` (`CasingEjector`, 25 mm). `z_index = 10` en el raíz.
 
-**Los tres efectos del cañón se colocan a ojo en el editor** y no dependen de nada del
-código: `CannonFlash` y `CannonTracers` en la boca del arma, `CannonSmoke` bajo el ala.
-Los tres escuchan `firing_started` / `firing_stopped` en **`../WeaponSystem`**, que es
-quien sabe si se dan las condiciones de tiro. Ninguno conoce a los otros: sumar un cuarto
-efecto no obliga a tocar nada.
+**Los efectos del cañón se colocan a ojo en el editor** y no dependen de nada del
+código: `CannonFlash` y `CannonTracers` en la boca del arma, `CannonSmoke` bajo el ala,
+`CannonCasings` junto a la cabina. Todos escuchan `firing_started` / `firing_stopped` en
+**`../WeaponSystem`**, que es quien sabe si se dan las condiciones de tiro. Ninguno conoce
+a los otros: sumar un efecto más no obliga a tocar nada — los casquillos se añadieron así,
+sin tocar una línea de los otros tres.
+
+`CannonCasings` lleva **`eject_angle_deg = −90`**: la izquierda del piloto. Ver la advertencia
+en `CasingEjector` — no es la izquierda de la imagen.
 
 **API:**
 - `start_flight(orbit_center)` — la cubierta le cede el control y enciende el armamento. **Sólo entra al circuito de espera si no tiene órdenes**: si hay `attack_target` sale a por él, y si `orbit.has_pending_order()` no toca nada (el destino ya está puesto en el piloto). El circuito es lo que hace un avión sin órdenes, y el jugador pudo darle una mientras estaba en cubierta
@@ -2455,6 +2527,29 @@ sale el offset exacto. **Anchos par e impar no se pueden centrar con offsets ent
 desvío mínimo es medio píxel y uno fraccionario rompe el encaje. Cuando pase, se deja
 escrito de qué lado quedó y por qué — es un arreglo de arte, no de posición.
 
+### Los lados se razonan desde dentro del vehículo, no desde la imagen
+Para cualquier cosa que salga **de lado** —casquillos hoy, eyecciones o escapes laterales
+mañana— el sistema de referencia es el del vehículo, no el del dibujo en el editor.
+
+El arte apunta a **+Y**, o sea al sur, y **quien mira al sur tiene el este a su izquierda**. El
+este es +X, que en la imagen se ve a la **derecha**. Así que "la izquierda del piloto" y "la
+izquierda del sprite" son lados contrarios, y mirar el sprite quieto para elegir el signo lleva
+justo al error opuesto. Es la misma familia que el `−90` del rumbo y que el `get_facing()` de
+una torreta: el marco del dibujo no es el marco del vehículo.
+
+Cuando el criterio es **"hacia afuera"** —los dos cañones de un gemelo— la trampa desaparece,
+porque no depende de izquierda ni derecha.
+
+### Medir el efecto, no el punto de partida
+Un test que comprueba **dónde nace** una cosa no prueba **hacia dónde va**. Con los dos
+eyectores del Tunguska escupiendo al mismo lado, la primera medición seguía informando de
+casquillos "a izquierda y derecha": nacían en sitios distintos, y eso era todo lo que estaba
+mirando. El bug sobrevivió a su propia prueba.
+
+Lo que hay que medir es el desplazamiento respecto al origen, o el estado después de que la
+cosa haya tenido tiempo de ocurrir. Mismo error que el de esperar un número fijo de pasos en
+vez de esperar al hecho.
+
 ### El contexto desambigua el gesto, no un modo aparte
 Antes de añadir un modo o un gesto secundario para una acción nueva, comprobar si el
 contexto ya alcanza para distinguirla. Ejemplo: atacar no necesitó doble-tap ni un botón de
@@ -2514,6 +2609,7 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **2S6 Tunguska**: primera unidad enemiga con comportamiento — radar girando, torreta que engancha y sigue al avión más cercano, y cañón gemelo con ráfagas cortas. Construida con tres componentes genéricos (`RangeRings`, `RadarDish`, `TurretTracker`) y veinte líneas de pegamento
 - [x] Círculos de alcance visibles y ajustables en el editor (`RangeRings`, `@tool`): detección y tiro por separado
 - [x] Ráfagas por arma (`burst_seconds` / `burst_pause`), con 0 = fuego continuo para no tocar el cañón del avión
+- [x] Casquillos al disparar (`Casing` / `CasingEjector`), por calibre y no por unidad: 30 mm en el Tunguska (uno por cañón, hacia afuera) y 25 mm en el Harrier (izquierda del piloto, arrastrando con el avión)
 - [x] Primer enemigo en el mapa: T-14 Armata (estático, sin IA)
 - [x] Atacar: click/tap sobre un enemigo con unidad propia seleccionada, o "Atacar" en `TargetMenu`; al morir el objetivo, el Harrier orbita donde llegó
 - [x] Menú contextual (`TargetMenu`) sobre unidad ajena: click derecho en PC, pulsación mantenida en táctil (`PanCamera.long_pressed`)

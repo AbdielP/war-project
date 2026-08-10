@@ -4,6 +4,59 @@ Registro cronológico (más reciente arriba). Una entrada por decisión: qué se
 
 ## 2026-08-10
 
+### Los casquillos van por calibre, no por unidad
+Un archivo de 5×6 px con los dos casquillos dentro, recortados con `AtlasTexture`, y dos
+escenas: `casing_30mm.tscn` y `casing_25mm.tscn`. **Nombrados por el cartucho y no por el
+vehículo** porque el casquillo es del cartucho: el mismo 25 mm vale para cualquier arma que lo
+dispare, y atarlo al Harrier obligaría a duplicarlo en cuanto haya otra que use ese calibre.
+
+Como con las trazadoras, **no se echa uno por bala**: 8–10 por segundo de los 50–60 que se
+disparan. Sesenta nodos por segundo no se sostienen y además no se distinguirían.
+
+### Por qué lado sale un casquillo lo decide el arma, no el cartucho
+Primer intento: `eject_angle_deg` vivía en `Casing`. No funciona con un cañón gemelo — los dos
+tubos usan el mismo cartucho y escupen a lados opuestos —, y habría obligado a dos escenas por
+calibre. Se movió a `CasingEjector`, y `Casing.launch()` recibe la dirección **ya resuelta**: el
+cartucho no sabe de armas.
+
+### La izquierda del piloto y la izquierda del dibujo son lados opuestos
+Costó tres intentos y merece quedar escrito, porque va a volver a pasar con cualquier efecto
+lateral.
+
+El arte apunta a **+Y**, o sea al sur. **Quien mira al sur tiene el este a su izquierda**, y el
+este es +X: el lado **derecho** de la imagen. Así que "el lado izquierdo de la cabina" y "el
+lado izquierdo del sprite en el editor" son sitios contrarios, y mirar el sprite quieto para
+decidir el signo lleva justo al error.
+
+La regla: **para cualquier cosa que salga de lado, razonar desde dentro del vehículo, no desde
+la imagen.** Es la misma familia de fallo que el `−90` del rumbo y que el `get_facing()` de la
+torreta: el sistema de referencia del dibujo no es el del vehículo.
+
+De paso, la primera medición no lo detectó porque comprobaba **dónde nacían** los casquillos y
+no **hacia dónde salían**: con los dos eyectores del Tunguska escupiendo al mismo lado, el test
+seguía viendo casquillos a izquierda y derecha, porque nacían en sitios distintos. Medir el
+efecto, no la posición de partida.
+
+### La cadencia de siembra es una sola, esté quien esté sembrando
+`TracerStream` y `CasingEjector` llevaban la misma cuenta —restar el delta, soltar los que
+toquen, arrastrar el resto al frame siguiente— y sólo cambiaba qué sale. Se extrajo a
+`EffectEmitter._due(delta, per_second)`.
+
+Devuelve un **número** y no un sí/no a propósito: con cadencias por encima de los fps toca
+soltar más de uno en el mismo frame, y sin arrastrar el resto la cadencia real quedaría limitada
+por los fotogramas. `_begin()` de la base pone el reloj a cero para que **el primero salga ya**;
+quien siembre por distancia (`SmokeTrail`) lo sobrescribe. El cañón del avión no notó el cambio:
+sigue quitando 37,7 en la primera pasada y abriendo fuego una sola vez por pasada.
+
+### Un casquillo hereda parte de la velocidad, ni toda ni ninguna
+`inherit_velocity = 0.5`. A 1 volarían pegados al avión como si fueran parte de él; a 0 se
+quedarían clavados en el aire, como si el avión no llevara inercia. A la mitad salen
+acompañando y **se van quedando atrás** — medido, hasta 68 px por detrás del morro antes de
+frenarse del todo.
+
+Se le pregunta la velocidad a la unidad (`get_velocity()`) y no se deduce de cómo se mueve el
+nodo emisor: **la torreta de un antiaéreo gira, y girar no es desplazarse**.
+
 ### Una unidad antiaérea son tres componentes genéricos y veinte líneas de pegamento
 El 2S6 Tunguska es la primera unidad enemiga con comportamiento. Podía haber sido una clase
 `Tunguska` con todo dentro; se hizo al revés, y la prueba de que la separación es real es

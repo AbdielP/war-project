@@ -106,6 +106,11 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Cada cuánto rebusca blancos | mismo nodo → `rescan_interval` (0,1 s) |
 | Largo de las ráfagas del antiaéreo | `core/weapon/2a38m_cannon.tres` → `burst_seconds` / `burst_pause` (0,8 / 0,7). **`burst_seconds = 0` = fuego continuo**, que es lo que usa el cañón del avión |
 | Bocas de los cañones del Tunguska | nodos `CannonFlashL/R`, `CannonTracersL/R`, `CannonSmokeL/R` de la torreta → `position` (∓7, 12) |
+| Cuántos casquillos se ven caer | nodo `CannonCasings` (Harrier) o `CasingsL/R` (Tunguska) → `casings_per_second`. **No es uno por bala**: 8-10 de los 50-60 que se disparan |
+| **Por qué lado salen los casquillos** | mismo nodo → `eject_angle_deg`. **−90 = izquierda del piloto, +90 = su derecha.** Ojo: **no** es la izquierda del dibujo — el arte mira al sur, y quien mira al sur tiene el este a su izquierda |
+| Cuánto se abre el reguero de casquillos | mismo nodo → `angle_spread_deg` (25° a cada lado) |
+| Cuánto arrastra el casquillo al avión | mismo nodo → `inherit_velocity` (0,5). A 1 volarían pegados al avión, a 0 quedarían clavados en el aire |
+| Vuelo del casquillo (velocidad, frenada, giro, vida) | `core/weapon/casing_30mm.tscn` / `casing_25mm.tscn` → `eject_speed`, `drag`, `spin_deg`, `lifetime` |
 | A qué velocidad despega un avión | no se ajusta: es su `min_speed`, y la cubierta se la pregunta |
 | Resistencia de cada unidad | `<unidad>_type.tres` → `max_health` |
 | Altura y sombra de la Mk-82 al caer | nodo `Shadow` de `mk82_bomb.tscn` → `descent_px` / `ground_px`. Es la sombra del misil, prestada hasta que tenga la suya |

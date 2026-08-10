@@ -2,11 +2,11 @@
 
 [ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
 [ext_resource type="Texture2D" uid="uid://ba15tj4nkfmy4" path="res://assets/art/sprites/2S6 Tunguska.png" id="2"]
-[ext_resource type="Resource" path="res://core/unit/2s6_tunguska/2s6_tunguska_type.tres" id="3"]
+[ext_resource type="Resource" uid="uid://deh1o0475jjds" path="res://core/unit/2s6_tunguska/2s6_tunguska_type.tres" id="3"]
 [ext_resource type="Script" uid="uid://bflrckokenmqs" path="res://core/unit/range_rings.gd" id="4"]
 [ext_resource type="Script" uid="uid://bal67o5na5fld" path="res://core/unit/radar_dish.gd" id="5"]
 [ext_resource type="Script" uid="uid://cm26t1nxoptb0" path="res://core/unit/turret_tracker.gd" id="6"]
-[ext_resource type="Script" path="res://core/unit/2s6_tunguska/tunguska_2s6.gd" id="7"]
+[ext_resource type="Script" uid="uid://0c2ynci0wooa" path="res://core/unit/2s6_tunguska/tunguska_2s6.gd" id="7"]
 [ext_resource type="Script" uid="uid://dqfwj1xrfic38" path="res://core/weapon/weapon_system.gd" id="8"]
 [ext_resource type="Script" uid="uid://dj8ko3tggrbdb" path="res://core/weapon/muzzle_flash.gd" id="9"]
 [ext_resource type="SpriteFrames" uid="uid://cdwbvnuj2xeu3" path="res://core/weapon/cannon_flash_frames.tres" id="10"]
@@ -14,6 +14,8 @@
 [ext_resource type="PackedScene" path="res://core/weapon/tracer.tscn" id="12"]
 [ext_resource type="Script" uid="uid://1do5br64c6er" path="res://core/weapon/smoke_trail.gd" id="13"]
 [ext_resource type="PackedScene" path="res://core/weapon/cannon_smoke_puff.tscn" id="14"]
+[ext_resource type="Script" uid="uid://bv57amugr3vv0" path="res://core/weapon/casing_ejector.gd" id="15"]
+[ext_resource type="PackedScene" path="res://core/weapon/casing_30mm.tscn" id="16"]
 
 [sub_resource type="AtlasTexture" id="Hull"]
 atlas = ExtResource("2")
@@ -56,29 +58,23 @@ position = Vector2(0, -10)
 texture = SubResource("Radar")
 script = ExtResource("5")
 
-[node name="RangeRings" type="Node2D" parent="." index="4" unique_id=2072478315]
-script = ExtResource("4")
-detection_radius = 400.0
-engagement_radius = 250.0
-
-[node name="WeaponSystem" type="Node" parent="."]
-script = ExtResource("8")
-
-[node name="CannonFlashL" type="AnimatedSprite2D" parent="Turret"]
+[node name="CannonFlashL" type="AnimatedSprite2D" parent="Turret" index="1" unique_id=1733175595]
 z_index = 2
 position = Vector2(-7, 12)
 sprite_frames = ExtResource("10")
+animation = &"start"
 script = ExtResource("9")
 source_path = NodePath("../../WeaponSystem")
 
-[node name="CannonFlashR" type="AnimatedSprite2D" parent="Turret"]
+[node name="CannonFlashR" type="AnimatedSprite2D" parent="Turret" index="2" unique_id=1765709450]
 z_index = 2
 position = Vector2(7, 12)
 sprite_frames = ExtResource("10")
+animation = &"start"
 script = ExtResource("9")
 source_path = NodePath("../../WeaponSystem")
 
-[node name="CannonTracersL" type="Node2D" parent="Turret"]
+[node name="CannonTracersL" type="Node2D" parent="Turret" index="3" unique_id=1320684902]
 position = Vector2(-7, 12)
 script = ExtResource("11")
 spawn_scene = ExtResource("12")
@@ -86,7 +82,7 @@ source_path = NodePath("../../WeaponSystem")
 start_signal = &"firing_started"
 stop_signal = &"firing_stopped"
 
-[node name="CannonTracersR" type="Node2D" parent="Turret"]
+[node name="CannonTracersR" type="Node2D" parent="Turret" index="4" unique_id=1663430955]
 position = Vector2(7, 12)
 script = ExtResource("11")
 spawn_scene = ExtResource("12")
@@ -94,7 +90,7 @@ source_path = NodePath("../../WeaponSystem")
 start_signal = &"firing_started"
 stop_signal = &"firing_stopped"
 
-[node name="CannonSmokeL" type="Node2D" parent="Turret"]
+[node name="CannonSmokeL" type="Node2D" parent="Turret" index="5" unique_id=2134775960]
 position = Vector2(-7, 8)
 script = ExtResource("13")
 spawn_scene = ExtResource("14")
@@ -102,10 +98,37 @@ source_path = NodePath("../../WeaponSystem")
 start_signal = &"firing_started"
 stop_signal = &"firing_stopped"
 
-[node name="CannonSmokeR" type="Node2D" parent="Turret"]
+[node name="CannonSmokeR" type="Node2D" parent="Turret" index="6" unique_id=387755489]
 position = Vector2(7, 8)
 script = ExtResource("13")
 spawn_scene = ExtResource("14")
 source_path = NodePath("../../WeaponSystem")
 start_signal = &"firing_started"
 stop_signal = &"firing_stopped"
+
+[node name="CasingsL" type="Node2D" parent="Turret" index="7" unique_id=67077345]
+position = Vector2(-9, -7)
+script = ExtResource("15")
+casings_per_second = 8.0
+spawn_scene = ExtResource("16")
+source_path = NodePath("../../WeaponSystem")
+start_signal = &"firing_started"
+stop_signal = &"firing_stopped"
+
+[node name="CasingsR" type="Node2D" parent="Turret" index="8" unique_id=637734800]
+position = Vector2(9, -7)
+script = ExtResource("15")
+casings_per_second = 8.0
+eject_angle_deg = -90.0
+spawn_scene = ExtResource("16")
+source_path = NodePath("../../WeaponSystem")
+start_signal = &"firing_started"
+stop_signal = &"firing_stopped"
+
+[node name="RangeRings" type="Node2D" parent="." index="4" unique_id=2072478315]
+script = ExtResource("4")
+detection_radius = 400.0
+engagement_radius = 250.0
+
+[node name="WeaponSystem" type="Node" parent="." index="5" unique_id=22577873]
+script = ExtResource("8")

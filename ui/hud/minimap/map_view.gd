@@ -43,8 +43,22 @@ signal refitted
 ## mapa**: es un icono, no terreno — a 1 px por celda un punto a escala sería
 ## invisible, y en el mapa grande sería una mancha.
 @export var marker_px: int = 2
+## Ondas donde nos han enganchado o nos están disparando. Ver [ThreatPulses].
+@export var show_alerts: bool = true
+## Hasta dónde se abre cada onda, en píxeles de pantalla. **No escala con el
+## mapa**, igual que los puntos: en el minimapa un anillo a escala real sería de
+## dos píxeles y no se vería. Aquí sí conviene subirlo en el mapa grande, donde
+## hay sitio de sobra.
+@export var alert_radius_px: float = 12.0
+## Cuántas ondas salen por contacto, repartidas en lo que dura. Varias y no una
+## porque **una sola se pierde si el jugador estaba mirando a otro lado**.
+@export_range(1, 6, 1) var alert_rings: int = 3
 
 const _COLOR_TEXT := Color(0.6705882, 0.5803922, 0.4784314)
+## Nos siguen con el radar, pero todavía no disparan.
+const _COLOR_TRACKED := Color(0.98, 0.76, 0.29)
+## Nos están disparando.
+const _COLOR_FIRED_UPON := Color(0.9, 0.29, 0.31)
 const _COLOR_ACCENT := Color(0.56078434, 0.827451, 1.0)
 ## Filo oscuro alrededor de cada punto. No es adorno: el azul del jugador y el
 ## azul del agua se parecen demasiado, y un punto de 2 px sin borde desaparece.
@@ -76,11 +90,17 @@ var _selected: Unit = null
 ## Mantener pulsado equivale al click derecho, igual que en el mundo. Sin esto,
 ## en móvil no habría forma de abrir el menú de una unidad desde el mapa.
 var _press := LongPress.new()
+## Los contactos que hay que señalar. Cada mapa lleva los suyos: el grande está
+## oculto casi siempre pero sigue apuntándolos, así que al abrirlo se ve lo que
+## está pasando en vez de nada.
+var _alerts := ThreatPulses.new()
 
 
 func _ready() -> void:
 	resized.connect(_refit)
 	_refit()
+	if show_alerts:
+		_alerts.attach(self)
 
 
 ## Rehace la imagen del terreno. Público porque el mapa cambia por misión: quien
@@ -230,7 +250,11 @@ func _process(delta: float) -> void:
 	if _press.tick(delta):
 		_emit_at(_press.origin(), true)
 	var current := get_viewport().get_canvas_transform()
-	if show_units or current != _last_transform:
+	# Las ondas se mueven solas, así que hay que repintar mientras haya alguna
+	# viva aunque no se mueva nada más. Con los puntos encendidos ya se repinta
+	# cada frame de todos modos.
+	if show_units or current != _last_transform \
+			or (show_alerts and _alerts.any_active()):
 		_last_transform = current
 		queue_redraw()
 
@@ -250,6 +274,40 @@ func _draw() -> void:
 		_draw_order_marker(drawn)
 	if show_units:
 		_draw_units(drawn)
+	# Al final del todo: es lo más urgente que hay en el mapa, así que se dibuja
+	# encima de las unidades y no debajo.
+	if show_alerts:
+		_draw_alerts(drawn)
+
+
+## Las ondas de los contactos. Cada una nace en el punto y se abre hacia afuera
+## desvaneciéndose, y se repiten mientras el contacto siga vigente.
+##
+## El anillo es de **píxeles de pantalla y no de mundo**: lo que dice es "mirá
+## acá", y eso tiene que medir lo mismo en el minimapa que en el mapa grande. Un
+## radio a escala real sería de dos píxeles en el minimapa.
+func _draw_alerts(drawn: Vector2) -> void:
+	var inside := Rect2(_origin, drawn)
+	for pulse in _alerts.active():
+		var center := world_to_local(pulse["where"])
+		if not inside.has_point(center):
+			continue
+		var color: Color = _COLOR_FIRED_UPON \
+			if pulse["kind"] == ThreatPulses.Kind.FIRED_UPON else _COLOR_TRACKED
+		_draw_rings(center, float(pulse["age"]), color)
+
+
+func _draw_rings(center: Vector2, age: float, color: Color) -> void:
+	var every := ThreatPulses.LIFETIME / float(alert_rings)
+	for i in alert_rings:
+		# Cada onda arranca más tarde que la anterior. Las que aún no han salido
+		# dan negativo y se saltan.
+		var t := (age - i * every) / every
+		if t < 0.0 or t > 1.0:
+			continue
+		var faded := color
+		faded.a = 1.0 - t
+		draw_arc(center, alert_radius_px * t, 0.0, TAU, 24, faded, 1.0)
 
 
 ## El destino de la orden en curso: la misma cruz dentro de un círculo que se

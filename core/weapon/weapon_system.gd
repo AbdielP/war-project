@@ -117,7 +117,12 @@ func _physics_process(delta: float) -> void:
 		return
 
 	var weapon := _unit.active_weapon
-	var target := _unit.attack_target
+	# A `null` en cuanto deja de existir, y no sólo "ya se comprobará luego": una
+	# referencia liberada NO es `null` y sigue teniendo tipo, así que pasarla a
+	# una función que espera `Unit` revienta al entrar, antes de que nadie pueda
+	# comprobar nada. Pasa de verdad: el blanco puede morir entre dos frames y
+	# quien lo apuntaba tarda en enterarse.
+	var target: Unit = _unit.attack_target if is_instance_valid(_unit.attack_target) else null
 
 	if weapon != null and weapon.fire_mode == WeaponType.FireMode.SUSTAINED:
 		_work_the_trigger(weapon, target, delta)
@@ -209,7 +214,7 @@ func _pour_rounds(weapon: WeaponType, target: Unit, delta: float) -> void:
 	var rounds := weapon.rounds_per_second * delta
 	var hits := rounds * _hit_fraction(weapon, target)
 	if hits > 0.0:
-		target.take_damage(weapon.damage * hits)
+		target.take_damage(weapon.damage * hits, _unit)
 
 
 ## Qué fracción de la ráfaga entra, de 0 a 1. Dos cosas la bajan, y las dos son

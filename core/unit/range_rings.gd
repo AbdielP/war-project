@@ -57,6 +57,12 @@ class_name RangeRings
 		engagement_color = value
 		queue_redraw()
 
+## La zona muerta: el círculo de dentro, donde el cañón ya no puede tirar.
+@export var dead_zone_color: Color = Color(0.4, 0.68, 0.42, 0.8):
+	set(value):
+		dead_zone_color = value
+		queue_redraw()
+
 ## Grosor de la línea, en píxeles de mundo. A 1 se ve de un píxel a escala 1x,
 ## que es lo que pide el pixel art.
 @export var line_width: float = 1.0:
@@ -72,13 +78,41 @@ class_name RangeRings
 		queue_redraw()
 
 
+## El radio de la zona muerta la última vez que se dibujó. Sirve para notar que
+## el arma cambió mientras se edita, ya que ese número no es un export de aquí y
+## nadie avisa cuando se toca.
+var _drawn_dead_zone: float = -1.0
+
+
 func _draw() -> void:
 	if not visible_rings:
 		return
-	# El de detección primero: es el de fuera y el más tenue, así que el de tiro
-	# se dibuja encima y gana donde se toquen.
+	# De fuera hacia dentro: los de dentro se dibujan encima y ganan donde se
+	# toquen, que es el orden en que importan.
 	_ring(detection_radius, detection_color)
 	_ring(engagement_radius, engagement_color)
+	_drawn_dead_zone = dead_zone_radius()
+	_ring(_drawn_dead_zone, dead_zone_color)
+
+
+## Dentro de esto el cañón ya no llega. **No es un export**: sale del `min_range`
+## del arma, que es quien lo decide de verdad. Apuntarlo también aquí daría dos
+## verdades sobre lo mismo y el círculo acabaría mintiendo.
+##
+## 0 = la unidad no tiene cañón, o su cañón no tiene zona muerta.
+func dead_zone_radius() -> float:
+	var unit := get_parent() as Unit
+	if unit == null or unit.unit_type == null or unit.unit_type.cannon == null:
+		return 0.0
+	return unit.unit_type.cannon.min_range
+
+
+func _process(_delta: float) -> void:
+	# Sólo en el editor y sólo si cambió: el radio de dentro viene del arma, así
+	# que tocar el `.tres` no dispara ningún setter de aquí y el círculo se
+	# quedaría con el valor viejo hasta recargar la escena.
+	if Engine.is_editor_hint() and not is_equal_approx(_drawn_dead_zone, dead_zone_radius()):
+		queue_redraw()
 
 
 func _ring(radius: float, color: Color) -> void:

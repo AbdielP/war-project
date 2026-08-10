@@ -77,7 +77,9 @@ func _apply_damage() -> void:
 			continue
 		var damage := _damage_at(global_position.distance_to(unit.global_position))
 		if damage > 0.0:
-			unit.take_damage(damage)
+			# El arma la tiró alguien: la baja es suya, no del proyectil, que
+			# para entonces ya no existe.
+			unit.take_damage(damage, _shooter)
 
 
 ## Daño completo dentro del radio de impacto directo, decayendo hasta cero en

@@ -116,10 +116,23 @@ func _watch(node: Node) -> void:
 	unit.died.connect(_on_died)
 	unit.attack_target_changed.connect(_on_target_changed.bind(unit))
 	unit.ammo_changed.connect(_on_ammo_changed.bind(unit))
+	unit.tracked_by.connect(_on_tracked.bind(unit))
+	unit.fired_upon_by.connect(_on_fired_upon.bind(unit))
 
 
+## Caer no es lo mismo según de quién sea lo que cayó, y el parte tiene que
+## sonar distinto: **"Splash!" es lo que se canta al derribar algo**, no lo que
+## se dice al perder a uno de los tuyos.
 func _on_died(unit: Unit) -> void:
-	add_event("Splash! %s %s" % [unit.get_display_name(), _zone(unit.global_position)])
+	if not unit.is_player_controlled():
+		add_event("Splash! %s %s" % [unit.get_display_name(),
+				_zone(unit.global_position)])
+		return
+	var by := ""
+	if is_instance_valid(unit.killed_by):
+		by = ", derribado por %s" % unit.killed_by.get_display_name()
+	add_event("UNIT LOST — %s%s %s" % [unit.get_display_name(), by,
+			_zone(unit.global_position)])
 
 
 func _on_target_changed(target: Unit, unit: Unit) -> void:
@@ -129,6 +142,33 @@ func _on_target_changed(target: Unit, unit: Unit) -> void:
 		return
 	add_event("%s ataca %s %s" % [unit.get_display_name(), target.get_display_name(),
 			_zone(target.global_position)])
+
+
+## "Harrier: MUD SPIKE — 2S6 Tunguska B4". Un radar de superficie la tiene
+## enganchada, y **todavía no le disparan**: es el aviso que llega a tiempo.
+##
+## Se da la coordenada de LA AMENAZA, no la del avión: lo que el jugador necesita
+## saber es de dónde viene, para decidir por dónde sale.
+func _on_tracked(threat: Unit, unit: Unit) -> void:
+	if not _is_worth_reporting(unit, threat):
+		return
+	add_event("%s: MUD SPIKE — %s %s" % [unit.get_display_name(),
+			threat.get_display_name(), _zone(threat.global_position)])
+
+
+## "Harrier: AAA, bajo fuego B4". Esto ya no es un aviso.
+func _on_fired_upon(threat: Unit, unit: Unit) -> void:
+	if not _is_worth_reporting(unit, threat):
+		return
+	add_event("%s: AAA, bajo fuego %s" % [unit.get_display_name(),
+			_zone(threat.global_position)])
+
+
+## El parte es del jugador: que a un enemigo lo enganche otro enemigo no es
+## noticia suya. Morir sí se cuenta de todos —saber que algo cayó importa venga
+## de donde venga—, pero las alarmas son de los suyos.
+func _is_worth_reporting(unit: Unit, threat: Unit) -> bool:
+	return unit.is_player_controlled() and is_instance_valid(threat)
 
 
 ## Se cuelga del gasto de munición y no de un "disparó" propio porque es la

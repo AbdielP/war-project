@@ -4,6 +4,89 @@ Registro cronológico (más reciente arriba). Una entrada por decisión: qué se
 
 ## 2026-08-10
 
+### El daño no se hace justo esquivando: se hace justo avisando
+El problema era que el Tunguska mataba aviones y eso frustraba. La primera propuesta fue que el
+avión esquivara solo, y se descartó: **cambia frustración por algo peor**, un avión que no va
+donde lo mandaste. Lo que frustra no es recibir daño, es recibirlo sin haberlo podido prever.
+
+También se descartó la segunda idea, dejar los círculos de alcance siempre visibles: **un
+círculo comunica geometría, no peligro**. Está siempre ahí, no cambia, y el jugador deja de
+verlo a los cinco minutos.
+
+Lo que quedó es feedback **direccional y en el momento**, que le dice al jugador dónde mirar
+justo cuando importa:
+
+| aviso | de qué señal sale | qué dice |
+|---|---|---|
+| `MUD SPIKE` | `TurretTracker.target_acquired` | te tienen enganchado, aún no disparan |
+| `AAA, bajo fuego` | `WeaponSystem.firing_started` | ya te disparan |
+
+Y **la anticipación sale gratis de los rangos**, sin ningún círculo: detección 400 px, tiro
+250 px, y la torreta tarda hasta 3 s en apuntar. Medido, el `MUD SPIKE` llega 4,8 s antes del
+primer disparo. El aviso de que te siguen *es* la telegrafía.
+
+### La alarma es una sola aunque la oigan varios
+El filtro anti-repetición vive en `Unit` (`ALARM_SILENCE`, 8 s por amenaza y por tipo), no en el
+parte de eventos. Si cada consumidor —el parte, los dos mapas y el audio que falta— filtrara por
+su cuenta, tarde o temprano dirían cosas distintas sobre lo mismo.
+
+Hace falta de verdad: un cañón de ráfagas abre fuego cada segundo y medio, así que sin filtro el
+parte sería una línea repetida hasta que el avión se fuera. **Una alarma que se repite deja de
+ser una alarma.** Medido: 2 avisos donde habría habido ~10.
+
+Y el aviso va **del agresor a la víctima**, porque el que apunta es el único que sabe a quién.
+La víctima decide qué hacer con la noticia — hoy el parte y los mapas, mañana la radio.
+
+### Cada mapa lleva su propio registro de contactos
+`ThreatPulses` sólo lleva la cuenta —qué señalar y desde cuándo—; el dibujo es de cada mapa, que
+sabe su escala. El mismo contacto se pinta con un anillo de 12 px en el minimapa y de 28 en el
+grande.
+
+Que el minimapa y el mapa táctico tengan **una instancia cada uno** parece desperdicio y es
+justo lo que da el comportamiento que se buscaba: **el mapa grande está oculto casi siempre pero
+sigue apuntando lo que pasa**, así que al abrirlo porque algo sonó se ven los contactos vivos en
+vez de una pantalla en blanco. Verificado con el HUD real: 1 pulso registrado con `visible:
+false`.
+
+El radio de la onda va en **píxeles de pantalla y no de mundo**, como los puntos de unidad: lo
+que dice es "mirá acá", y eso tiene que medir lo mismo en los dos mapas. A escala real serían
+2 px en el minimapa. Y salen **tres ondas por contacto** en vez de una, porque una sola se
+pierde si el jugador estaba mirando a otro lado.
+
+### Perder una unidad y derribar una no se cuentan igual
+`Splash!` es lo que se canta **al abatir algo**, no lo que se dice al perder a uno de los tuyos.
+El parte los separa: lo enemigo sigue con `Splash!`, lo propio pasa a
+`UNIT LOST — <unidad>, derribado por <quién>`.
+
+Para poder decir *por quién* hubo que propagar el autor: `take_damage()` acepta un `source`
+opcional y la unidad apunta `killed_by`. Se guarda **quién pegó el último**, no quién pegó más:
+es lo que se dice en un parte de bajas y lo único que se puede saber sin llevar la cuenta de
+cuánto puso cada uno. Opcional porque no todo daño tendrá autor —un choque, el terreno— y
+entonces la línea sale sin culpable en vez de inventarlo.
+
+### Una baja no desaparece del panel: se apaga y se va al final
+Que un cuadrito se esfume sin más deja al jugador dudando de si perdió algo o si nunca lo tuvo.
+Apagado y al final de su fila, es el recuento de la operación. El panel guarda **el nombre y no
+la unidad**, porque para entonces la unidad ya no existe: el panel es lo único que queda de ella.
+
+### La iniciativa propia llena huecos, nunca contradice una orden
+La regla que zanjó el debate sobre si el avión debe evitar las zonas defendidas:
+
+| orden | qué fijó el jugador | puede evitar |
+|---|---|---|
+| ir a un punto | el destino, no la ruta | **sí** — rodear y llegar igual es obedecer |
+| atacar a X | el resultado | **no** — avisa y sigue |
+
+La evasión en ruta **queda aparcada a propósito**: toca el comportamiento de vuelo, que es lo
+que más costó dejar bien, y no se puede decidir con el mapa casi vacío — rodear sólo tiene
+sentido cuando hay algo que rodear. Se reevalúa cuando haya varias baterías y misiones con ruta
+real.
+
+Queda anotado **un caso que sí es un hueco** y hay que vigilar: el avión que se queda sin
+órdenes dentro del alcance. Pasa solo — al terminar un ataque, `_on_target_lost()` lo pone a
+orbitar *donde está*, que es justo encima de la defensa que acaba de atacar. Ahí no obedece
+nada: muere por una decisión automática del juego. No es esquivar, es **elegir dónde orbitar**.
+
 ### Los casquillos van por calibre, no por unidad
 Un archivo de 5×6 px con los dos casquillos dentro, recortados con `AtlasTexture`, y dos
 escenas: `casing_30mm.tscn` y `casing_25mm.tscn`. **Nombrados por el cartucho y no por el

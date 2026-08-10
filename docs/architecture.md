@@ -52,7 +52,26 @@ Base de toda unidad seleccionable. Tiene `CollisionShape2D` + `SelectionIndicato
 | `spend_ammo(w)` | Descuenta una y emite `ammo_changed`. `false` si no había |
 | `get_domain()` | `UnitType.Domain` — en qué medio se mueve; decide qué armas pueden atacarla |
 | `get_max_health()` / `is_alive()` | Resistencia |
-| `take_damage(float)` | Encaja daño. Al llegar a 0 emite `died` y `queue_free()` |
+| `take_damage(float, source)` | Encaja daño. Al llegar a 0 emite `died` y `queue_free()`. `source` es opcional: quien lo causó, si se sabe |
+| `notify_tracked(threat)` | Le avisan de que la tienen enganchada. Lo llama **la amenaza** |
+| `notify_fired_upon(threat)` | Le avisan de que le están disparando |
+
+**Alarmas: quién apunta avisa a quién es apuntado.** Dos señales, `tracked_by(threat)` y
+`fired_upon_by(threat)`. El agresor es el único que sabe a quién apunta, así que llama a la
+víctima; la víctima decide qué hacer con la noticia — hoy el parte de eventos y los dos mapas,
+mañana el audio.
+
+La diferencia entre las dos importa: **`tracked_by` llega a tiempo**. Un antiaéreo detecta más
+lejos de lo que alcanza y encima tarda en girar la torreta, así que entre que te engancha y que
+te dispara hay margen. Medido con el Tunguska: 4,8 s.
+
+**El filtro anti-repetición vive aquí** (`ALARM_SILENCE`, 8 s por amenaza y por tipo), no en
+quien escucha: la alarma es una sola aunque la oigan varios, y si cada consumidor filtrara por
+su cuenta acabarían diciendo cosas distintas. Sin él, un cañón de ráfagas —que abre fuego cada
+segundo y medio— llenaría el parte con la misma línea. Medido: 2 avisos en vez de ~10.
+
+**`killed_by`** guarda quién pegó el último, para el parte de bajas. El último y no el que más
+puso: es lo que se dice en un parte, y lo único que se sabe sin llevar la cuenta de cada uno.
 | `get_facing()` | **Virtual** — rumbo real en radianes. De ahí sale el armamento. Por defecto `global_rotation` |
 | `get_velocity()` | **Virtual** — lo que se lleva el arma al soltarse. Por defecto cero |
 | `get_time_to_impact()` | **Virtual** — segundos hasta que llegue lo que tenga disparado, −1 si nada |
@@ -207,6 +226,14 @@ número. Dos trampas ya pisadas y documentadas en el propio script:
 
 Es la fuente del alcance para quien la necesite: tenerlo también apuntado en el buscador daría
 una unidad que engancha más lejos de lo que dibuja, y el jugador ajusta lo que ve.
+
+**El círculo de dentro —la zona muerta— NO es un export.** Sale de `dead_zone_radius()`, que lee
+el `min_range` del cañón de la unidad. Apuntarlo también aquí sería un tercer número diciendo lo
+mismo, y el círculo acabaría mintiendo. Como ese valor no pasa por ningún setter de este nodo,
+en el editor se comprueba cada frame si cambió para repintar; en juego eso no corre.
+
+Sirve de ejemplo de la unificación que sigue pendiente para `engagement_radius`, que hoy **sí**
+duplica el `max_range` del arma.
 
 ---
 
@@ -1896,6 +1923,16 @@ Panel superior con las unidades desplegadas, agrupadas por categoría (grupos de
 
 Un cuadrito (`Button`, 30×14px) por unidad suelta o por **escuadrón**: si `unit.squad != null`, todos sus miembros colapsan en un solo cuadrito (con el nombre del líder), y si tiene más de 1 miembro se agrega un badge `xN` en la esquina inferior derecha (`Label` hijo del botón, `mouse_filter = IGNORE` para no tapar el click). Al presionar, emite `unit_selected(unit)` — la unidad individual, o `squad.leader` si es un escuadrón. `HUD` conecta esto a `unit_focus_requested`.
 
+**Una baja no desaparece del panel: se apaga y se va al final de su fila.** Que un cuadrito se
+esfume sin más deja al jugador dudando de si perdió algo o si nunca lo tuvo; verlo ahí, apagado,
+es el recuento de la operación. El botón va `disabled` y sin `pressed` — no hay a dónde llevar
+la cámara, lo que representaba ya no está en el mapa.
+
+Se engancha a `Unit.died` (con repaso inicial diferido, como el parte de eventos) y guarda **el
+nombre, no la unidad**: para cuando se dibuja, la unidad ya no existe y el panel es lo único que
+queda de ella. Pendiente: **las bajas se acumulan sin tope**, así que en una operación larga la
+fila se llenará de cuadritos apagados.
+
 ---
 
 ### `WeaponBar` — `ui/hud/weapon_bar/weapon_bar.gd`
@@ -1994,7 +2031,18 @@ El parte de lo que va pasando, con la coordenada del mapa. Emite
 | Orden de movimiento | `SelectionManager` → `HUD.report_move_order()` | `LHD Wasp → F4` |
 | Empieza a atacar | `Unit.attack_target_changed` | `LHD Wasp ataca T-14 Armata B2` |
 | Disparo | `Unit.ammo_changed` | `LHD Wasp: AGM-65 (Rifle!)` |
-| Muerte | `Unit.died` | `Splash! T-14 Armata B2` |
+| Baja enemiga | `Unit.died` | `Splash! T-14 Armata B2` |
+| **Baja propia** | `Unit.died` | `UNIT LOST — AV-8B Harrier II, derribado por 2S6 Tunguska D1` |
+| **Te enganchan** | `Unit.tracked_by` | `AV-8B Harrier II: MUD SPIKE — 2S6 Tunguska D1` |
+| **Te disparan** | `Unit.fired_upon_by` | `AV-8B Harrier II: AAA, bajo fuego D1` |
+
+**Caer no se cuenta igual según de quién sea.** `Splash!` es lo que se canta al abatir algo, no
+lo que se dice al perder a uno de los tuyos; de ahí las dos líneas distintas.
+
+**Las alarmas van con la coordenada de la amenaza, no la del avión**: lo que el jugador necesita
+saber es de dónde viene el fuego, para decidir por dónde sale. Y sólo se reportan las de
+unidades propias — que a un enemigo lo enganche otro enemigo no es noticia suya. Morir sí se
+cuenta de todos: saber que algo cayó importa venga de donde venga.
 
 **Se engancha él solo a cada unidad por el grupo**, igual que el mapa saca sus puntos: nadie
 tiene que avisarle de quién nace o muere. El repaso inicial va **diferido**, y no es un
@@ -2062,7 +2110,8 @@ que se notara.
 extends Control   class_name MapView
 ```
 Dibuja terreno, rejilla, coordenadas, el recuadro de lo que se ve en pantalla, las unidades,
-el destino de la orden en curso y el recuadro de la unidad seleccionada.
+el destino de la orden en curso, el recuadro de la unidad seleccionada y **las ondas de los
+contactos** (ver `ThreatPulses`).
 
 | Señal | Cuándo |
 |-------|--------|
@@ -2080,6 +2129,9 @@ API además de los exportados: `set_order_marker(world)` / `clear_order_marker()
 | `show_viewport_rect` | `true` | `true` | recuadro de lo que se está mirando |
 | `show_units` | `true` | `true` | un punto por unidad, del color de su bando |
 | `marker_px` | `2` | `4` | lado del punto **en píxeles de pantalla** |
+| `show_alerts` | `true` | `true` | ondas donde nos enganchan o nos disparan |
+| `alert_radius_px` | `12` | `28` | hasta dónde se abre la onda, **en píxeles de pantalla** |
+| `alert_rings` | `3` | `3` | cuántas ondas por contacto |
 
 **La escala no se configura, se calcula:** el mayor número entero de píxeles por celda que
 quepa en el control. Si no cabe ni uno, se resume el mapa dentro de la propia imagen y se
@@ -2148,6 +2200,36 @@ al minimapa no se le pasa la selección, y ahí el recuadro de cámara se queda 
 que planta `MoveMarker` en el mundo y al mismo tamaño en ambos: es un icono. Con el mapa
 abierto el marcador del mundo no se ve, y sin esto no habría forma de saber a dónde se mandó
 la unidad.
+
+#### `ThreatPulses` — `threat_pulses.gd`
+```
+extends RefCounted   class_name ThreatPulses
+```
+Lleva la cuenta de los contactos que hay que señalar en un mapa: quién nos enganchó, **desde
+dónde** y hace cuánto. Se engancha solo a las unidades por el grupo, como el parte de eventos.
+
+**Sólo lleva la cuenta; no dibuja.** El dibujo es de cada mapa, que sabe su escala — el mismo
+contacto sale con un anillo de 12 px en el minimapa y de 28 en el grande.
+
+| | |
+|---|---|
+| `Kind.TRACKED` | ámbar — te siguen, aún no disparan |
+| `Kind.FIRED_UPON` | rojo — te están disparando |
+| `LIFETIME` | 5 s. Del mismo orden que `Unit.ALARM_SILENCE`: más largo y los pulsos se solaparían consigo mismos |
+
+`active()` devuelve los vigentes y **de paso tira los caducados**, así que no hace falta
+limpiarlos por otro lado mientras alguien pregunte al dibujar.
+
+Se guarda **la posición de la amenaza, no la del avión**, y se guarda la posición y no la
+unidad: el contacto es un sitio y un momento, y sigue valiendo aunque quien disparó se mueva o
+deje de existir.
+
+**Cada mapa tiene su instancia.** Parece desperdicio y es justo lo que da el comportamiento
+buscado: el mapa grande está oculto casi siempre pero **sigue apuntando lo que pasa**, así que
+al abrirlo porque algo sonó se ven los contactos vivos en vez de nada. Verificado con el HUD
+real: 1 pulso registrado con `visible: false`.
+
+---
 
 #### `Minimap` — `minimap.gd`
 ```
@@ -2610,6 +2692,11 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] Círculos de alcance visibles y ajustables en el editor (`RangeRings`, `@tool`): detección y tiro por separado
 - [x] Ráfagas por arma (`burst_seconds` / `burst_pause`), con 0 = fuego continuo para no tocar el cañón del avión
 - [x] Casquillos al disparar (`Casing` / `CasingEjector`), por calibre y no por unidad: 30 mm en el Tunguska (uno por cañón, hacia afuera) y 25 mm en el Harrier (izquierda del piloto, arrastrando con el avión)
+- [x] Zona muerta del cañón antiaéreo: no puede batir lo que le pasa por encima. El círculo interior se dibuja solo, sacado del `min_range` del arma
+- [x] Alarmas de amenaza (`Unit.tracked_by` / `fired_upon_by`), con filtro anti-repetición: aviso de enganche **antes** del primer disparo, y parte de "bajo fuego"
+- [x] Ondas de contacto en el minimapa y el mapa táctico (`ThreatPulses`), con el grande registrando aunque esté cerrado
+- [x] Parte de bajas: `Splash!` para lo enemigo, `UNIT LOST — … derribado por …` para lo propio (`take_damage` propaga el autor)
+- [x] Las unidades perdidas se quedan apagadas al final de su fila en el panel superior, en vez de desaparecer
 - [x] Primer enemigo en el mapa: T-14 Armata (estático, sin IA)
 - [x] Atacar: click/tap sobre un enemigo con unidad propia seleccionada, o "Atacar" en `TargetMenu`; al morir el objetivo, el Harrier orbita donde llegó
 - [x] Menú contextual (`TargetMenu`) sobre unidad ajena: click derecho en PC, pulsación mantenida en táctil (`PanCamera.long_pressed`)
@@ -2662,7 +2749,12 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [ ] Alargar la fase opaca del humo (3–4 frames más antes de que baje el alfa, y algún paso de alfa extra): hoy la estela se disuelve desde el primer tercio (ver `SmokePuff`)
 - [ ] **Efectos propios del Tunguska**: fogonazo, trazadoras y humo son los del Harrier prestados. Cambiarlos es reasignar dos recursos por emisor, sin tocar código
 - [ ] **Probabilidad de impacto contra aeronaves.** El cañón AA usa hoy el mismo `_hit_fraction` por geometría que el del avión, que no modela lo que cuesta acertarle a un blanco aéreo rápido. Va junto con el daño en serio: hoy baja un Harrier de 100 a 47 en dos ráfagas
-- [ ] **Misiles de radar del Tunguska.** Sólo tiene cañón; los misiles son la mitad de lo que es la unidad
+- [ ] **Misiles de radar del Tunguska**, y **contramedidas del avión** para responderles. Aquí el avión **sí** debe evadir: es un misil, y esquivarlo da juego y vistosidad
+- [ ] **Audio de las alertas.** Es la única señal que funciona sin estar mirando la pantalla; hoy las tres avisos visuales compiten por la misma atención. El enganche ya está: las señales `tracked_by` / `fired_upon_by` con su filtro
+- [ ] **Evasión en ruta: aparcada a propósito.** Ver la regla en `decisions.md` — se reevalúa cuando haya varias baterías y misiones con ruta real
+- [ ] **Vigilar el avión sin órdenes dentro del alcance.** `_on_target_lost()` lo pone a orbitar *donde está*, que tras un ataque es encima de la defensa. No es esquivar: es elegir dónde orbitar
+- [ ] Ruido en el parte: se reportan también los ataques de unidades enemigas (`2S6 Tunguska ataca AV-8B Harrier II`), que ahora duplica al `MUD SPIKE`
+- [ ] Las bajas del panel superior se acumulan sin tope; hará falta un límite o limpiarlas entre misiones
 - [ ] Duplicación pendiente de decidir: `RangeRings.engagement_radius` (250) y `max_range` del arma (250) dicen lo mismo en dos sitios. Mover el círculo no cambia el arma
 - [ ] Contramedidas (bengalas, chaff, ECM) como blancos falsos y degradación del guiado
 - [ ] Qué hace el avión cuando se queda sin munición y el blanco sigue vivo (hoy sigue haciendo pasadas)

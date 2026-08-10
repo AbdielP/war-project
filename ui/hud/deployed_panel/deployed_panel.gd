@@ -14,12 +14,56 @@ const _COLOR_DIM    := Color(0.6705882, 0.5803922, 0.4784314, 0.4)
 
 var _rows: Array = []   # un HBoxContainer por categoría
 var _dirty := true
+## Las que se perdieron, por categoría: `{índice de fila: [nombre, ...]}`. Se
+## guarda el nombre y no la unidad porque la unidad ya no existe — el panel es lo
+## único que queda de ella.
+##
+## Una baja **no desaparece del panel**: se va al final de su fila, apagada. Que
+## un cuadrito se esfume sin más deja al jugador dudando de si perdió algo o si
+## nunca lo tuvo; verlo ahí, apagado, es el recuento de la operación.
+var _lost: Dictionary = {}
 
 
 func _ready() -> void:
 	_build_layout()
 	get_tree().node_added.connect(_on_tree_changed)
 	get_tree().node_removed.connect(_on_tree_changed)
+	get_tree().node_added.connect(_watch)
+	_sweep.call_deferred()
+
+
+## Se engancha a cada unidad para enterarse de su muerte mientras todavía existe:
+## en `node_removed` ya no se le puede preguntar ni el nombre.
+func _sweep() -> void:
+	for node in get_tree().get_nodes_in_group(Unit.GROUP):
+		_watch(node)
+
+
+func _watch(node: Node) -> void:
+	var unit := node as Unit
+	if unit == null or unit.died.is_connected(_on_unit_died):
+		return
+	unit.died.connect(_on_unit_died)
+
+
+func _on_unit_died(unit: Unit) -> void:
+	if not unit.is_player_controlled():
+		return
+	var row := _row_of(unit)
+	if row < 0:
+		return
+	if not _lost.has(row):
+		_lost[row] = []
+	_lost[row].append(unit.get_display_name())
+	_dirty = true
+
+
+## En qué fila del panel va, o -1 si no es de ninguna categoría conocida.
+func _row_of(unit: Unit) -> int:
+	for i in _CATEGORIES.size():
+		if unit.is_in_group(_CATEGORIES[i][0]):
+			return i
+	return -1
 
 
 func _process(_delta: float) -> void:
@@ -89,6 +133,33 @@ func _refresh() -> void:
 				row.add_child(_make_btn(unit.squad.leader, unit.squad.members.size()))
 			else:
 				row.add_child(_make_btn(unit, 1))
+		# Las bajas van detrás de las vivas, siempre. Es el orden de un parte:
+		# primero con qué se cuenta, después lo que costó.
+		for name in _lost.get(i, []):
+			row.add_child(_make_lost_btn(name))
+
+
+## El cuadrito de una unidad perdida: mismo sitio, mismo tamaño, apagado y sin
+## responder. No lleva `pressed` porque no hay a dónde llevar la cámara — lo que
+## representaba ya no está en el mapa.
+func _make_lost_btn(display_name: String) -> Button:
+	var btn := Button.new()
+	btn.text = display_name.split(" ")[0]
+	btn.clip_text = true
+	btn.custom_minimum_size = Vector2(38, 18)
+	btn.disabled = true
+	btn.tooltip_text = "%s — perdido" % display_name
+
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(0.192, 0.212, 0.220, 0.5)
+	box.border_color = _COLOR_DIM
+	box.set_border_width_all(1)
+	box.set_content_margin_all(2)
+	for state in ["normal", "focus", "disabled", "hover", "pressed"]:
+		btn.add_theme_stylebox_override(state, box)
+
+	btn.add_theme_color_override("font_disabled_color", _COLOR_DIM)
+	return btn
 
 
 func _make_btn(unit: Unit, count: int) -> Button:

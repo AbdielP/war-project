@@ -5,6 +5,9 @@ class_name Unit
 ## barrer el mapa — una explosión buscando a quién alcanzar — mira aquí en vez
 ## de recorrer el árbol entero.
 const GROUP := &"units"
+## Segundos de silencio antes de repetir la misma voz de alarma sobre la misma
+## amenaza. Ver [method _alarm_is_stale].
+const ALARM_SILENCE := 8.0
 
 @export var unit_type: UnitType
 @export var unit_name: String = ""
@@ -22,16 +25,29 @@ signal attack_target_changed(target: Unit)
 ## se entere mientras todavía existe.
 signal died(unit: Unit)
 
+## Alguien la tiene enganchada y la sigue con el arma. **Todavía no le disparan**:
+## éste es el aviso que llega a tiempo, porque un antiaéreo detecta más lejos de
+## lo que alcanza y encima tarda en girar la torreta. Ese hueco es la ventana
+## para reaccionar.
+signal tracked_by(threat: Unit)
+## Le están disparando. Esto ya no es un aviso, es un parte de daños.
+signal fired_upon_by(threat: Unit)
+
 var squad: Squad = null  # null = unidad suelta, sin escuadrón
 var weapon_loadout: WeaponLoadout = null  # null = unidad desarmada
 var active_weapon: WeaponType = null  # con qué ataca ahora mismo
 var attack_target: Unit = null  # a quién ataca; null = a nadie
 var health: float = 0.0
+## Quién le pegó el último. Se lee al morir, para poder decir por quién. `null`
+## si nadie la mató o si quien lo hizo ya no existe.
+var killed_by: Unit = null
 
 @onready var _selection_indicator: Node2D = $SelectionIndicator
 
 var _selected := false
 var _targeted := false
+## Cuándo se dio cada voz de alarma, por amenaza y tipo. Ver [method _alarm_is_stale].
+var _alarms: Dictionary = {}
 
 
 func _ready() -> void:
@@ -74,6 +90,39 @@ func is_hostile_to(other: Unit) -> bool:
 	return other != null and Team.are_hostile(team, other.team)
 
 
+## Le avisa de que la tienen enganchada. Lo llama la amenaza, que es la única que
+## sabe a quién apunta.
+func notify_tracked(threat: Unit) -> void:
+	if _alarm_is_stale(threat, &"tracked"):
+		tracked_by.emit(threat)
+
+
+## Le avisa de que le están disparando.
+func notify_fired_upon(threat: Unit) -> void:
+	if _alarm_is_stale(threat, &"fire"):
+		fired_upon_by.emit(threat)
+
+
+## ¿Toca volver a dar la voz por esto, o es la misma alarma de hace un momento?
+##
+## El filtro vive aquí y no en quien la escucha porque **la alarma es una sola
+## aunque la oigan varios**: el parte, el mapa y, cuando lo haya, el audio. Si
+## cada uno filtrase por su cuenta, tarde o temprano dirían cosas distintas.
+##
+## Hace falta de verdad: un cañón de ráfagas abre fuego cada segundo y medio, y
+## sin esto el parte sería una sola línea repetida hasta que el avión se fuera.
+## Una alarma que se repite deja de ser una alarma.
+func _alarm_is_stale(threat: Unit, kind: StringName) -> bool:
+	if threat == null:
+		return false
+	var key := "%d:%s" % [threat.get_instance_id(), kind]
+	var now := Time.get_ticks_msec() / 1000.0
+	if _alarms.has(key) and now - float(_alarms[key]) < ALARM_SILENCE:
+		return false
+	_alarms[key] = now
+	return true
+
+
 ## En qué medio se mueve: decide qué armas pueden atacarla.
 func get_domain() -> UnitType.Domain:
 	return unit_type.domain if unit_type else UnitType.Domain.SURFACE
@@ -89,10 +138,16 @@ func is_alive() -> bool:
 
 ## Encajar daño. Morir la borra del mapa; quien la tuviera apuntada se entera
 ## por `died` o porque su referencia deja de ser válida.
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, source: Unit = null) -> void:
 	if amount <= 0.0 or not is_alive():
 		return
 	health = maxf(0.0, health - amount)
+	# Se apunta quién pegó el último, no quién pegó más: es lo que se dice en un
+	# parte de bajas, y es lo único que se puede saber sin llevar la cuenta de
+	# cuánto puso cada uno. `source` es opcional porque no todo daño tiene autor
+	# —un choque, el terreno— y entonces la baja se cuenta sin culpable.
+	if is_instance_valid(source):
+		killed_by = source
 	if health <= 0.0:
 		died.emit(self)
 		queue_free()

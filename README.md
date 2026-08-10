@@ -111,6 +111,10 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Cuánto se abre el reguero de casquillos | mismo nodo → `angle_spread_deg` (25° a cada lado) |
 | Cuánto arrastra el casquillo al avión | mismo nodo → `inherit_velocity` (0,5). A 1 volarían pegados al avión, a 0 quedarían clavados en el aire |
 | Vuelo del casquillo (velocidad, frenada, giro, vida) | `core/weapon/casing_30mm.tscn` / `casing_25mm.tscn` → `eject_speed`, `drag`, `spin_deg`, `lifetime` |
+| **Zona muerta del antiaéreo** (a partir de dónde ya no te bate) | `core/weapon/2a38m_cannon.tres` → `min_range` (70). El círculo interior del mapa sale solo de aquí |
+| Cada cuánto se repite un aviso de amenaza | `core/unit/unit.gd` → `ALARM_SILENCE` (8 s por amenaza y por tipo) |
+| Cuánto dura una onda de contacto en los mapas | `ui/hud/minimap/threat_pulses.gd` → `LIFETIME` (5 s) |
+| Tamaño y número de las ondas | nodo `MapView` de `minimap.tscn` / `tactical_map.tscn` → `alert_radius_px` (12 / 28), `alert_rings` (3) |
 | A qué velocidad despega un avión | no se ajusta: es su `min_speed`, y la cubierta se la pregunta |
 | Resistencia de cada unidad | `<unidad>_type.tres` → `max_health` |
 | Altura y sombra de la Mk-82 al caer | nodo `Shadow` de `mk82_bomb.tscn` → `descent_px` / `ground_px`. Es la sombra del misil, prestada hasta que tenga la suya |

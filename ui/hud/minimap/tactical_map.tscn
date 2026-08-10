@@ -28,6 +28,7 @@ zone_cells = 8
 show_viewport_rect = true
 show_units = true
 marker_px = 4
+alert_radius_px = 28.0
 
 [node name="Hint" type="Label" parent="."]
 offset_left = 492.0

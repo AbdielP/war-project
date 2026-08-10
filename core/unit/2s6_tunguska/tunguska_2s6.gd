@@ -22,10 +22,26 @@ extends Unit
 
 func _ready() -> void:
 	super._ready()
-	turret.target_acquired.connect(set_attack_target)
+	turret.target_acquired.connect(_on_locked_on)
 	# `bind` porque la señal no lleva nada y `set_attack_target` pide a quién:
 	# perderlo es dejar de apuntar a nadie.
 	turret.target_lost.connect(set_attack_target.bind(null))
+	weapons.firing_started.connect(_on_opened_fire)
+
+
+## Enganchó a alguien: se le apunta y **se le avisa**.
+##
+## El aviso va del agresor a la víctima y no al revés porque el que apunta es el
+## único que sabe a quién. La víctima decide qué hacer con la noticia — hoy sale
+## por el parte de eventos, mañana por la radio.
+func _on_locked_on(unit: Unit) -> void:
+	set_attack_target(unit)
+	unit.notify_tracked(self)
+
+
+func _on_opened_fire() -> void:
+	if is_instance_valid(attack_target):
+		attack_target.notify_fired_upon(self)
 
 
 ## Hacia dónde sale el fuego: la línea de los cañones, que giran solos. El casco

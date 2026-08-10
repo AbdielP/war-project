@@ -10,7 +10,7 @@
 [ext_resource type="Script" uid="uid://nm0ui7hib5n3" path="res://core/unit/flight/attack_run_behavior.gd" id="8"]
 [ext_resource type="Script" uid="uid://dqfwj1xrfic38" path="res://core/weapon/weapon_system.gd" id="9"]
 [ext_resource type="Script" uid="uid://dj8ko3tggrbdb" path="res://core/weapon/muzzle_flash.gd" id="10"]
-[ext_resource type="SpriteFrames" path="res://core/weapon/cannon_flash_frames.tres" id="11"]
+[ext_resource type="SpriteFrames" uid="uid://cdwbvnuj2xeu3" path="res://core/weapon/cannon_flash_frames.tres" id="11"]
 [ext_resource type="Script" uid="uid://1do5br64c6er" path="res://core/weapon/smoke_trail.gd" id="12"]
 [ext_resource type="PackedScene" path="res://core/weapon/cannon_smoke_puff.tscn" id="13"]
 [ext_resource type="Script" uid="uid://bsjekc6u5xhjv" path="res://core/weapon/tracer_stream.gd" id="14"]
@@ -22,6 +22,7 @@ size = Vector2(28, 32)
 [node name="Av8bHarrier" unique_id=1 instance=ExtResource("1")]
 z_index = 10
 script = ExtResource("4")
+
 unit_type = ExtResource("3")
 
 [node name="Sprite2D" parent="." index="0"]
@@ -93,8 +94,8 @@ source_path = NodePath("../WeaponSystem")
 [node name="CannonSmoke" type="Node2D" parent="." index="9" unique_id=1787461108]
 position = Vector2(12, -2)
 script = ExtResource("12")
-spawn_scene = ExtResource("13")
 spacing_px = 5.0
+spawn_scene = ExtResource("13")
 source_path = NodePath("../WeaponSystem")
 start_signal = &"firing_started"
 stop_signal = &"firing_stopped"
@@ -103,7 +104,6 @@ stop_signal = &"firing_stopped"
 position = Vector2(8, 13)
 script = ExtResource("14")
 spawn_scene = ExtResource("15")
-tracers_per_second = 12.0
 source_path = NodePath("../WeaponSystem")
 start_signal = &"firing_started"
 stop_signal = &"firing_stopped"

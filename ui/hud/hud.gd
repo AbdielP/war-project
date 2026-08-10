@@ -28,6 +28,7 @@ signal look_requested(world_position: Vector2)
 @onready var _zoom_controls: VBoxContainer = $ZoomControls
 @onready var _minimap: Minimap = $Minimap
 @onready var _tactical_map: TacticalMap = $TacticalMap
+@onready var _unit_tag: UnitTag = $UnitTag
 
 ## Dónde se pone la cuenta atrás respecto al objetivo, en píxeles de pantalla:
 ## arriba y un poco a la derecha, para no taparlo ni pisar su recuadro.
@@ -104,6 +105,7 @@ func show_selected_unit(unit: Unit) -> void:
 	unit.ammo_changed.connect(_on_ammo_changed)
 	_on_attack_target_changed(unit.attack_target)
 	_desel_btn.show()
+	_unit_tag.show_for(unit)
 	_tactical_map.set_selected_unit(unit)
 
 
@@ -144,6 +146,7 @@ func clear_selected_unit() -> void:
 	_attack_label.hide()
 	_impact_timer.hide()
 	_desel_btn.hide()
+	_unit_tag.clear()
 	_tactical_map.set_selected_unit(null)
 
 

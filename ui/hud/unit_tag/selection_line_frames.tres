@@ -1,0 +1,81 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://085sa7csdxag"]
+
+[ext_resource type="Texture2D" uid="uid://dpmjtk38g715c" path="res://assets/art/sprites/Animations/UI_Line_Animation_36x16.png" id="1_strip"]
+
+[sub_resource type="AtlasTexture" id="Frame_00"]
+atlas = ExtResource("1_strip")
+region = Rect2(0, 0, 36, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_01"]
+atlas = ExtResource("1_strip")
+region = Rect2(36, 0, 36, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_02"]
+atlas = ExtResource("1_strip")
+region = Rect2(72, 0, 36, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_03"]
+atlas = ExtResource("1_strip")
+region = Rect2(108, 0, 36, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_04"]
+atlas = ExtResource("1_strip")
+region = Rect2(144, 0, 36, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_05"]
+atlas = ExtResource("1_strip")
+region = Rect2(180, 0, 36, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_06"]
+atlas = ExtResource("1_strip")
+region = Rect2(216, 0, 36, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_07"]
+atlas = ExtResource("1_strip")
+region = Rect2(252, 0, 36, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_08"]
+atlas = ExtResource("1_strip")
+region = Rect2(288, 0, 36, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_09"]
+atlas = ExtResource("1_strip")
+region = Rect2(324, 0, 36, 16)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("Frame_00")
+}, {
+"duration": 1.0,
+"texture": SubResource("Frame_01")
+}, {
+"duration": 1.0,
+"texture": SubResource("Frame_02")
+}, {
+"duration": 1.0,
+"texture": SubResource("Frame_03")
+}, {
+"duration": 1.0,
+"texture": SubResource("Frame_04")
+}, {
+"duration": 1.0,
+"texture": SubResource("Frame_05")
+}, {
+"duration": 1.0,
+"texture": SubResource("Frame_06")
+}, {
+"duration": 1.0,
+"texture": SubResource("Frame_07")
+}, {
+"duration": 1.0,
+"texture": SubResource("Frame_08")
+}, {
+"duration": 1.0,
+"texture": SubResource("Frame_09")
+}],
+"loop": 0,
+"name": &"deploy",
+"speed": 24.0
+}]

@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" format=3]
+[gd_resource type="SpriteFrames" format=3 uid="uid://cmvgivlcgke6i"]
 
 [ext_resource type="Texture2D" uid="uid://gsbe6fl6fr3" path="res://assets/art/sprites/Animations/Tracer_16x64.png" id="1_strip"]
 
@@ -36,47 +36,37 @@ region = Rect2(112, 0, 16, 64)
 
 [resource]
 animations = [{
-"frames": [
-{
+"frames": [{
 "duration": 1.0,
 "texture": SubResource("Frame_00")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_01")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_02")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_03")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_04")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_05")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_06")
-}
-],
-"loop": false,
+}],
+"loop": 0,
 "name": &"muzzle",
 "speed": 60.0
 }, {
-"frames": [
-{
+"frames": [{
 "duration": 1.0,
 "texture": SubResource("Frame_07")
-}
-],
-"loop": true,
+}],
+"loop": 1,
 "name": &"streak",
 "speed": 1.0
 }]

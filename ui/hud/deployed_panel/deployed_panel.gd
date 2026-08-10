@@ -96,7 +96,7 @@ func _make_btn(unit: Unit, count: int) -> Button:
 	# primer token del nombre como etiqueta compacta
 	btn.text = unit.get_display_name().split(" ")[0]
 	btn.clip_text = true
-	btn.custom_minimum_size = Vector2(30, 14)
+	btn.custom_minimum_size = Vector2(38, 18)
 
 	var normal_box := StyleBoxFlat.new()
 	normal_box.bg_color = Color(0.192, 0.212, 0.220)

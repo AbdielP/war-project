@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" format=3]
+[gd_resource type="SpriteFrames" format=3 uid="uid://cdwbvnuj2xeu3"]
 
 [ext_resource type="Texture2D" uid="uid://ceu6j8npwaqkc" path="res://assets/art/sprites/Animations/Jet_cannon_flash_animation_16x16.png" id="1_strip"]
 
@@ -48,59 +48,46 @@ region = Rect2(160, 0, 16, 16)
 
 [resource]
 animations = [{
-"frames": [
-{
+"frames": [{
 "duration": 1.0,
 "texture": SubResource("Frame_00")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_01")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_02")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_03")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_04")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_05")
-}
-],
-"loop": false,
+}],
+"loop": 0,
 "name": &"start",
 "speed": 24.0
 }, {
-"frames": [
-{
+"frames": [{
 "duration": 1.0,
 "texture": SubResource("Frame_06")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_07")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_08")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_09")
-},
-{
+}, {
 "duration": 1.0,
 "texture": SubResource("Frame_10")
-}
-],
-"loop": true,
+}],
+"loop": 1,
 "name": &"sustain",
 "speed": 24.0
 }]

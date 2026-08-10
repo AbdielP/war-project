@@ -46,6 +46,14 @@ var _firing := false
 ## está en la pasada. Arranca en `true`: una unidad que no hace pasadas — un
 ## tanque, un barco — dispara cuando puede y no espera permiso de nadie.
 var _cleared_to_fire := true
+## Ristra en curso: armas que quedan por soltar de la andanada, y cuánto falta
+## para la siguiente. Una andanada escalonada no son N disparos sueltos — es un
+## solo disparo que dura, y se termina aunque cambien las condiciones a mitad.
+var _stick_left: int = 0
+var _stick_timer: float = 0.0
+var _stick_launched: int = 0
+var _stick_weapon: WeaponType = null
+var _stick_target: Unit = null
 
 
 func _ready() -> void:
@@ -62,6 +70,12 @@ func set_active(value: bool) -> void:
 		# Apagar el armamento con el gatillo apretado dejaría el cañón
 		# escupiendo fuego para siempre: nadie va a volver a pasar por aquí.
 		_release_trigger()
+		# Y una ristra a medias se quedaría esperando un frame que ya no llega.
+		# Aquí sí se corta: el avión aterrizó o murió, no hay pasada que acabar.
+		_stick_left = 0
+		_stick_launched = 0
+		_stick_weapon = null
+		_stick_target = null
 
 
 ## Autoriza o corta el fuego sin apagar el armamento. Es lo que separa APUNTAR de
@@ -89,6 +103,13 @@ func _physics_process(delta: float) -> void:
 	_cooldown = maxf(0.0, _cooldown - delta)
 	_forget_spent_shots()
 	if _unit == null:
+		return
+
+	# Una ristra empezada se termina. Ni el permiso de tiro ni que el blanco
+	# muera la interrumpen: las bombas ya están saliendo del avión, y cortarla a
+	# medias dejaría media carga colgada del ala sin que nadie pueda soltarla.
+	if _stick_left > 0:
+		_work_the_stick(delta)
 		return
 
 	var weapon := _unit.active_weapon
@@ -242,13 +263,62 @@ func _fire_salvo(target: Unit) -> void:
 		# 0 = todo lo que quede. Un arma sin límite (el cañón) no puede vaciar
 		# nada, así que dispara una.
 		count = maxi(1, _unit.get_ammo(weapon))
+	_cooldown = weapon.reload_time
+
+	if weapon.salvo_interval > 0.0:
+		_start_the_stick(weapon, target, count)
+		return
+
 	var launched := 0
 	for _i in count:
 		if not _fire_one(target, weapon):
 			break
 		launched += 1
-	_cooldown = weapon.reload_time
 	if launched > 0:
+		fired.emit(weapon)
+
+
+## Empieza una ristra: la primera sale ya y el resto van cayendo solas.
+func _start_the_stick(weapon: WeaponType, target: Unit, count: int) -> void:
+	_stick_weapon = weapon
+	_stick_target = target
+	_stick_left = count
+	_stick_launched = 0
+	_stick_timer = 0.0
+	# Con el reloj a cero la primera sale en este mismo frame: esperar el
+	# intervalo antes de la primera retrasaría la ristra entera medio palmo.
+	_work_the_stick(0.0)
+
+
+## Suelta lo que toque de la ristra. El `while` es por lo mismo que en las
+## trazadoras: con intervalos por debajo del frame hay que soltar más de una en
+## el mismo tick, y lo que sobra se arrastra al siguiente en vez de perderse.
+func _work_the_stick(delta: float) -> void:
+	_stick_timer -= delta
+	while _stick_left > 0 and _stick_timer <= 0.0:
+		if not _fire_one(_stick_target, _stick_weapon):
+			# Se acabó la munición a mitad de ristra: lo que quedaba no existe.
+			_stick_left = 0
+			break
+		_stick_left -= 1
+		_stick_launched += 1
+		_stick_timer += maxf(_stick_weapon.salvo_interval, 0.001)
+	if _stick_left <= 0:
+		_close_the_stick()
+
+
+## Se soltó la última. **`fired` se emite aquí y no con la primera**, y de eso
+## depende toda la pasada de bombardeo: el vuelo rompe al oírlo, así que
+## anunciarlo con la primera pondría al avión a virar con cinco bombas todavía
+## colgadas, y saldrían abanicadas hacia donde ya no está el blanco.
+func _close_the_stick() -> void:
+	var weapon := _stick_weapon
+	var launched := _stick_launched
+	_stick_left = 0
+	_stick_launched = 0
+	_stick_weapon = null
+	_stick_target = null
+	if launched > 0 and weapon != null:
 		fired.emit(weapon)
 
 

@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="WeaponType" format=3 uid="uid://b8uve05p7flty"]
+[gd_resource type="Resource" script_class="WeaponType" load_steps=4 format=3 uid="uid://b8uve05p7flty"]
 
 [ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://b7jnu3vrjdatq" path="res://assets/art/sprites/mk82.tres" id="2"]
+[ext_resource type="PackedScene" path="res://core/weapon/mk82_bomb.tscn" id="3"]
 
 [resource]
 script = ExtResource("1")
@@ -10,3 +11,15 @@ short_name = "Mk-82"
 brevity_code = "Pickle"
 icon = ExtResource("2")
 targets = 2
+min_range = 100.0
+max_range = 220.0
+firing_arc_deg = 10.0
+damage = 80.0
+blast_radius = 45.0
+fire_mode = 0
+projectile_scene = ExtResource("3")
+salvo_size = 0
+salvo_spread = 0.0
+salvo_interval = 0.1
+reload_time = 1.0
+slows_to_aim = false

@@ -87,6 +87,13 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Cuándo empieza a bajar la sombra | mismo nodo → `descent_px` |
 | Vuelo de la bomba planeadora (caída, planeo, espoleta) | `core/weapon/gbu54_bomb.tscn` (nodo raíz) |
 | Alcance real de la bomba | mismo nodo → `fall_time` (es su altura), junto con `max_range` del `.tres` |
+| Vuelo de la bomba tonta (separación, freno, caída) | `core/weapon/mk82_bomb.tscn` (nodo raíz) |
+| Cuánto se queda atrás la Mk-82 al soltarla | mismo nodo → `drag` y `terminal_speed`. Es lo que evita que el avión vuele hacia su propia explosión |
+| Alcance real de la Mk-82 | no se ajusta: es lo que recorre mientras cae (`fall_time` × su velocidad). El `max_range` del `.tres` es **desde dónde soltarla** para que la ristra caiga centrada |
+| Dispersión de la ristra | mismo nodo → `wander_deg` (a lo ancho) y `fall_spread` (a lo largo). **No** `salvo_spread`: una bomba tonta no apunta |
+| Largo de la ristra de bombas | `core/weapon/mk82.tres` → `salvo_interval` (0,1 s ≈ 75 px a máxima). Cuántas caen: `salvo_size = 0` (todas) |
+| Si el avión frena para apuntar con un arma | `<arma>.tres` → `slows_to_aim` (el cañón sí, la bomba no) |
+| Velocidad de apertura del freno de la bomba | `core/weapon/mk82_bomb_frames.tres` (`carried` = cola cerrada, `drop` = abriéndose) |
 | Velocidades del avión (mínima, máxima, aceleración) | nodo `PlaneController` de `av8b_harrier.tscn` |
 | Radio de giro del avión | mismo nodo → `turn_radius`. **Es el parámetro maestro del vuelo**: manda sobre el viraje y sobre el tamaño mínimo del circuito de espera |
 | Distancias de las pasadas de ataque | nodo `AttackRun` de `av8b_harrier.tscn` |

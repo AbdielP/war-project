@@ -2,6 +2,33 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-09 (noche)
+
+### La bomba tonta es tonta de verdad: no apunta a nada
+La Mk-82 (`BallisticBomb`) se desprende con la velocidad del avión, abre el freno de cola y **cae donde la deja la inercia**. No guía, no corrige y no sabe dónde está el blanco.
+
+Decisión de fondo: **su alcance no se configura, sale de la geometría.** No hay ningún parámetro que diga "llega a X px" — llega hasta donde la lleve su velocidad mientras dure `fall_time`. Soltarla pronto la deja corta, soltarla tarde la pasa de largo. Por eso el `max_range` del arma significa "desde dónde hay que soltarla", no un muro. Misma familia de decisión que el `fall_time` de la planeadora y el combustible del misil: el fallo sale de la simulación.
+
+**Hermana de `GlideBomb`, no subclase suya.** Comparten el "no tiene motor, se desprende y cae", pero la planeadora manda sobre su rumbo y ésta no manda sobre nada. Unirlas con un `if` habría obligado a arrastrar guiado, espoleta de proximidad y punto de apuntado por un camino que no los usa jamás.
+
+**La dispersión se mudó de sitio.** `WeaponType.salvo_spread` dispersa el *punto de apuntado*, y esto no apunta. Lo que varía de una bomba a otra es **cómo se desprende**: sale un pelo torcida (`wander_deg`) y frena un pelo distinto (`fall_spread`). El `aim_offset` le llega y se ignora a propósito — ignorarlo es la forma de decir en el código que una bomba tonta no tiene puntería que dispersar.
+
+### Una andanada escalonada es un disparo que dura, no N disparos sueltos
+Las 6 bombas salen una detrás de otra (`salvo_interval`). Eso chocaba de frente con dos reglas que ya estaban:
+
+- **"No dispares mientras tengas algo tuyo en el aire"** habría bloqueado las cinco siguientes con la primera ya volando.
+- **`fired` rompe el ataque.** Emitirlo con la primera pondría al avión a virar con cinco bombas colgadas, y saldrían abanicadas hacia donde ya no está el blanco.
+
+Solución: la ristra pasa a ser un estado en curso en `WeaponSystem`, atendido antes que nada y **terminado siempre** — ni perder el permiso de tiro ni que el blanco muera la interrumpen; las bombas ya están saliendo del avión. Sólo apagar el armamento la aborta. Y `fired` se emite con la última.
+
+**La longitud de la ristra no se configura**: sale del intervalo por la velocidad del avión. Medido (0,1 s a 115 px/s): 75 px de línea batida, las primeras cortas, las del medio encima y las últimas largas, con 6 de 6 dentro del radio de explosión y variación real entre pasadas.
+
+### Cómo se ataca es del arma, no del avión
+`WeaponType.slows_to_aim`. El cañón frena para apuntar; la Mk-82 cruza a máxima y sale de ahí. Va por el mismo canal que la envolvente (`set_envelope`) y por la misma razón: una propiedad del arma traducida a vuelo, con `AttackRunBehavior` sin saber de armas. Es el mismo reparto que ya trajo `fire_mode`.
+
+### La convención del arte no se negocia
+Monté la bomba con `sprite_offset_deg = +90` asumiendo que el sprite apuntaba hacia arriba. Volaba de culo, **con el freno desplegándose por delante** — un paracaídas en vez de un retardador. Todo el arte de este proyecto apunta a +Y y lleva −90: avión, misil, planeadora, trazadora. Cuando una pieza nueva parece necesitar otro valor, casi siempre es que se está leyendo mal el dibujo.
+
 ## 2026-08-09 (tarde)
 
 ### La pasada de ametrallamiento se compromete: enfilar y no volver a corregir

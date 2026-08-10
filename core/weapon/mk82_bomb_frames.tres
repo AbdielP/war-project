@@ -1,0 +1,70 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/art/sprites/Animations/MK82_Bomb_droping_animation_16x16.png" id="1_strip"]
+
+[sub_resource type="AtlasTexture" id="Frame_00"]
+atlas = ExtResource("1_strip")
+region = Rect2(0, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_01"]
+atlas = ExtResource("1_strip")
+region = Rect2(16, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_02"]
+atlas = ExtResource("1_strip")
+region = Rect2(32, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_03"]
+atlas = ExtResource("1_strip")
+region = Rect2(48, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_04"]
+atlas = ExtResource("1_strip")
+region = Rect2(64, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="Frame_05"]
+atlas = ExtResource("1_strip")
+region = Rect2(80, 0, 16, 16)
+
+[resource]
+animations = [{
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("Frame_00")
+}
+],
+"loop": false,
+"name": &"carried",
+"speed": 1.0
+}, {
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("Frame_00")
+},
+{
+"duration": 1.0,
+"texture": SubResource("Frame_01")
+},
+{
+"duration": 1.0,
+"texture": SubResource("Frame_02")
+},
+{
+"duration": 1.0,
+"texture": SubResource("Frame_03")
+},
+{
+"duration": 1.0,
+"texture": SubResource("Frame_04")
+},
+{
+"duration": 1.0,
+"texture": SubResource("Frame_05")
+}
+],
+"loop": false,
+"name": &"drop",
+"speed": 14.0
+}]

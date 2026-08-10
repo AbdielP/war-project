@@ -80,6 +80,8 @@ var _pilot: PlaneController
 var _body: Node2D
 var _min_range: float = 0.0
 var _max_range: float = 0.0
+## ¿El arma de ahora pide frenar para apuntar? Lo dice el arma, no el avión.
+var _slows_to_aim := true
 var _phase: Phase = Phase.INGRESS
 var _egress_point: Vector2 = Vector2.ZERO
 ## ¿Ya está enfilado y lanzado? Mientras lo esté no se toca el destino.
@@ -97,20 +99,26 @@ func _ready() -> void:
 
 ## Ataca a esa unidad respetando la envolvente del arma. `max_range` a 0 = arma
 ## sin alcance conocido: se comporta como el viejo perseguir, yendo derecho.
-func engage(new_target: Unit, min_range: float, max_range: float) -> void:
+func engage(new_target: Unit, min_range: float, max_range: float,
+		slows_to_aim: bool = true) -> void:
 	if _pilot == null or not is_instance_valid(new_target):
 		return
 	target = new_target
-	set_envelope(min_range, max_range)
+	set_envelope(min_range, max_range, slows_to_aim)
 	_start_ingress()
 	set_process(true)
 
 
 ## El jugador cambió de arma en pleno ataque: la envolvente es otra y el vuelo
 ## tiene que ajustarse sin soltar el blanco.
-func set_envelope(min_range: float, max_range: float) -> void:
+##
+## `slows_to_aim` viene por el mismo canal que las distancias porque es lo mismo:
+## una propiedad del arma traducida a vuelo. Este nodo sigue sin saber de armas.
+func set_envelope(min_range: float, max_range: float,
+		slows_to_aim: bool = true) -> void:
 	_min_range = maxf(0.0, min_range)
 	_max_range = maxf(0.0, max_range)
+	_slows_to_aim = slows_to_aim
 
 
 ## Ya disparó: romper y separarse. Es lo que evita que el avión siga metiéndose
@@ -232,8 +240,13 @@ func _start_egress() -> void:
 ## Fuera de eso, gas: acercarse hasta la envolvente cuanto antes, y romper
 ## cuanto antes una vez soltada el arma. No hay ninguna velocidad "de ataque"
 ## que ajustar — es la mínima del propio avión, que él ya se sabe.
+##
+## **Y hay armas que no piden frenar** (`slows_to_aim`). Una bomba tonta viene
+## alineándose desde lejos y no tiene nada que afinar al final: lo que necesita
+## es cruzar rápido y salir de ahí. Frenar encima de un blanco para soltar una
+## bomba es la peor forma posible de hacerlo.
 func _set_throttle(distance: float) -> void:
-	var lining_up := _phase == Phase.INGRESS \
+	var lining_up := _slows_to_aim and _phase == Phase.INGRESS \
 		and _max_range > 0.0 and distance <= _max_range
 	_pilot.set_cruising(not lining_up)
 

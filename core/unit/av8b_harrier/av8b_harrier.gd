@@ -90,7 +90,8 @@ func receive_attack_order(target: Unit) -> void:
 	# pasada. Al revés, el avión abriría fuego mientras todavía está buscando la
 	# línea de ataque.
 	weapons.set_cleared_to_fire(false)
-	attack.engage(target, _weapon_min_range(), _weapon_max_range())
+	attack.engage(target, _weapon_min_range(), _weapon_max_range(),
+		_weapon_slows_to_aim())
 
 
 ## Se quedó sin objetivo en pleno viaje. Un avión no puede pararse: orbita
@@ -105,7 +106,8 @@ func _on_target_lost() -> void:
 ## que rehacer las distancias sin soltar el blanco.
 func _on_active_weapon_changed(_weapon: WeaponType) -> void:
 	if is_instance_valid(attack_target):
-		attack.set_envelope(_weapon_min_range(), _weapon_max_range())
+		attack.set_envelope(_weapon_min_range(), _weapon_max_range(),
+			_weapon_slows_to_aim())
 
 
 func _weapon_min_range() -> float:
@@ -116,6 +118,11 @@ func _weapon_min_range() -> float:
 ## derecho", que es lo único sensato cuando no hay envolvente que respetar.
 func _weapon_max_range() -> float:
 	return active_weapon.max_range if active_weapon != null else 0.0
+
+
+## Si el arma pide frenar para apuntar. Sin arma da igual: no va a disparar.
+func _weapon_slows_to_aim() -> bool:
+	return active_weapon.slows_to_aim if active_weapon != null else true
 
 
 func _orbit_around(center: Node2D) -> void:

@@ -72,9 +72,28 @@ enum FireMode {
 ## Radio en px de la dispersión del punto de apuntado de cada arma de la
 ## andanada. Es lo que convierte una tirada de bombas en un área batida en
 ## vez de N impactos en el mismo píxel.
+##
+## Sólo tiene sentido con armas que APUNTAN a algo. Una bomba tonta no apunta:
+## cae donde la deja la inercia, y su dispersión sale de cómo se desprende cada
+## una — está en la escena de la bomba, no aquí.
 @export var salvo_spread: float = 0.0
+## Segundos entre una arma y la siguiente DENTRO de la misma andanada. 0 = todas
+## en el mismo instante.
+##
+## Es lo que convierte una tirada de bombas en una ristra: salen una detrás de
+## otra mientras el avión avanza, así que caen repartidas en una línea sobre el
+## blanco en vez de amontonarse. La longitud de esa línea no se configura — sale
+## de este intervalo por la velocidad a la que vaya el avión.
+@export var salvo_interval: float = 0.0
 ## Segundos de espera entre andanadas.
 @export var reload_time: float = 1.0
+## ¿El avión frena para alinearse con esta arma? Apuntar despacio da más tiempo
+## en parámetros, pero deja al avión lento y cerca del blanco.
+##
+## Un cañón sí: hay que apuntar, y la pasada es larga. Una bomba tonta no: viene
+## alineándose desde lejos y lo que necesita es cruzar rápido y salir de ahí —
+## es el ataque en el que más se expone el avión.
+@export var slows_to_aim: bool = true
 
 @export_group("Fuego sostenido")
 ## Proyectiles por segundo. Sólo con `SUSTAINED`. Junto con `damage`, que sigue

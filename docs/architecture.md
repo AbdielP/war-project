@@ -655,6 +655,12 @@ ahí mete gas: llegar cuanto antes a la envolvente, y romper cuanto antes tras s
 arma. No existe ninguna velocidad "de ataque" configurable: la lenta es la `min_speed`
 del propio avión (ver `PlaneController`, por qué se fue `attack_speed`).
 
+**…y hay armas que no piden frenar.** `set_envelope()` recibe también `slows_to_aim`, por
+el mismo canal que las distancias y por la misma razón: es una propiedad del arma traducida
+a vuelo, y este nodo sigue sin saber de armas. Una bomba tonta viene alineándose desde lejos
+y no tiene nada que afinar al final — frenar encima de un blanco para soltarla es la peor
+forma posible de hacerlo, y es el ataque en el que más se expone el avión.
+
 **`separation_gain` existe por un bug real:** romper justo en el borde del alcance máximo
 no servía de nada, porque la condición de reencarar ya estaba cumplida en el mismo frame
 y el avión seguía metiéndose. La separación tiene que ser relativa a dónde se rompió, no
@@ -688,7 +694,18 @@ icono no se desincronizan entre misiones.
 | Lanzamiento | `projectile_scene` | Qué se instancia al disparar |
 | Lanzamiento | `salvo_size` | 1 = de una en una; **0 = todo lo que quede** |
 | Lanzamiento | `salvo_spread` | Radio de dispersión del punto de apuntado de cada arma de la andanada |
+| Lanzamiento | `salvo_interval` | Segundos entre una arma y la siguiente **dentro** de la andanada. 0 = todas a la vez |
 | Lanzamiento | `reload_time` | Segundos entre andanadas |
+| Lanzamiento | `slows_to_aim` | Si el avión frena para alinearse con esta arma |
+
+**`salvo_spread` sólo aplica a armas que apuntan.** Dispersa el *punto de apuntado*, y una
+bomba tonta no tiene punto de apuntado: cae donde la deja la inercia. Su dispersión está en
+la escena de la bomba, porque lo que varía es **cómo se desprende cada una**, no a dónde
+apunta. Por eso la Mk-82 lo lleva a 0 y no está roto.
+
+**`slows_to_aim` es del arma, no del avión**, por lo mismo que `fire_mode`: qué exige el
+arma de quien la lleva. El cañón sí (hay que apuntar y la pasada es larga); una bomba tonta
+no (viene alineándose desde lejos y lo que necesita es cruzar rápido y salir de ahí).
 
 **El código de brevedad va en el arma, no en una tabla del registro.** Es parte de lo que el
 arma *es*: un arma nueva lo trae puesto y nadie tiene que acordarse de añadirla a una lista
@@ -1223,6 +1240,65 @@ Verificado en headless con el ciclo completo del Harrier (blanco a 1400 px): sue
 **898 px**, nunca se acerca a menos de **782** (el `min_range` es 350, así que el avión no
 sobrevuela nada), gasta **una sola** por pasada (`salvo_size = 1`) y mata.
 
+#### `BallisticBomb` — `ballistic_bomb.gd` (`extends Projectile`)
+```
+extends Projectile   class_name BallisticBomb
+```
+Bomba tonta retardada — la Mk-82. **No guía, no corrige y no sabe dónde está el blanco.**
+
+**Hermana de `GlideBomb`, no subclase suya.** Comparten "no tiene motor, se desprende y
+cae", pero la planeadora **manda sobre su rumbo** y ésta no manda sobre nada. Unirlas con un
+`if` obligaría a arrastrar guiado, espoleta de proximidad y punto de apuntado por un camino
+que no los usa jamás.
+
+Dos tiempos:
+
+| Tiempo | Qué pasa | Cuánto dura |
+|--------|----------|-------------|
+| Separación | Cae del pilón con el freno cerrado, casi sin frenar. Es lo que la aleja del avión | `separation_time` (0,25 s) |
+| Retardada | El freno de cola abre y frena de golpe. Deja de seguir al avión | hasta tocar suelo |
+
+| Exportado | Hoy | Nota |
+|-----------|-----|------|
+| `separation_time` | 0.25 | cuándo abre el freno |
+| `separation_drag` | 0.35 | frenado antes de abrirlo: bajo, no hay nada desplegado |
+| `drag` | 1.6 | frenado con el freno abierto. **Decide cuánto se queda atrás** |
+| `terminal_speed` | 45 | a lo que acaba cayendo |
+| `fall_time` | 3.0 | su altura, igual que en la planeadora |
+| `wander_deg` | 3.0 | cuánto puede salir torcida |
+| `fall_spread` | 0.09 | cuánto puede variar su caída |
+| `sprite_offset_deg` | −90 | el arte apunta a +Y, como todo lo demás |
+
+**Su alcance no se configura: sale de la geometría.** No hay ningún parámetro que diga
+"llega a X px" — llega hasta donde la lleve su velocidad mientras dure `fall_time`.
+Soltarla pronto la deja corta y soltarla tarde la pasa de largo. Eso es lo que hace tonta a
+una bomba tonta, y por eso el `max_range` del arma significa **"desde dónde hay que
+soltarla"**, no un muro.
+
+**Ignora el `aim_offset` a propósito.** Le llega porque `Projectile.launch()` lo pasa
+siempre, pero es el desvío de un punto de apuntado y esto no apunta. Ignorarlo es la forma
+de decir en el código que una bomba tonta no tiene puntería que dispersar. Lo que sí varía
+es cómo se desprende cada una: `wander_deg` la reparte **a lo ancho** y `fall_spread` **a lo
+largo**.
+
+**El frenado es exponencial, no a plazos fijos.** Una retardada pierde de golpe casi toda la
+velocidad que traía y luego baja despacio hasta la suya; restando una cantidad fija por
+segundo se quedaría quieta de repente, que se lee como otra cosa.
+
+**Sólo tiene un final:** se le acaba la altura y estalla donde esté. No hay espoleta de
+proximidad ni impacto directo — no sabe dónde está el blanco, así que no puede acertarle a
+propósito.
+
+**El freno cumple su función, medido:** cuando cada bomba estalla, el avión ya está a
+**135–216 px** de ella. No vuela hacia su propia explosión.
+
+**El arte** (`mk82_bomb_frames.tres`, 6 frames de 16×16) va en dos estados, igual que el
+fogonazo y la trazadora: `carried` (frame 0, cola cerrada) y `drop` (0→5, el freno
+abriéndose), que se dispara al separarse y se queda en el último frame — un freno no se
+vuelve a cerrar. El `sprite_offset_deg` estuvo en +90 y **la bomba volaba de culo, con el
+freno desplegándose por delante**: el arte de este proyecto apunta a +Y y la convención es
+−90 en todas partes (avión, misil, planeadora, trazadora). Salirse de ella nunca sale bien.
+
 #### `WeaponSystem` — `weapon_system.gd`
 ```
 extends Node   class_name WeaponSystem
@@ -1256,6 +1332,25 @@ misil tampoco debe salir a mitad de un viraje.
 **No dispara mientras tenga algo suyo en el aire.** De ahí sale solo el "si no muere,
 lanza el otro": se lanza, se espera a que explote, y si el blanco sigue vivo sale el
 siguiente. Nadie escribió "reevaluar tras el impacto".
+
+**Una andanada escalonada es UN disparo que dura, no N disparos sueltos.** Con
+`salvo_interval > 0` la andanada pasa a ser un estado en curso (`_stick_*`) que se atiende
+al principio del proceso y se termina siempre. Dos motivos, los dos reales:
+
+- La regla de arriba la mataría: la bomba nº1 en el aire bloquearía a las cinco siguientes.
+- Cortarla a medias por perder el permiso de tiro o porque el blanco muera dejaría media
+  carga colgada del ala sin que nadie pueda soltarla.
+
+Sólo `set_active(false)` la aborta — ahí el avión aterrizó o murió, y no hay pasada que
+acabar.
+
+**`fired` se emite con la ÚLTIMA del stick**, y de eso depende toda la pasada de bombardeo:
+el vuelo rompe al oírlo, así que anunciarlo con la primera pondría al avión a virar con
+cinco bombas todavía colgadas, y saldrían abanicadas hacia donde ya no está el blanco.
+
+**La longitud de la ristra no se configura**: sale del intervalo por la velocidad a la que
+vaya el avión. Medido con la Mk-82 (0,1 s a 115 px/s): **75 px** de línea batida, las
+primeras cortas, las del medio encima del blanco y las últimas largas.
 
 **Dos formas de disparar, según `WeaponType.fire_mode`:**
 
@@ -2192,12 +2287,15 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Pasada de ametrallamiento recta:** el avión se compromete al enfilar y deja de corregir hasta que rompe, atravesando el blanco. Medido, el morro se mueve **menos de 3°** durante toda la ráfaga
 - [x] **Sólo se dispara dentro de la pasada** (`set_cleared_to_fire`): al romper hay alto el fuego, así que el morro puede barrer el blanco mientras vira sin que salga un tiro
 - [x] **Trazadoras que se acaban en el blanco:** el trazo recibe del arma la distancia real de tiro, lleva dispersión propia y se consume con los frames cortos al revés en vez de seguir de largo
+- [x] **Bomba tonta (`BallisticBomb` / Mk-82):** se desprende con la velocidad del avión, abre el freno de cola y cae donde la deja la inercia — sin guiado, sin punto de apuntado y sin saber dónde está el blanco
+- [x] **Ristra escalonada** (`salvo_interval`): las 6 bombas salen una detrás de otra y baten una línea de 75 px sobre el blanco. El avión rompe con la última, no con la primera
+- [x] **Velocidad de pasada según el arma** (`slows_to_aim`): el cañón frena para apuntar, el bombardeo cruza a máxima y sale de ahí
 
 ### Pendiente
-- [ ] Proyectil balístico para bombas tontas (Mk-82). La GBU-54 planea y guía; una bomba sin guía es otro vuelo. El mecanismo de andanada con dispersión ya existe: `salvo_size` / `salvo_spread`
 - [ ] Alabeo e inclinación del avión al virar y al cambiar de régimen: el enganche existe (`bank_sprite_path`, `AnimatedSprite2D` de 5 frames), falta el arte
 - [ ] Marcas de impacto en el terreno y barras de vida. Con eso se afinan las ráfagas del cañón para que varíen y no dejen siempre el mismo patrón
-- [ ] **Definir el daño en serio.** Los números de hoy son de trabajo: un Harrier destruye un T-14 en tres pasadas de cañón, que es demasiado fácil para lo que debería costar. Va junto con las barras de vida, y hay que decidirlo por unidad y por arma, no ajustando el `damage` del cañón hasta que "quede bien"
+- [ ] **Definir el daño en serio.** Los números de hoy son de trabajo: un Harrier destruye un T-14 en tres pasadas de cañón, y **dos Mk-82 bastan** para lo mismo. Demasiado fácil para lo que debería costar. Va junto con las barras de vida, y hay que decidirlo por unidad y por arma, no ajustando el `damage` de cada una hasta que "quede bien"
+- [ ] **Revisar en el editor la Mk-82:** el vuelo, la ristra y el frenado están medidos, pero la animación del freno abriéndose sólo se ha comprobado por fotogramas
 - [ ] **Revisar en el editor** los efectos del cañón: verificados por medición (fotogramas, encadenado, siembra, rumbo de los trazos, dónde muere cada trazo, curvatura del rastro y las tres pasadas hasta matar), pero la lectura visual final no
 - [ ] Efectos: explosión y caída. Los enganches existen (`detonated`), falta el arte. Fuego, humo y sombra ya están — `MissileExhaust`, `SmokeTrail` y `MissileShadow` sirven de patrón
 - [ ] Redibujar la sombra del misil ovalada y de 3 px de ancho: hoy mide lo mismo que el cuerpo y se funden en los últimos frames (ver `MissileShadow`)

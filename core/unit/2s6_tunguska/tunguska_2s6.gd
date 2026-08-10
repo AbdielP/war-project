@@ -13,8 +13,25 @@ extends Unit
 ##      hacia dónde mira el casco. Sin esto el armamento creería estar apuntando
 ##      al frente del vehículo y no dispararía nunca — o peor, dispararía de
 ##      lado.
+##   3. **Con qué de las dos armas tira**, que depende de a qué distancia esté
+##      lo que tiene enganchado.
 ##
 ## Se defiende sola y no recibe órdenes: es del otro bando.
+
+## Los misiles. Van en un armamento y no como arma fija —a diferencia del
+## cañón— porque **se gastan**: los que lleve y no hay más hasta que alguien la
+## recargue.
+##
+## Exportado y no `preload`: así el valor vive en la escena, y los círculos de
+## alcance pueden leerlo **en el editor**, donde los scripts que no son `@tool`
+## no llegan a ejecutarse y el armamento todavía no existe.
+@export var missile: WeaponType
+## Cuántos lleva.
+@export var missile_rounds: int = 8
+
+## Estación de la que salen. No hay `HardpointRack` en la escena, así que el
+## nombre no dibuja nada: sólo sirve para llevar la cuenta de la munición.
+const MISSILE_STATION := &"Rail"
 
 @onready var turret: TurretTracker = $Turret
 @onready var weapons: WeaponSystem = $WeaponSystem
@@ -22,11 +39,35 @@ extends Unit
 
 func _ready() -> void:
 	super._ready()
+	if missile != null:
+		set_weapon_loadout(WeaponLoadout.new("2S6", [
+			WeaponMount.new(missile, PackedStringArray([MISSILE_STATION]), missile_rounds),
+		]))
 	turret.target_acquired.connect(_on_locked_on)
 	# `bind` porque la señal no lleva nada y `set_attack_target` pide a quién:
 	# perderlo es dejar de apuntar a nadie.
 	turret.target_lost.connect(set_attack_target.bind(null))
 	weapons.firing_started.connect(_on_opened_fire)
+
+
+## Elige el arma según a qué distancia esté el blanco.
+##
+## Las dos envolventes están pegadas y no se solapan —el cañón llega a 250, el
+## misil empieza ahí—, así que a cada distancia sirve una sola y no hay que
+## desempatar: **la distancia elige, no una prioridad**. De lejos, misil; cuando
+## se te ha metido dentro, cañón.
+##
+## Si el blanco queda fuera de las dos —muy lejos, o tan encima que ni el cañón
+## llega— se deja el arma como estaba. Cambiarla no serviría de nada y sólo haría
+## parpadear la barra de armas.
+func _physics_process(_delta: float) -> void:
+	if not is_instance_valid(attack_target):
+		return
+	var distance := global_position.distance_to(attack_target.global_position)
+	for weapon in get_weapons():
+		if weapon.in_range(distance) and has_ammo(weapon):
+			set_active_weapon(weapon)
+			return
 
 
 ## Enganchó a alguien: se le apunta y **se le avisa**.

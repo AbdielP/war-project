@@ -57,6 +57,14 @@ class_name RangeRings
 		engagement_color = value
 		queue_redraw()
 
+## El alcance del misil: el círculo de tiro de fuera. Rojo como el del cañón,
+## porque las dos cosas dicen lo mismo —desde aquí te disparan—, pero más claro
+## para poder distinguirlos.
+@export var missile_color: Color = Color(1.0, 0.45, 0.45, 0.9):
+	set(value):
+		missile_color = value
+		queue_redraw()
+
 ## La zona muerta: el círculo de dentro, donde el cañón ya no puede tirar.
 @export var dead_zone_color: Color = Color(0.4, 0.68, 0.42, 0.8):
 	set(value):
@@ -78,10 +86,11 @@ class_name RangeRings
 		queue_redraw()
 
 
-## El radio de la zona muerta la última vez que se dibujó. Sirve para notar que
-## el arma cambió mientras se edita, ya que ese número no es un export de aquí y
-## nadie avisa cuando se toca.
+## Los radios que no son exports, la última vez que se dibujaron. Sirven para
+## notar que el armamento cambió mientras se edita: esos números salen de las
+## armas y nadie avisa aquí cuando se tocan.
 var _drawn_dead_zone: float = -1.0
+var _drawn_missile: float = -1.0
 
 
 func _draw() -> void:
@@ -90,6 +99,8 @@ func _draw() -> void:
 	# De fuera hacia dentro: los de dentro se dibujan encima y ganan donde se
 	# toquen, que es el orden en que importan.
 	_ring(detection_radius, detection_color)
+	_drawn_missile = missile_radius()
+	_ring(_drawn_missile, missile_color)
 	_ring(engagement_radius, engagement_color)
 	_drawn_dead_zone = dead_zone_radius()
 	_ring(_drawn_dead_zone, dead_zone_color)
@@ -101,17 +112,51 @@ func _draw() -> void:
 ##
 ## 0 = la unidad no tiene cañón, o su cañón no tiene zona muerta.
 func dead_zone_radius() -> float:
-	var unit := get_parent() as Unit
-	if unit == null or unit.unit_type == null or unit.unit_type.cannon == null:
+	var type := _property(&"unit_type") as UnitType
+	if type == null or type.cannon == null:
 		return 0.0
-	return unit.unit_type.cannon.min_range
+	return type.cannon.min_range
+
+
+## Un arma que la unidad lleve apuntada en una propiedad suya.
+func _weapon_of(property: StringName) -> WeaponType:
+	return _property(property) as WeaponType
+
+
+## Lee una propiedad del padre **sin llamarle a ningún método**.
+##
+## Es la diferencia entre verse en el editor y no verse: un script que no es
+## `@tool` no se ejecuta ahí, así que preguntarle nada devolvería vacío y los
+## círculos que salen del armamento no se dibujarían hasta arrancar el juego. Los
+## valores exportados, en cambio, están puestos en el nodo y se leen igual.
+func _property(name: StringName) -> Variant:
+	var unit := get_parent()
+	return unit.get(name) if unit != null else null
+
+
+## Hasta dónde llega el arma de más alcance que lleve, si es que llega más lejos
+## que el cañón. Es el anillo del misil.
+##
+## Tampoco es un export, por lo mismo que la zona muerta: el número ya está en el
+## arma. Se mira **el armamento entero** y no un misil concreto para que valga
+## igual el día que una batería lleve otra cosa.
+##
+## 0 = no lleva nada de más alcance que el cañón, y entonces no hay anillo que
+## dibujar: sería el mismo círculo dos veces.
+func missile_radius() -> float:
+	var weapon := _weapon_of(&"missile")
+	return weapon.max_range if weapon != null and weapon.max_range > engagement_radius \
+		else 0.0
 
 
 func _process(_delta: float) -> void:
-	# Sólo en el editor y sólo si cambió: el radio de dentro viene del arma, así
-	# que tocar el `.tres` no dispara ningún setter de aquí y el círculo se
-	# quedaría con el valor viejo hasta recargar la escena.
-	if Engine.is_editor_hint() and not is_equal_approx(_drawn_dead_zone, dead_zone_radius()):
+	# Sólo en el editor y sólo si cambió: estos radios vienen de las armas, así
+	# que tocar un `.tres` no dispara ningún setter de aquí y los círculos se
+	# quedarían con el valor viejo hasta recargar la escena.
+	if not Engine.is_editor_hint():
+		return
+	if not is_equal_approx(_drawn_dead_zone, dead_zone_radius()) \
+			or not is_equal_approx(_drawn_missile, missile_radius()):
 		queue_redraw()
 
 

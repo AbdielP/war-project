@@ -16,6 +16,7 @@
 [ext_resource type="PackedScene" path="res://core/weapon/cannon_smoke_puff.tscn" id="14"]
 [ext_resource type="Script" uid="uid://bv57amugr3vv0" path="res://core/weapon/casing_ejector.gd" id="15"]
 [ext_resource type="PackedScene" path="res://core/weapon/casing_30mm.tscn" id="16"]
+[ext_resource type="Resource" path="res://core/weapon/9m311_missile.tres" id="17"]
 
 [sub_resource type="AtlasTexture" id="Hull"]
 atlas = ExtResource("2")
@@ -34,6 +35,7 @@ region = Rect2(29, 1, 20, 11)
 
 [node name="Tunguska2S6" unique_id=1007014232 groups=["unit_ground"] instance=ExtResource("1")]
 script = ExtResource("7")
+missile = ExtResource("17")
 unit_type = ExtResource("3")
 team = 2
 

@@ -63,6 +63,13 @@ signal fuel_spent
 ## Explota al pasar a menos de esto del blanco, aunque no lo toque.
 @export var proximity_radius: float = 12.0
 
+@export_group("Buscador")
+## Cono dentro del cual el buscador puede confundir un señuelo con el blanco.
+## Estrecho: fuera de él, una bengala no engaña a nadie por muy cerca que esté.
+## Hasta dónde mira de lado para buscarse un señuelo al que irse, si le tocó
+## fallar. No decide nada: sólo evita que se vaya a uno que tiene detrás.
+@export var seeker_cone_deg: float = 30.0
+
 @export_group("Arte")
 ## Grados a sumar al rumbo para orientar el sprite, igual que en el avión.
 @export var sprite_offset_deg: float = -90.0
@@ -79,10 +86,21 @@ var _spent := false
 var _last_los: float = 0.0
 var _has_los := false
 var _last_distance: float = INF
+## El señuelo del que se ha tragado, si se tragó alguno. Una vez enganchado no
+## vuelve al blanco: ver [method _check_decoys].
+var _decoy: Decoy = null
+## Si este misil ya nació condenado a fallar. Lo decide quien lo lanza, de una
+## vez, y aquí sólo se representa. Ver [method WeaponSystem._roll_decoy_defeat].
+var _decoyed := false
 
 
 func _ready() -> void:
 	set_physics_process(false)
+
+
+## Le dice si le toca fallar. Lo llama quien lo lanza, antes de que vuele.
+func set_decoyed(value: bool) -> void:
+	_decoyed = value
 
 
 ## Mientras cae del ala todavía no tiene velocidad propia: la que cuenta es la
@@ -174,7 +192,10 @@ func _fly(delta: float) -> void:
 func _steer(delta: float, powered: bool) -> float:
 	var cmd := 0.0
 	if powered:
-		if is_instance_valid(target):
+		_check_decoys()
+		if is_instance_valid(_decoy):
+			_aim_point = _decoy.global_position
+		elif is_instance_valid(target):
 			_aim_point = target.global_position + _aim_offset
 		var los := (_aim_point - global_position).angle()
 		if _has_los:
@@ -189,6 +210,59 @@ func _steer(delta: float, powered: bool) -> float:
 
 	var omega_max := _speed / maxf(min_turn_radius, 1.0)
 	return clampf(cmd, -omega_max, omega_max)
+
+
+## ¿Se ha tragado un señuelo?
+##
+## **No hay tirada de dados: gana el que más señal devuelve.** Y "señal" son tres
+## cosas a la vez, no una — usar sólo el ángulo hacía que el buscador se tragase
+## siempre el chaff, y usar sólo la distancia habría hecho que no se lo tragase
+## nunca de frente. Las tres juntas dan un compromiso de verdad:
+##
+##   - **Fuerza**: lo que brilla cada contacto. Una nube tarda en abrirse, así
+##     que recién soltada no cuenta (ver [method Decoy.strength]).
+##   - **Distancia**, al cuadrado: un contacto lejano no compite con uno cercano
+##     por muy centrado que esté.
+##   - **Ángulo**: cuánto se sale de por donde va apuntando el misil.
+##
+## Lo que sale de eso, sin programar ningún caso:
+##
+##   - Avión **recto o de frente**: las nubes le quedan alineadas por detrás —
+##     mismo ángulo y más lejos—, así que pierden por distancia. Soltar sin
+##     cambiar la geometría no salva.
+##   - Avión **cruzando o virando**: el misil se queda apuntando a donde el avión
+##     iba, las nubes se quedan ahí y el avión se sale del centro. La nube gana
+##     por ángulo.
+##
+## Y una vez enganchado a uno **no vuelve**: un buscador que dudase iría dando
+## bandazos entre los dos contactos y acabaría acertando por accidente. Si el
+## señuelo se apaga antes de llegar, el misil recupera el blanco — pero para
+## entonces ya lleva un rato volando hacia otro lado.
+func _check_decoys() -> void:
+	if is_instance_valid(_decoy):
+		return
+	if _weapon == null or _weapon.seeker == WeaponType.Seeker.NONE:
+		return
+	if not _decoyed:
+		return
+	var wanted := Countermeasures.kind_against(_weapon)
+	# Ya está decidido que este misil falla: sólo hay que buscarle a qué irse. Se
+	# coge el señuelo más centrado que tenga delante, que es el que hace que el
+	# desvío se lea como un engaño y no como un fallo aleatorio.
+	var best_off := deg_to_rad(seeker_cone_deg)
+	for node in get_tree().get_nodes_in_group(Decoy.GROUP):
+		var decoy := node as Decoy
+		if decoy == null or decoy.kind != wanted:
+			continue
+		var off := _off_boresight(decoy.global_position)
+		if off < best_off:
+			best_off = off
+			_decoy = decoy
+
+
+## Cuánto se sale un punto de por donde va apuntando el misil, en radianes.
+func _off_boresight(point: Vector2) -> float:
+	return absf(angle_difference(_heading, (point - global_position).angle()))
 
 
 ## ¿Toca explotar? Aparte del impacto directo, explota en el punto de máximo

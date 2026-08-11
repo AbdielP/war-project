@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://ctkl2vdhxhu6k"]
+
+[ext_resource type="Script" uid="uid://hjkmd7deoibk" path="res://ui/hud/countermeasure_bar/countermeasure_bar.gd" id="1"]
+
+[node name="CountermeasureBar" type="HBoxContainer" unique_id=230662681]
+offset_left = 354.0
+offset_top = 317.0
+offset_right = 413.0
+offset_bottom = 339.0
+theme_override_constants/separation = 3
+script = ExtResource("1")
+button_size = Vector2(20, 20)

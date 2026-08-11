@@ -9,3 +9,4 @@ display_name = "AV-8B Harrier II"
 cannon = ExtResource("2")
 domain = 0
 max_health = 60.0
+ecm_evasion = 0.2

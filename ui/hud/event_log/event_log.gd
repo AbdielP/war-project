@@ -13,6 +13,10 @@ class_name EventLog
 signal look_requested(world_position: Vector2)
 
 const MAX_LINES := 6
+## Cuánto puede tardar la siguiente arma de una andanada en salir para que
+## cuente como la misma. La ristra de Mk-82 va a una décima entre bombas; esto
+## deja margen de sobra sin llegar a juntar dos ataques distintos.
+const SALVO_WINDOW := 2.0
 const TEXT_COLOR := Color(0.6705882, 0.5803922, 0.4784314)
 const ACCENT_COLOR := Color(0.56078434, 0.827451, 1.0)
 const _FONT_SIZE := 8
@@ -26,6 +30,13 @@ const _FONT_SIZE := 8
 @onready var lines: VBoxContainer = $Lines
 
 var _map: MapView = null
+## La última línea escrita, para poder reescribirla si la andanada sigue.
+var _last_line: RichTextLabel = null
+## De qué andanada va esa línea: arma, de quién y cuántas van.
+var _salvo_weapon: WeaponType = null
+var _salvo_unit: int = 0
+var _salvo_count: int = 0
+var _salvo_at: float = 0.0
 ## El borde de abajo se queda quieto y el parte crece hacia arriba, como una
 ## consola: lo último dicho queda siempre a la misma altura.
 var _bottom: float = 0.0
@@ -66,6 +77,7 @@ func add_event(text: String) -> void:
 	line.meta_clicked.connect(_on_coordinate_clicked)
 	line.text = text
 	lines.add_child(line)
+	_last_line = line
 	if lines.get_child_count() > MAX_LINES:
 		lines.get_child(0).queue_free()
 	show()
@@ -118,6 +130,11 @@ func _watch(node: Node) -> void:
 	unit.ammo_changed.connect(_on_ammo_changed.bind(unit))
 	unit.tracked_by.connect(_on_tracked.bind(unit))
 	unit.fired_upon_by.connect(_on_fired_upon.bind(unit))
+	unit.missile_inbound.connect(_on_missile_inbound.bind(unit))
+	for child in unit.get_children():
+		var pod := child as Countermeasures
+		if pod != null:
+			pod.dispensing_started.connect(_on_defending.bind(unit))
 
 
 ## Caer no es lo mismo según de quién sea lo que cayó, y el parte tiene que
@@ -138,7 +155,7 @@ func _on_died(unit: Unit) -> void:
 func _on_target_changed(target: Unit, unit: Unit) -> void:
 	# Perder el objetivo también emite, con `null`. Que deje de atacar no es
 	# noticia; que empiece, sí.
-	if not is_instance_valid(target):
+	if not is_instance_valid(target) or not unit.is_player_controlled():
 		return
 	add_event("%s ataca %s %s" % [unit.get_display_name(), target.get_display_name(),
 			_zone(target.global_position)])
@@ -164,6 +181,29 @@ func _on_fired_upon(threat: Unit, unit: Unit) -> void:
 			_zone(threat.global_position)])
 
 
+## "Harrier: SAM LAUNCH — 2S6 Tunguska B4". El aviso urgente: hay algo en el aire
+## viniendo a por ella.
+##
+## El código va del arma (`brevity_code`) y no escrito aquí, porque lo que te
+## tiran cambia lo que sirve para engañarlo: contra radar, chaff; contra calor,
+## bengalas. El parte tiene que decir cuál es.
+func _on_missile_inbound(threat: Unit, weapon: WeaponType, _missile: Node2D, unit: Unit) -> void:
+	if not _is_worth_reporting(unit, threat):
+		return
+	var code := weapon.brevity_code if weapon.brevity_code != "" else "MISSILE"
+	add_event("%s: %s LAUNCH — %s %s" % [unit.get_display_name(), code,
+			threat.get_display_name(), _zone(threat.global_position)])
+
+
+## "Harrier: DEFENDING". La respuesta al aviso anterior: está soltando señuelos y
+## maniobrando. Va sin coordenada — lo que importa no es dónde, es que está en
+## ello y que el jugador no tiene que hacer nada.
+func _on_defending(_threat: Unit, unit: Unit) -> void:
+	if not unit.is_player_controlled():
+		return
+	add_event("%s: DEFENDING" % unit.get_display_name())
+
+
 ## El parte es del jugador: que a un enemigo lo enganche otro enemigo no es
 ## noticia suya. Morir sí se cuenta de todos —saber que algo cayó importa venga
 ## de donde venga—, pero las alarmas son de los suyos.
@@ -173,9 +213,46 @@ func _is_worth_reporting(unit: Unit, threat: Unit) -> bool:
 
 ## Se cuelga del gasto de munición y no de un "disparó" propio porque es la
 ## misma cosa: una menos es un arma que salió del ala.
+##
+## **Una ristra es una línea, no seis.** Soltar seis Mk-82 gasta munición seis
+## veces con una décima entre medias, y sin agrupar el parte no diría más que
+## "Mk-82" repetido hasta llenarse. Es un solo gesto del piloto y se cuenta como
+## uno, con la cantidad al lado.
 func _on_ammo_changed(weapon: WeaponType, _remaining: int, unit: Unit) -> void:
+	if not unit.is_player_controlled():
+		return
+	if _grew_the_salvo(weapon, unit):
+		return
+	_salvo_weapon = weapon
+	_salvo_unit = unit.get_instance_id()
+	_salvo_count = 1
+	_salvo_at = Time.get_ticks_msec() / 1000.0
+	add_event(_salvo_text(weapon, unit, 1))
+
+
+## ¿Esto es otra arma de la misma andanada? Entonces se reescribe la línea que ya
+## está en vez de añadir otra.
+##
+## Tiene que ser **la última línea**: si entre dos bombas se coló otro suceso,
+## agrupar hacia atrás dejaría el parte contando cosas en desorden.
+func _grew_the_salvo(weapon: WeaponType, unit: Unit) -> bool:
+	if weapon != _salvo_weapon or unit.get_instance_id() != _salvo_unit:
+		return false
+	if Time.get_ticks_msec() / 1000.0 - _salvo_at > SALVO_WINDOW:
+		return false
+	if _last_line == null or not is_instance_valid(_last_line) \
+			or lines.get_child_count() == 0 or lines.get_child(-1) != _last_line:
+		return false
+	_salvo_count += 1
+	_salvo_at = Time.get_ticks_msec() / 1000.0
+	_last_line.text = _salvo_text(weapon, unit, _salvo_count)
+	return true
+
+
+func _salvo_text(weapon: WeaponType, unit: Unit, count: int) -> String:
 	var code: String = " (%s!)" % weapon.brevity_code if weapon.brevity_code != "" else ""
-	add_event("%s: %s%s" % [unit.get_display_name(), weapon.get_short_name(), code])
+	var many := " x%d" % count if count > 1 else ""
+	return "%s: %s%s%s" % [unit.get_display_name(), weapon.get_short_name(), many, code]
 
 
 ## La coordenada, envuelta para poder pulsarla. Sin mapa a la vista no hay

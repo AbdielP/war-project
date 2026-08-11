@@ -59,6 +59,9 @@ const _COLOR_TEXT := Color(0.6705882, 0.5803922, 0.4784314)
 const _COLOR_TRACKED := Color(0.98, 0.76, 0.29)
 ## Nos están disparando.
 const _COLOR_FIRED_UPON := Color(0.9, 0.29, 0.31)
+## Hay un misil en el aire viniendo a por nosotros. Casi blanco: es el aviso más
+## urgente de los tres y tiene que ganarle a los otros dos de un vistazo.
+const _COLOR_MISSILE := Color(1.0, 0.94, 0.9)
 const _COLOR_ACCENT := Color(0.56078434, 0.827451, 1.0)
 ## Filo oscuro alrededor de cada punto. No es adorno: el azul del jugador y el
 ## azul del agua se parecen demasiado, y un punto de 2 px sin borde desaparece.
@@ -292,9 +295,17 @@ func _draw_alerts(drawn: Vector2) -> void:
 		var center := world_to_local(pulse["where"])
 		if not inside.has_point(center):
 			continue
-		var color: Color = _COLOR_FIRED_UPON \
-			if pulse["kind"] == ThreatPulses.Kind.FIRED_UPON else _COLOR_TRACKED
-		_draw_rings(center, float(pulse["age"]), color)
+		_draw_rings(center, float(pulse["age"]), _alert_color(pulse["kind"]))
+
+
+func _alert_color(kind: ThreatPulses.Kind) -> Color:
+	match kind:
+		ThreatPulses.Kind.MISSILE:
+			return _COLOR_MISSILE
+		ThreatPulses.Kind.FIRED_UPON:
+			return _COLOR_FIRED_UPON
+		_:
+			return _COLOR_TRACKED
 
 
 func _draw_rings(center: Vector2, age: float, color: Color) -> void:

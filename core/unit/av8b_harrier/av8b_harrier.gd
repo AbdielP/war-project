@@ -8,6 +8,11 @@ extends Unit
 ## puntos al mismo piloto y no pueden correr a la vez. Y aquí se traduce el
 ## arma activa a la envolvente de tiro que el vuelo tiene que respetar — el
 ## comportamiento no sabe de armas y el arma no sabe de vuelo.
+##
+## **No esquiva por su cuenta.** Suelta señuelos —de eso se encarga
+## `Countermeasures`, que se engancha solo al aviso de misil— y sigue con lo
+## suyo. Sacarlo de una zona batida es del jugador: un avión que maniobra solo
+## acaba desobedeciendo, y el aviso llega con tiempo de sobra para decidir.
 
 signal order_fulfilled
 

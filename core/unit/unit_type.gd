@@ -19,3 +19,12 @@ enum Domain { AIR, SURFACE }
 ## Cuánto aguanta. Un AGM-65 pega 120, así que un tanque de 100 muere de uno
 ## y algo más grande necesita varios.
 @export var max_health: float = 100.0
+## Lo que se libra de un misil guiado **sin gastar nada**: su equipo de guerra
+## electrónica de serie. Los señuelos suman encima de esto, así que un avión sin
+## cargas no queda vendido del todo — le queda lo suyo.
+##
+## Va en el tipo y no en la instancia, como `max_health`: es lo que trae el
+## modelo de fábrica, y así el día que haya menú de mejoras se sube para todos
+## los de ese modelo de una vez. Lo que sí es de cada unidad es el bando, porque
+## el mismo avión puede cambiarlo.
+@export_range(0.0, 1.0, 0.05) var ecm_evasion: float = 0.0

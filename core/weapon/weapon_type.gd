@@ -39,6 +39,13 @@ enum FireMode {
 @export var brevity_code: String = ""
 @export var icon: Texture2D
 
+## Cómo busca el blanco lo que dispara esta arma. **Decide qué señuelo la
+## engaña**: chaff contra radar, bengalas contra calor. Soltar el que no es no
+## sirve de nada, y ahí está la decisión — hay que saber qué te tiraron.
+##
+## `NONE` es lo que no persigue nada: un cañón, una bomba tonta.
+enum Seeker { NONE, RADAR, HEAT }
+
 @export_group("Objetivos")
 ## Contra qué sirve. Un Sidewinder no le hace nada a un tanque y un Maverick
 ## no alcanza a un avión: sin esto el jugador puede disparar armas que jamás
@@ -64,6 +71,27 @@ enum FireMode {
 
 @export_group("Lanzamiento")
 @export var fire_mode: FireMode = FireMode.LAUNCHER
+## Por qué guía va. Ver [enum Seeker].
+@export var seeker: Seeker = Seeker.NONE
+
+@export_subgroup("Contramedidas")
+## Cuánto **suma** un señuelo a lo que el blanco ya se libra por su cuenta
+## (`UnitType.ecm_evasion`). Son dos capas: el equipo de a bordo siempre está, y
+## las cargas añaden encima mientras queden.
+##
+## Se tira una vez, al lanzar, y el resto es representación: si sale a favor el
+## misil se irá tras una bengala a la vista de todos, y si no, va derecho.
+## Decidirlo de una hace el resultado ajustable con un número, en vez de depender
+## de cinco variables de vuelo que nadie puede predecir.
+@export_range(0.0, 1.0, 0.05) var decoy_bonus: float = 0.55
+## Cuánto baja esa probabilidad con cada misil más que se le tira **al mismo
+## blanco**. La batería va afinando la solución de tiro: quedarse en la zona sale
+## cada vez más caro, y eso es lo que empuja a sacar el avión de ahí.
+@export_range(0.0, 1.0, 0.05) var decoy_defeat_step: float = 0.15
+## Segundos que la batería recuerda lo aprendido sobre un blanco al que ha
+## dejado de seguir. **No se olvida al salir del círculo**: si fuera así,
+## bastaría con entrar y salir para volver a empezar de cero.
+@export var fire_solution_memory: float = 25.0
 @export var projectile_scene: PackedScene
 ## Cuántas armas salen de una vez. 1 = una a una, esperando a ver si hace
 ## falta la siguiente. 0 = todas las que queden — un bombardeo suelta la

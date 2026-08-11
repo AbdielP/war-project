@@ -4,6 +4,92 @@ Registro cronológico (más reciente arriba). Una entrada por decisión: qué se
 
 ## 2026-08-10
 
+### Simular las contramedidas no funcionó, y el porcentaje sí
+La entrada más cara del día, por lo que enseña. El objetivo era que soltar chaff no fuese un
+interruptor de invulnerabilidad, y se intentó **sin dados**, por geometría pura, apoyándose en
+la regla ya escrita de que "el fallo sale de la simulación, no de un dado".
+
+Cuatro modelos, cada uno arreglando el anterior y ninguno funcionando:
+
+| criterio del buscador | qué pasó |
+|---|---|
+| el señuelo **más centrado** | el chaff nace en la posición del avión: siempre estaba tan centrado como él. Engañaba **siempre** |
+| el señuelo **más cercano** | de frente las nubes quedan detrás del avión: no engañaba **nunca** |
+| **señal** = fuerza / distancia² × ángulo², con la nube floreciendo en 0,4 s | seguía engañando siempre: el misil acaba persiguiendo por la cola y los señuelos le quedan delante |
+| lo anterior + **resolución angular** + margen de captura | igual. Medido: señuelo a 137 px contra avión a 279 |
+
+El error de fondo no fue ninguno de los cuatro: fue **elegir la simulación para algo con cinco
+variables acopladas**. La regla de "que lo decida la geometría" vale para el cañón, donde son
+dos —distancia y ángulo— y el jugador las ve. Aquí ni yo podía predecir el resultado leyendo el
+código, así que el jugador menos.
+
+**Lo que se hizo al final es lo que el usuario había propuesto desde el principio:** tirar una
+vez, al lanzar, y que todo lo demás sea representación. Si la tirada dice que falla, el misil se
+va tras una bengala a la vista de todos; si dice que acierta, va derecho. **Se ve exactamente
+igual** —los señuelos, el florecimiento y el seguimiento siguen ahí— pero el resultado es un
+número ajustable en vez de cinco perillas imposibles.
+
+La lección para la próxima: *simular* está bien cuando el jugador puede leer la simulación. Si
+no puede, es azar disfrazado — y encima azar que no se puede ajustar.
+
+### La evasión automática se implementó y se quitó el mismo día
+Se llegó a construir un `EvasionBehavior` que viraba cruzándose al misil y aceleraba. Estaba
+mal por dos motivos, y el segundo era un fallo ya documentado en esta misma bitácora:
+
+1. **Con orden de ataque:** evadía, el misil se perdía, volvía al blanco, entraba en rango, otro
+   misil. Bucle infinito encima de la batería hasta quedarse sin chaff.
+2. **Sin órdenes:** al terminar orbitaba **donde había acabado de esquivar** — al lado del
+   Tunguska. Es literalmente el caso que se había anotado como "el avión muere por una decisión
+   automática del juego", reintroducido.
+
+Y el viraje perpendicular, correcto en un simulador, aquí no sacaba al avión de ningún sitio:
+con radio de giro de 130 px sólo lo dejaba dando vueltas dentro de la zona.
+
+**Se eliminó entera.** El avión suelta señuelos y sigue con lo suyo; sacarlo de una zona batida
+es del jugador. Vuelve a valer la regla sin excepciones: *la iniciativa propia llena huecos,
+nunca contradice una orden*.
+
+### Dos capas contra un misil: lo que llevas puesto y lo que gastas
+- **`UnitType.ecm_evasion`** — lo que el avión se libra por sí solo, sin gastar nada (20% en el
+  Harrier). Va en el tipo y no en la instancia, como `max_health`: es lo que trae el modelo de
+  fábrica, así que el menú de progresión lo subirá para todos los de ese modelo de una vez.
+- **`WeaponType.decoy_bonus`** — lo que suma soltar un señuelo (+55%), mientras queden cargas.
+
+Así **un avión sin cargas no queda vendido**, sólo mucho más expuesto. Medido:
+
+```
+             misil 1   2     3     4     5
+con chaff      75%   58%   44%   29%   12%
+sin chaff      20%    5%    0%    0%    0%
+```
+
+### La batería afina la puntería, y olvida de dos maneras
+Con un porcentaje fijo y 30 cargas, un avión aguantaría veinte misiles y quedarse en la zona no
+costaría nada. Por eso cada misil que una batería le tira **al mismo blanco** descuenta 15
+puntos: la insistencia es lo que mata, no el primer disparo.
+
+El olvido va por dos vías, y la primera importa más de lo que parece:
+
+- **Por tiempo** (25 s sin tenerlo enganchado). Se descartó olvidar al salir del círculo de
+  detección: sería un botón de reiniciar — entrar, salir y volver con la cuenta a cero.
+- **Al volver a base** (`forget_solution()`). Un avión que aterrizó y se rearmó no es el mismo
+  contacto que la batería llevaba media hora estudiando. El enganche está puesto pero **no lo
+  llama nadie**: la recuperación de aviones todavía no existe.
+
+Es por pareja batería-blanco, así que otra batería empieza de cero contra ese avión, y la misma
+batería empieza de cero contra otro avión.
+
+### Los porcentajes no se enseñan, pero la escalada tiene que notarse
+Decisión: **ningún número en pantalla**. Es un arcade, no un juego de tablero; lo que el jugador
+tiene que aprender es "cerca de una batería te matan", no "tengo 44%". En el menú de progresión
+sí irán números, porque ahí se gastan recursos y hace falta saber qué se compra.
+
+Con una condición pendiente: **la escalada es hoy invisible**, y es la mecánica más importante
+que se acaba de meter. Quien pierda un avión al cuarto misil lo leerá como mala suerte y no como
+"me quedé demasiado". Si no se percibe, la mecánica no existe — sólo hace que el juego parezca
+aleatorio. Idea del usuario para resolverlo: un indicador en el avión que muestre desde dónde lo
+están siguiendo y que se intensifique, pulsando y sonando más fuerte.
+
 ### El daño no se hace justo esquivando: se hace justo avisando
 El problema era que el Tunguska mataba aviones y eso frustraba. La primera propuesta fue que el
 avión esquivara solo, y se descartó: **cambia frustración por algo peor**, un avión que no va

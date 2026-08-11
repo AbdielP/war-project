@@ -17,7 +17,7 @@ class_name ThreatPulses
 ## lo que se espera al abrir el mapa porque algo sonó.
 
 ## Qué clase de contacto es. Cambia el color, no la forma.
-enum Kind { TRACKED, FIRED_UPON }
+enum Kind { TRACKED, FIRED_UPON, MISSILE }
 
 ## Segundos que dura un contacto en el mapa. Pasado eso deja de pintarse. Va en
 ## el mismo orden de magnitud que el silencio entre alarmas de `Unit`: más largo
@@ -51,6 +51,7 @@ func _watch(node: Node) -> void:
 		return
 	unit.tracked_by.connect(_on_tracked.bind(unit))
 	unit.fired_upon_by.connect(_on_fired_upon.bind(unit))
+	unit.missile_inbound.connect(_on_missile_inbound.bind(unit))
 
 
 func _on_tracked(threat: Unit, unit: Unit) -> void:
@@ -59,6 +60,10 @@ func _on_tracked(threat: Unit, unit: Unit) -> void:
 
 func _on_fired_upon(threat: Unit, unit: Unit) -> void:
 	_add(threat, unit, Kind.FIRED_UPON)
+
+
+func _on_missile_inbound(threat: Unit, _weapon: WeaponType, _missile: Node2D, unit: Unit) -> void:
+	_add(threat, unit, Kind.MISSILE)
 
 
 ## El mapa es del jugador: que a un enemigo lo apunte otro enemigo no le importa.

@@ -58,6 +58,9 @@ var _stick_timer: float = 0.0
 var _stick_launched: int = 0
 var _stick_weapon: WeaponType = null
 var _stick_target: Unit = null
+## Lo que esta batería lleva aprendido de cada blanco: `id -> [misiles, cuándo]`.
+## Ver [method _roll_decoy_defeat].
+var _solutions: Dictionary = {}
 
 
 func _ready() -> void:
@@ -377,7 +380,75 @@ func _fire_one(target: Unit, weapon: WeaponType) -> bool:
 	_unit.get_parent().add_child(projectile)
 	projectile.launch(_unit, muzzle, target, weapon, _dispersion(weapon))
 	_in_flight.append(projectile)
+	# Sólo lo que persigue avisa. Una bomba cae donde cae y no hay nada que
+	# esquivar; un misil guiado te viene buscando, y saberlo es lo que da
+	# ocasión de responder.
+	if projectile is GuidedMissile:
+		(projectile as GuidedMissile).set_decoyed(_roll_decoy_defeat(target, weapon))
+		target.notify_missile_inbound(_unit, weapon, projectile)
 	return true
+
+
+## ¿Se lo va a llevar un señuelo? Se decide **aquí, al lanzar**, y una sola vez.
+##
+## Lo que pasa después es representación: el misil que ya perdió se irá tras una
+## bengala, y el que no, irá derecho. Se resolvió simulando la geometría de los
+## señuelos y no funcionó — ni el jugador ni yo podíamos predecir el resultado, y
+## salía siempre lo mismo. Un número que se ve y se ajusta vale más que una
+## simulación que nadie entiende.
+##
+## La probabilidad baja con cada misil que esta batería le ha tirado a ese mismo
+## blanco: va afinando la solución de tiro. Se olvida sola pasado un rato sin
+## seguirlo — por tiempo y no al salir del alcance, o entrar y salir del círculo
+## sería un botón de reiniciar.
+func _roll_decoy_defeat(target: Unit, weapon: WeaponType) -> bool:
+	# Lo que se libra por sí solo, tenga o no con qué responder.
+	var chance := target.unit_type.ecm_evasion if target.unit_type != null else 0.0
+	# Y lo que suma soltar algo, si le queda. Una carga por misil y no por
+	# bengala: lo que se gasta es la respuesta a una amenaza, y cuántas salgan
+	# por el tubo es cosa del patrón.
+	var pod := _countermeasures_of(target)
+	if pod != null and pod.spend(Countermeasures.kind_against(weapon)):
+		chance += weapon.decoy_bonus
+	# Y lo que la batería lleva descontado por insistir contra este mismo blanco.
+	chance -= weapon.decoy_defeat_step * _shots_fired_at(target, weapon)
+	return randf() < clampf(chance, 0.0, 1.0)
+
+
+## Cuántos misiles se le han tirado ya a ese blanco, olvidando los viejos. De
+## paso apunta este.
+func _shots_fired_at(target: Unit, weapon: WeaponType) -> int:
+	var key := target.get_instance_id()
+	var now := Time.get_ticks_msec() / 1000.0
+	var shots := 0
+	if _solutions.has(key):
+		var record: Array = _solutions[key]
+		if now - float(record[1]) <= weapon.fire_solution_memory:
+			shots = int(record[0])
+	_solutions[key] = [shots + 1, now]
+	return shots
+
+
+## Olvida lo aprendido sobre ese blanco de golpe, sin esperar a que caduque.
+##
+## Es la otra mitad del olvido: la solución de tiro se enfría sola con el tiempo,
+## **y además se pierde entera cuando el avión vuelve a base**. Un avión que
+## aterrizó, se rearmó y volvió a salir no es el mismo contacto que la batería
+## llevaba media hora estudiando.
+##
+## Todavía no lo llama nadie: la recuperación de aviones no existe aún. El
+## enganche queda puesto para cuando la haya.
+func forget_solution(target: Unit) -> void:
+	if is_instance_valid(target):
+		_solutions.erase(target.get_instance_id())
+
+
+func _countermeasures_of(unit: Unit) -> Countermeasures:
+	for child in unit.get_children():
+		var pod := child as Countermeasures
+		if pod != null:
+			return pod
+	return null
 
 
 ## Desvío del punto de apuntado de cada arma de la andanada. Es lo que hace

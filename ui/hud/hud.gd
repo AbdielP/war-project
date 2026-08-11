@@ -22,6 +22,7 @@ signal look_requested(world_position: Vector2)
 @onready var _desel_btn: Button = $DeselButton
 @onready var _deployed_panel: PanelContainer = $DeployedPanel
 @onready var _weapon_bar: HBoxContainer = $WeaponBar
+@onready var _countermeasure_bar: CountermeasureBar = $CountermeasureBar
 @onready var _target_menu: PanelContainer = $TargetMenu
 @onready var _attack_label: Label = $AttackLabel
 @onready var _impact_timer: Label = $ImpactTimer
@@ -117,6 +118,9 @@ func _refresh_weapon_bar() -> void:
 	if not is_instance_valid(unit) or not unit.is_player_controlled() or _tactical_map.visible:
 		unit = null
 	_weapon_bar.show_weapons(unit)
+	# Va con las armas y no aparte: las dos cuentan lo que lleva encima y las dos
+	# sobran cuando no hay una unidad propia seleccionada.
+	_countermeasure_bar.show_for(unit)
 
 
 ## El menú se coloca solo junto a la unidad: convierte su posición del mundo a
@@ -143,6 +147,7 @@ func clear_selected_unit() -> void:
 	_selection_panel.clear()
 	_actions_panel.clear()
 	_weapon_bar.clear()
+	_countermeasure_bar.clear()
 	_attack_label.hide()
 	_impact_timer.hide()
 	_desel_btn.hide()

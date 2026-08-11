@@ -17,6 +17,8 @@
 [ext_resource type="PackedScene" path="res://core/weapon/tracer.tscn" id="15"]
 [ext_resource type="Script" uid="uid://bv57amugr3vv0" path="res://core/weapon/casing_ejector.gd" id="16"]
 [ext_resource type="PackedScene" path="res://core/weapon/casing_25mm.tscn" id="17"]
+[ext_resource type="Script" uid="uid://23wfrxnvyo63" path="res://core/unit/flight/countermeasures.gd" id="18"]
+[ext_resource type="PackedScene" path="res://core/unit/flight/decoy.tscn" id="20"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(28, 32)
@@ -51,7 +53,13 @@ script = ExtResource("8")
 [node name="WeaponSystem" type="Node" parent="." index="6" unique_id=1582074284]
 script = ExtResource("9")
 
-[node name="Hardpoints" type="Node2D" parent="." index="7" unique_id=1787461106]
+[node name="Countermeasures" type="Node" parent="." index="7"]
+script = ExtResource("18")
+chaff = 30
+decoy_scene = ExtResource("20")
+flares = 30
+
+[node name="Hardpoints" type="Node2D" parent="." index="8" unique_id=1787461106]
 script = ExtResource("7")
 
 [node name="L1" type="Marker2D" parent="Hardpoints" index="0" unique_id=1824358855]
@@ -84,7 +92,7 @@ position = Vector2(13, 0)
 [node name="R1" type="Marker2D" parent="Hardpoints" index="9" unique_id=554350331]
 position = Vector2(15, -2)
 
-[node name="CannonFlash" type="AnimatedSprite2D" parent="." index="8" unique_id=1787461107]
+[node name="CannonFlash" type="AnimatedSprite2D" parent="." index="9" unique_id=1787461107]
 z_index = 1
 position = Vector2(8, 13)
 sprite_frames = ExtResource("11")
@@ -92,7 +100,7 @@ animation = &"start"
 script = ExtResource("10")
 source_path = NodePath("../WeaponSystem")
 
-[node name="CannonSmoke" type="Node2D" parent="." index="9" unique_id=1787461108]
+[node name="CannonSmoke" type="Node2D" parent="." index="10" unique_id=1787461108]
 position = Vector2(12, -2)
 script = ExtResource("12")
 spacing_px = 5.0
@@ -101,7 +109,7 @@ source_path = NodePath("../WeaponSystem")
 start_signal = &"firing_started"
 stop_signal = &"firing_stopped"
 
-[node name="CannonTracers" type="Node2D" parent="." index="10" unique_id=1787461109]
+[node name="CannonTracers" type="Node2D" parent="." index="11" unique_id=1787461109]
 position = Vector2(8, 13)
 script = ExtResource("14")
 spawn_scene = ExtResource("15")
@@ -109,7 +117,7 @@ source_path = NodePath("../WeaponSystem")
 start_signal = &"firing_started"
 stop_signal = &"firing_stopped"
 
-[node name="CannonCasings" type="Node2D" parent="." index="11" unique_id=970960894]
+[node name="CannonCasings" type="Node2D" parent="." index="12" unique_id=970960894]
 position = Vector2(9, 7)
 script = ExtResource("16")
 eject_angle_deg = -90.0

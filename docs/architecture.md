@@ -180,6 +180,11 @@ Resource `.tres` compartido entre todas las instancias del mismo tipo (ej. `lhd_
 | `cannon` | WeaponType — arma fija, va siempre y no ocupa estación. Vacío = sin cañón |
 | `domain` | `Domain` (AIR / SURFACE) — en qué medio se mueve. Decide qué armas pueden atacarla |
 | `max_health` | float — Harrier 60, T-14 100. Un AGM-65 pega 120 |
+| `ecm_evasion` | 0–1 — lo que se libra de un misil guiado **sin gastar nada**. 0,20 en el Harrier |
+
+**`ecm_evasion` va aquí y no en la instancia**, como `max_health`: es lo que trae el modelo de
+fábrica, así que el menú de progresión lo subirá para todos los de ese modelo de una vez. Lo que
+sí es de cada unidad es el bando, porque el mismo avión puede cambiarlo entre misiones.
 
 El enum `Domain` se declara aquí y las firmas del propio archivo lo escriben
 `UnitType.Domain` — ver el patrón "Enum de una clase con `class_name`".
@@ -609,6 +614,62 @@ sin soltar el compromiso en curso — para objetivos que se mueven.
 **Orientación:** `sprite_offset_deg` traduce rumbo → rotación del sprite.
 El arte del Harrier apunta a **+Y local** (abajo), de ahí el −90.
 
+#### `Countermeasures` — `countermeasures.gd`
+```
+extends Node   class_name Countermeasures
+```
+Chaff y bengalas: lleva la cuenta y **las suelta solo** cuando le viene un misil. Se engancha al
+`missile_inbound` de su propia unidad y va soltando con un respiro entre soltada y soltada hasta
+que el misil se pierde o impacta. No pide permiso a nadie.
+
+| señal | cuándo |
+|---|---|
+| `spent(kind, left)` | se gastó una carga |
+| `dispensing_started(threat)` | empieza a soltar — el parte canta `DEFENDING` |
+| `dispensing_stopped` | el misil terminó, o no quedan cargas |
+
+| export | por defecto | qué es |
+|---|---|---|
+| `chaff` / `flares` | 30 / 30 | cargas de cada tipo |
+| `decoy_scene` | `decoy.tscn` | qué suelta |
+| `interval` | 0,25 s | entre soltada y soltada |
+| `per_release` | 1 | cuántos salen de golpe. 2 con apertura = la V clásica |
+| `spread_deg` | 60 | apertura del abanico, hacia la cola |
+| `behind_px` | 6 | a qué distancia del avión aparecen |
+| `inherit_velocity` | 0,35 | cuánto se llevan de la velocidad del avión |
+
+**Va aparte del armamento a propósito:** una contramedida no es un arma — no se elige, no apunta
+y no hace daño. Meterla en el `WeaponLoadout` la habría metido en la rotación de armas activas,
+y el avión podría acabar "atacando con bengalas".
+
+**El tipo lo decide el arma que te tiran** (`kind_against()`), no una preferencia: contra radar
+chaff, contra calor bengalas. Soltar el que no es no engaña a nadie. Hoy sólo hay misiles de
+radar, así que las bengalas no se gastan nunca.
+
+`dispensing_started` se emite **diferido**: cuelga del mismo aviso que el registro de eventos y
+se conecta antes que él, así que emitirlo en el acto cantaba `DEFENDING` antes que `SAM LAUNCH`.
+
+---
+
+#### `Decoy` — `decoy.gd`
+```
+extends Node2D   class_name Decoy
+```
+Una nube de chaff o una bengala en el aire. Vive en el mundo, no colgada del avión. Grupo
+`decoys`, para que los buscadores lo encuentren sin conocer a quien lo soltó.
+
+Exports: `kind`, `lifetime` (2,6 s), `fade_fraction`, `drag`, y `peak_strength` / `bloom_time`,
+que describen cuánto "brilla" y cuánto tarda en abrirse.
+
+> ⚠ **`strength()` ya no decide nada.** Se escribió cuando el engaño se resolvía simulando, y
+> ese modelo se descartó (ver `decisions.md`). Hoy quien decide es la tirada del lanzamiento;
+> esto queda como dato descriptivo por si vuelve a hacer falta.
+
+Se dibuja con `_draw()` porque todavía no hay arte. Cuando lo haya, conviene que el dibujo viva
+en la escena y el script sólo mueva, como `Casing` y `Tracer`.
+
+---
+
 #### `OrbitBehavior` — `orbit_behavior.gd`
 Decide **a dónde** va cuando no hay órdenes: vueltas alrededor de un centro.
 
@@ -956,7 +1017,16 @@ teledirigida: **separación** (cae del ala sin motor, con la inercia del avión)
 | Vuelo | `cruise_speed` (300), `acceleration`, `boost_time`, `min_turn_radius` (90), `nav_gain` (3.5), `fuel_time` (2.5), `coast_drag`, `max_lifetime` |
 | Estabilización | `wobble_amount_deg`, `wobble_hz`, `wobble_decay` |
 | Espoleta | `proximity_radius` (12) |
+| Buscador | `seeker_cone_deg` (30) |
 | Arte | `sprite_offset_deg` (−90) |
+
+**No decide si lo engaña un señuelo: obedece.** `set_decoyed(bool)` se lo dice quien lo lanza,
+antes de volar. Si le tocó fallar, busca la bengala más centrada que tenga delante y se va con
+ella; si no, ignora los señuelos y va derecho. `seeker_cone_deg` sólo evita que se vaya a uno
+que tiene detrás.
+
+Se intentó al revés —que el misil decidiera simulando la geometría de los señuelos— y no
+funcionó: cuatro modelos distintos y todos daban el mismo resultado siempre. Ver `decisions.md`.
 
 **El giro se limita por RADIO, no por grados por segundo.** Es la diferencia entre un
 misil y un misil invencible: cuanto más rápido va, más ancho vira, así que existe una
@@ -1602,6 +1672,30 @@ segundo no se sostienen, y ese era el problema que llevaba tiempo anotado en pen
 Lo que se ve son las trazadoras — 12/s, una de cada cinco, que es lo que es una trazadora
 de verdad — y no hacen daño ni comprueban nada.
 
+**Contramedidas: se tira una vez, al lanzar.** `_roll_decoy_defeat()` decide de una si el misil
+va a fallar, y el vuelo posterior sólo lo representa. Suma dos capas y resta una:
+
+```
+prob = UnitType.ecm_evasion  +  WeaponType.decoy_bonus (si gasta carga)
+                             −  decoy_defeat_step × misiles ya lanzados a ese blanco
+```
+
+Medido, con el Harrier (ECM 0,20) contra el 9M311 (+0,55, escalón 0,15):
+
+```
+             misil 1   2     3     4     5
+con chaff      75%   58%   44%   29%   12%
+sin chaff      20%    5%    0%    0%    0%
+```
+
+**Una carga por misil, no por bengala:** lo que se gasta es la respuesta a una amenaza; cuántas
+salgan por el tubo es cosa del patrón. Así cambiar el patrón visual no altera la autonomía.
+
+**La solución de tiro se guarda por blanco** (`_solutions`) y se olvida de dos maneras: sola,
+pasado `fire_solution_memory` (25 s) sin seguirlo, y de golpe con `forget_solution()` cuando el
+avión vuelva a base — método listo, **todavía sin llamar**, porque la recuperación no existe. Se
+descartó olvidar al salir del círculo de detección: sería un botón de reiniciar.
+
 **Ráfagas: `burst_seconds` y `burst_pause`, con 0 = sin ráfagas.** Un cañón de avión debe
 tirar seguido porque **la pasada ya es la ráfaga**; una batería antiaérea no tiene pasada que
 le marque el ritmo, y si no cortara se quedaría escupiendo fuego desde que te ve hasta que
@@ -1968,6 +2062,28 @@ Se entera por `Unit.ammo_changed` en vez de preguntar cada frame por algo que ca
 tarde en tarde. **No guarda estado de selección**: la fuente de verdad es
 `Unit.active_weapon`, porque la barra se reconstruye en cada selección. `HUD` hace de
 intermediario — recibe `weapon_selected` y llama a `Unit.set_active_weapon()`.
+
+---
+
+### `CountermeasureBar` — `ui/hud/countermeasure_bar/countermeasure_bar.gd`
+```
+@tool  extends HBoxContainer   class_name CountermeasureBar
+```
+Chaff y bengalas de la unidad seleccionada, con lo que le queda de cada una.
+
+**Barra aparte de la de armas, y no un par de botones dentro de ella.** Una contramedida no se
+elige ni apunta, así que no debe leerse como una opción más de la rotación de armas. Se probó
+metida en `WeaponBar` y se sacó.
+
+Es `@tool` y **todo lo que se ve está exportado** — `button_size`, `font_size`, los textos, y la
+posición como cualquier `Control`. Ésa era la pega de la primera versión: los botones se
+construían por código y no se podían acomodar en el editor. En el editor enseña cargas de
+muestra, porque si no la barra sería un rectángulo vacío imposible de colocar.
+
+Los botones **no se pueden pulsar**, a propósito: el avión se defiende solo y el jugador no
+pilota. Están porque saber que quedan tres cargas cambia si mandás ese avión o no, y el día que
+haya pilotaje manual el botón ya está en su sitio. Se apagan al agotarse, como un arma sin
+munición, y se enganchan a `Countermeasures.spent` para bajar solos.
 
 ---
 
@@ -2697,6 +2813,10 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] Ondas de contacto en el minimapa y el mapa táctico (`ThreatPulses`), con el grande registrando aunque esté cerrado
 - [x] Parte de bajas: `Splash!` para lo enemigo, `UNIT LOST — … derribado por …` para lo propio (`take_damage` propaga el autor)
 - [x] Las unidades perdidas se quedan apagadas al final de su fila en el panel superior, en vez de desaparecer
+- [x] **Misil del Tunguska** (9M311, 250–380 px) y elección de arma por distancia: misil de lejos, cañón cuando se te mete dentro. Las dos envolventes se tocan sin solaparse, así que la distancia elige sola
+- [x] Cuatro anillos de alcance dibujados: detección, misil, cañón y zona muerta — los dos últimos derivados del arma, no exportados aparte
+- [x] **Contramedidas**: chaff y bengalas contadas, soltadas solas al aviso de misil, con el tipo elegido según la guía del arma
+- [x] Probabilidad de librarse en dos capas (ECM del modelo + señuelo) y una resta: la batería afina la puntería con cada misil que insiste
 - [x] Primer enemigo en el mapa: T-14 Armata (estático, sin IA)
 - [x] Atacar: click/tap sobre un enemigo con unidad propia seleccionada, o "Atacar" en `TargetMenu`; al morir el objetivo, el Harrier orbita donde llegó
 - [x] Menú contextual (`TargetMenu`) sobre unidad ajena: click derecho en PC, pulsación mantenida en táctil (`PanCamera.long_pressed`)
@@ -2749,9 +2869,14 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [ ] Alargar la fase opaca del humo (3–4 frames más antes de que baje el alfa, y algún paso de alfa extra): hoy la estela se disuelve desde el primer tercio (ver `SmokePuff`)
 - [ ] **Efectos propios del Tunguska**: fogonazo, trazadoras y humo son los del Harrier prestados. Cambiarlos es reasignar dos recursos por emisor, sin tocar código
 - [ ] **Probabilidad de impacto contra aeronaves.** El cañón AA usa hoy el mismo `_hit_fraction` por geometría que el del avión, que no modela lo que cuesta acertarle a un blanco aéreo rápido. Va junto con el daño en serio: hoy baja un Harrier de 100 a 47 en dos ráfagas
-- [ ] **Misiles de radar del Tunguska**, y **contramedidas del avión** para responderles. Aquí el avión **sí** debe evadir: es un misil, y esquivarlo da juego y vistosidad
+- [ ] **Que se note que la batería te está afinando la puntería.** Es la mecánica más importante del bloque y hoy es **invisible**: quien pierda un avión al cuarto misil lo leerá como mala suerte. Sin números en pantalla — la idea es un indicador en el avión que muestre desde dónde lo siguen y se intensifique, pulsando y sonando más fuerte
+- [ ] **Arte de los señuelos.** Hoy `Decoy` se dibuja con `_draw()`. El patrón (varios trozos de chaff, bengalas en V) ya es configurable: `per_release` y `spread_deg`
+- [ ] **Misiles de calor**, para que las bengalas sirvan de algo. El tipo ya se distingue (`WeaponType.seeker`); faltaría darle a cada tipo su propio `decoy_bonus`, hoy común
+- [ ] **Llamar a `forget_solution()` al recuperar un avión.** El método está; falta el aterrizaje
+- [ ] `Decoy.strength()` y `bloom_time` quedaron sin uso al descartar el modelo simulado — decidir si se quitan o se aprovechan
+- [ ] Menú de progresión: subir `ecm_evasion` por modelo. Ahí **sí** van números en pantalla, porque se gastan recursos y hay que saber qué se compra
 - [ ] **Audio de las alertas.** Es la única señal que funciona sin estar mirando la pantalla; hoy las tres avisos visuales compiten por la misma atención. El enganche ya está: las señales `tracked_by` / `fired_upon_by` con su filtro
-- [ ] **Evasión en ruta: aparcada a propósito.** Ver la regla en `decisions.md` — se reevalúa cuando haya varias baterías y misiones con ruta real
+- [ ] **Evasión automática: descartada, no pendiente.** Se construyó y se eliminó el mismo día — creaba dos bucles y dejaba al avión dando vueltas junto a la batería. Sacar un avión de una zona batida es del jugador. Ver `decisions.md` antes de volver a intentarlo
 - [ ] **Vigilar el avión sin órdenes dentro del alcance.** `_on_target_lost()` lo pone a orbitar *donde está*, que tras un ataque es encima de la defensa. No es esquivar: es elegir dónde orbitar
 - [ ] Ruido en el parte: se reportan también los ataques de unidades enemigas (`2S6 Tunguska ataca AV-8B Harrier II`), que ahora duplica al `MUD SPIKE`
 - [ ] Las bajas del panel superior se acumulan sin tope; hará falta un límite o limpiarlas entre misiones

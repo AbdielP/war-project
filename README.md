@@ -115,6 +115,16 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Cada cuánto se repite un aviso de amenaza | `core/unit/unit.gd` → `ALARM_SILENCE` (8 s por amenaza y por tipo) |
 | Cuánto dura una onda de contacto en los mapas | `ui/hud/minimap/threat_pulses.gd` → `LIFETIME` (5 s) |
 | Tamaño y número de las ondas | nodo `MapView` de `minimap.tscn` / `tactical_map.tscn` → `alert_radius_px` (12 / 28), `alert_rings` (3) |
+| Alcance del misil del Tunguska | `core/weapon/9m311_missile.tres` → `min_range` / `max_range` (250–380). Empieza donde acaba el cañón, así la distancia elige el arma sola |
+| Cuántos misiles lleva | nodo raíz de `2s6_tunguska.tscn` → `missile_rounds` (8), y `missile` para cambiarle el arma |
+| **Evasión propia del avión** (sin gastar nada) | `core/unit/av8b_harrier/av8b_harrier_type.tres` → `ecm_evasion` (0,20). Va por modelo: el menú de progresión lo subirá para todos |
+| **Cuánto suma el señuelo** | `core/weapon/9m311_missile.tres` → `decoy_bonus` (0,55). Con el ECM da el 75% del primer misil |
+| **Cuánto afina la batería por insistir** | mismo `.tres` → `decoy_defeat_step` (0,15 por misil al mismo blanco). Al quinto ya no falla |
+| Cuánto recuerda la batería a un blanco | mismo `.tres` → `fire_solution_memory` (25 s sin seguirlo). **No** se olvida al salir del círculo: sería un botón de reiniciar |
+| Cargas de chaff y bengalas | nodo `Countermeasures` de `av8b_harrier.tscn` → `chaff` / `flares` (30). **Una carga por misil**, no por bengala suelta |
+| Patrón de soltada (la V) | mismo nodo → `per_release`, `spread_deg`, `behind_px`, `interval` |
+| Vuelo del señuelo | `core/unit/flight/decoy.tscn` → `lifetime`, `drag`, `fade_fraction` |
+| Sitio y tamaño de los botones de chaff/bengalas | nodo `CountermeasureBar` del HUD → se arrastra en el editor; `button_size` y `font_size` en el inspector |
 | A qué velocidad despega un avión | no se ajusta: es su `min_speed`, y la cubierta se la pregunta |
 | Resistencia de cada unidad | `<unidad>_type.tres` → `max_health` |
 | Altura y sombra de la Mk-82 al caer | nodo `Shadow` de `mk82_bomb.tscn` → `descent_px` / `ground_px`. Es la sombra del misil, prestada hasta que tenga la suya |

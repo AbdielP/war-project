@@ -32,6 +32,10 @@ signal died(unit: Unit)
 signal tracked_by(threat: Unit)
 ## Le están disparando. Esto ya no es un aviso, es un parte de daños.
 signal fired_upon_by(threat: Unit)
+## Le han soltado un misil y viene hacia ella. Es el aviso más urgente de los
+## tres y el único que pide una reacción **ya**: lo demás se aguanta, un misil
+## no.
+signal missile_inbound(threat: Unit, weapon: WeaponType, missile: Node2D)
 
 var squad: Squad = null  # null = unidad suelta, sin escuadrón
 var weapon_loadout: WeaponLoadout = null  # null = unidad desarmada
@@ -101,6 +105,17 @@ func notify_tracked(threat: Unit) -> void:
 func notify_fired_upon(threat: Unit) -> void:
 	if _alarm_is_stale(threat, &"fire"):
 		fired_upon_by.emit(threat)
+
+
+## Le avisa de que le viene un misil.
+##
+## **Sin filtro de repetición, a diferencia de las otras dos.** Un misil no es un
+## estado que dure —"me siguen", "me disparan"— sino un suceso: si te tiran tres,
+## tienes que enterarte tres veces, porque cada uno hay que engañarlo por
+## separado. Lo que evita el spam aquí es la recarga del arma, no un silencio.
+func notify_missile_inbound(threat: Unit, weapon: WeaponType, missile: Node2D) -> void:
+	if is_instance_valid(threat):
+		missile_inbound.emit(threat, weapon, missile)
 
 
 ## ¿Toca volver a dar la voz por esto, o es la misma alarma de hace un momento?

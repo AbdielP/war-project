@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/hud/brevity_calls/brevity_calls.gd" id="1"]
+[ext_resource type="FontFile" uid="uid://byulypqvv336d" path="res://assets/fonts/M5X7/m5x7.ttf" id="2"]
+
+[node name="BrevityCalls" type="Node2D"]
+script = ExtResource("1")
+offset = Vector2(30, -28)
+font = ExtResource("2")
+font_size = 16

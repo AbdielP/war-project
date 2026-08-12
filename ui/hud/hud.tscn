@@ -14,12 +14,15 @@
 [ext_resource type="PackedScene" path="res://ui/hud/minimap/tactical_map.tscn" id="11"]
 [ext_resource type="PackedScene" path="res://ui/hud/unit_tag/unit_tag.tscn" id="12"]
 [ext_resource type="PackedScene" path="res://ui/hud/countermeasure_bar/countermeasure_bar.tscn" id="13"]
+[ext_resource type="PackedScene" path="res://ui/hud/brevity_calls/brevity_calls.tscn" id="14"]
 
 [node name="HUD" type="CanvasLayer" unique_id=1219806315]
 process_mode = 3
 script = ExtResource("0")
 
 [node name="UnitTag" parent="." instance=ExtResource("12")]
+
+[node name="BrevityCalls" parent="." instance=ExtResource("14")]
 
 [node name="EventLog" parent="." unique_id=173143879 instance=ExtResource("1")]
 offset_left = 6.0

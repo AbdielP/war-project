@@ -97,6 +97,12 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Velocidades del avión (mínima, máxima, aceleración) | nodo `PlaneController` de `av8b_harrier.tscn` |
 | Radio de giro del avión | mismo nodo → `turn_radius`. **Es el parámetro maestro del vuelo**: manda sobre el viraje y sobre el tamaño mínimo del circuito de espera |
 | Distancias de las pasadas de ataque | nodo `AttackRun` de `av8b_harrier.tscn` |
+| **Bandas del combate aéreo** | `aim120_amraam.tres` (350–900), `aim9_sidewinder.tres` (130–360), y el cañón con envolvente aparte para aire |
+| **Alcance del cañón contra aviones** | `gau12_cannon.tres` → `air_min_range` / `air_max_range` (40–150). El `min_range`/`max_range` normal sigue siendo el de tierra (220–420) |
+| Desde qué ángulo sirve un arma | `<arma>.tres` → `max_aspect_deg`, medido desde la cola del blanco. AIM-9 = 60 (busca la tobera), 180 = por donde sea. **Sólo cuenta contra aviones** |
+| Cómo persigue en un duelo | nodo `Dogfight` de `av8b_harrier.tscn` → `saddle_distance` (a qué distancia se pone detrás), `lead_time`, `overshoot_guard` |
+| Cada cuánto reelige arma el automático | nodo `WeaponSelector` → `interval` (0,2 s) |
+| **Blanco de pruebas que no muere** | casilla `Invulnerable` en la instancia de la unidad, dentro de `main.tscn` |
 | A qué distancia del barco esperan los aviones | nodo `OrbitBehavior` de `av8b_harrier.tscn` → `radius` |
 | **Hasta dónde ve el Tunguska** | nodo `RangeRings` de `2s6_tunguska.tscn` → `detection_radius` (400). Se ve dibujado en el editor |
 | **Hasta dónde dispara el Tunguska** | mismo nodo → `engagement_radius` (250). Hoy hay que mantenerlo a mano igual al `max_range` del arma |
@@ -198,8 +204,7 @@ paneles del HUD, ajusta los dos `offset` de la tabla o volverán a solaparse.
 - Bugs y mejoras lanzamiento de AGM-65
 	- El avión sale de la pantalla intentando atacar, eso no debería ocurrir, debe maniobrar dentro del juego...
 		- Siempre falla el misil al tratar de re tomar el ataque? parece que si.
-	- Sigue intentando atacar aún cuando se quedó sin arma. supongo que es por que no tenemos mas logicas de armas aún.
-	- El avión vira demasiado brusco y enseguida al lanzar el misil. es un giro cerrado de carrito a control remoto cuando debe ser un giro controlado... que pasó con el derrape y las variables cool y excentricas del control del jet, no aplican acá?
+	- Sigue intentando atacar aún cuando se quedó sin arma. Colocar limite de municiones de cañon para probar.
 - [X] Estela de humo del misil !! Falta alargar la fase opaca: empieza a desvanecerse al primer tercio, hacen falta 3–4 frames opacos más y algún paso de alfa extra antes del final
 - [X] Sombra del misil !! Redibujarla ovalada y de 3 px de ancho: ahora mide lo mismo que el cuerpo del misil y en los últimos frames se funden
 - [ ] El contador de impacto debería ser visible siempre sobre la unidad? de ese modo puedo saber si está siendo atacado mientras uso otra unidad.

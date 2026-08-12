@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://b0kbs1vy2sf1s" path="res://assets/art/sprites/aim9_sidewinder.tres" id="2"]
+[ext_resource type="PackedScene" uid="uid://dgpbq55vf6cfr" path="res://core/weapon/agm65_missile.tscn" id="3"]
 
 [resource]
 script = ExtResource("1")
@@ -10,3 +11,13 @@ short_name = "AIM-9"
 brevity_code = "Fox Two"
 icon = ExtResource("2")
 targets = 1
+min_range = 130.0
+max_range = 360.0
+firing_arc_deg = 22.0
+damage = 60.0
+blast_radius = 14.0
+max_aspect_deg = 60.0
+seeker = 2
+projectile_scene = ExtResource("3")
+reload_time = 2.0
+slows_to_aim = false

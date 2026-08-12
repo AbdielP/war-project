@@ -1,0 +1,37 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
+[ext_resource type="Texture2D" uid="uid://dcdn888d5qhmf" path="res://assets/art/sprites/SU-33 48x48.png" id="2"]
+[ext_resource type="Resource" path="res://core/unit/su33_flanker/su33_flanker_type.tres" id="3"]
+[ext_resource type="Script" path="res://core/unit/su33_flanker/su33_flanker.gd" id="4"]
+[ext_resource type="Script" uid="uid://c1s3dnfi6aan1" path="res://core/unit/flight/plane_controller.gd" id="5"]
+[ext_resource type="Script" uid="uid://d3s0jasumaqvv" path="res://core/unit/flight/orbit_behavior.gd" id="6"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(32, 44)
+
+[node name="Su33Flanker" instance=ExtResource("1")]
+z_index = 10
+script = ExtResource("4")
+unit_type = ExtResource("3")
+team = 2
+
+[node name="Sprite2D" parent="." index="0"]
+texture = ExtResource("2")
+
+[node name="CollisionShape2D" parent="." index="1"]
+shape = SubResource("RectangleShape2D_1")
+
+[node name="SelectionIndicator" parent="." index="2"]
+size = Vector2(32, 44)
+
+[node name="PlaneController" type="Node" parent="." index="3"]
+script = ExtResource("5")
+min_speed = 90.0
+max_speed = 140.0
+acceleration = 55.0
+turn_radius = 150.0
+
+[node name="OrbitBehavior" type="Node" parent="." index="4"]
+script = ExtResource("6")
+radius = 380.0

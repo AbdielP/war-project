@@ -210,5 +210,12 @@ func _on_action_pressed(action_name: String) -> void:
 func _on_weapon_selected(weapon: WeaponType) -> void:
 	if _current_unit == null:
 		return
+	# El jugador acaba de elegir a mano: el que la cambiaba sola se aparta hasta
+	# que esa arma se acabe o se cambie de blanco. Si no, el automático le
+	# pisaría la elección al primer repaso y la barra sería decorativa.
+	for child in _current_unit.get_children():
+		var selector := child as WeaponSelector
+		if selector != null:
+			selector.take_manual_control()
 	_current_unit.set_active_weapon(weapon)
 	_weapon_bar.set_active(weapon)

@@ -18,6 +18,8 @@
 [ext_resource type="Script" uid="uid://bv57amugr3vv0" path="res://core/weapon/casing_ejector.gd" id="16"]
 [ext_resource type="PackedScene" path="res://core/weapon/casing_25mm.tscn" id="17"]
 [ext_resource type="Script" uid="uid://23wfrxnvyo63" path="res://core/unit/flight/countermeasures.gd" id="18"]
+[ext_resource type="Script" uid="uid://dw0vhym2gel8b" path="res://core/weapon/weapon_selector.gd" id="19"]
+[ext_resource type="Script" path="res://core/unit/flight/dogfight_behavior.gd" id="21"]
 [ext_resource type="PackedScene" path="res://core/unit/flight/decoy.tscn" id="20"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
@@ -125,3 +127,9 @@ spawn_scene = ExtResource("17")
 source_path = NodePath("../WeaponSystem")
 start_signal = &"firing_started"
 stop_signal = &"firing_stopped"
+
+[node name="WeaponSelector" type="Node" parent="." index="13"]
+script = ExtResource("19")
+
+[node name="Dogfight" type="Node" parent="." index="14"]
+script = ExtResource("21")

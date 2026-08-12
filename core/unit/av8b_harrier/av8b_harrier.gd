@@ -19,6 +19,7 @@ signal order_fulfilled
 @onready var pilot: PlaneController = $PlaneController
 @onready var orbit: OrbitBehavior = $OrbitBehavior
 @onready var attack: AttackRunBehavior = $AttackRun
+@onready var dogfight: DogfightBehavior = $Dogfight
 @onready var weapons: WeaponSystem = $WeaponSystem
 
 
@@ -27,13 +28,16 @@ func _ready() -> void:
 	add_to_group("unit_air")
 	orbit.center_reached.connect(func() -> void: order_fulfilled.emit())
 	attack.target_lost.connect(_on_target_lost)
+	dogfight.target_lost.connect(_on_target_lost)
 	# Sólo se tira dentro de la pasada. Fuera de ella el avión está maniobrando
 	# y el blanco le cruza el morro de refilón cada vez que vira: sin esto, cada
 	# uno de esos cruces sería un tiro, y el ataque se vería como un baile.
 	attack.attack_run_started.connect(weapons.set_cleared_to_fire.bind(true))
 	attack.attack_run_ended.connect(weapons.set_cleared_to_fire.bind(false))
-	# Disparar y romper el ataque son la misma maniobra: en cuanto sale el arma
-	# el avión deja de meterse hacia el blanco.
+	# Disparar y romper el ataque son la misma maniobra **contra tierra**: en
+	# cuanto sale el arma el avión deja de meterse hacia un blanco que no le va a
+	# perseguir. En un duelo aéreo romper sería regalar la iniciativa, así que
+	# `dogfight` no escucha esto y sigue maniobrando después de tirar.
 	weapons.fired.connect(func(_weapon: WeaponType) -> void: attack.break_off())
 	# Cambiar de arma en pleno ataque cambia a qué distancia hay que volar.
 	active_weapon_changed.connect(_on_active_weapon_changed)
@@ -85,12 +89,29 @@ func start_flight(orbit_center: Node2D) -> void:
 func receive_move_order(target: Vector2) -> void:
 	super.receive_move_order(target)
 	attack.stop()
+	dogfight.stop()
 	orbit.orbit_at(target)
 
 
+## Atacar un avión y atacar algo en el suelo son **dos maniobras distintas**, y
+## el blanco decide cuál. Contra tierra se hacen pasadas: entrar, soltar y
+## romper. Contra un avión se pelea por el ángulo y no se rompe nunca.
+##
+## Mezclarlos fue el error que dejó al Harrier alejándose cada vez que soltaba un
+## AMRAAM: rompía el ataque, que es lo correcto contra un tanque y absurdo contra
+## algo que se mueve tan rápido como tú.
 func receive_attack_order(target: Unit) -> void:
 	super.receive_attack_order(target)
 	orbit.stop()
+	if target.get_domain() == UnitType.Domain.AIR:
+		attack.stop()
+		# Sin permisos que retirar: en un duelo se dispara en cuanto se puede, y
+		# quien decide si se puede es la envolvente del arma, no una fase de
+		# vuelo.
+		weapons.set_cleared_to_fire(true)
+		dogfight.engage(target, active_weapon)
+		return
+	dogfight.stop()
 	# Se empieza sin permiso: primero se enfila, y el permiso llega con la
 	# pasada. Al revés, el avión abriría fuego mientras todavía está buscando la
 	# línea de ataque.
@@ -111,6 +132,7 @@ func _on_target_lost() -> void:
 ## que rehacer las distancias sin soltar el blanco.
 func _on_active_weapon_changed(_weapon: WeaponType) -> void:
 	if is_instance_valid(attack_target):
+		dogfight.set_weapon(active_weapon)
 		attack.set_envelope(_weapon_min_range(), _weapon_max_range(),
 			_weapon_slows_to_aim())
 
@@ -132,4 +154,5 @@ func _weapon_slows_to_aim() -> bool:
 
 func _orbit_around(center: Node2D) -> void:
 	attack.stop()
+	dogfight.stop()
 	orbit.orbit_around(center)

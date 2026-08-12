@@ -233,8 +233,12 @@ func _pour_rounds(weapon: WeaponType, target: Unit, delta: float) -> void:
 ## es lo que pasa de verdad cuando se aguanta el gatillo sin apuntar.
 func _hit_fraction(weapon: WeaponType, target: Unit) -> float:
 	var distance := _unit.global_position.distance_to(target.global_position)
+	# Se interpola desde el mínimo QUE APLICA a este blanco. Con el mínimo a
+	# secas, darle al cañón un alcance corto para el aire estiraba la curva y le
+	# bajaba la puntería contra tierra sin que nadie tocara nada de tierra.
+	var floor_range := weapon.min_range_against(target.get_domain())
 	var reach := clampf(
-		inverse_lerp(weapon.min_range, maxf(weapon.max_range, weapon.min_range + 1.0),
+		inverse_lerp(floor_range, maxf(weapon.max_range, floor_range + 1.0),
 			distance), 0.0, 1.0)
 	var by_distance := lerpf(1.0, weapon.long_range_accuracy, reach)
 
@@ -286,7 +290,20 @@ func _in_parameters(weapon: WeaponType, target: Unit) -> bool:
 		return false
 	if not _unit.has_ammo(weapon):
 		return false
-	return weapon.in_range(_unit.global_position.distance_to(target.global_position))
+	var distance := _unit.global_position.distance_to(target.global_position)
+	if not weapon.in_range_against(distance, target.get_domain()):
+		return false
+	# Desde dónde se le entra, no sólo a qué distancia. Un misil de calor no
+	# engancha de frente por muy centrado que esté el blanco: le hace falta ver
+	# la tobera.
+	#
+	# **Sólo contra lo que vuela.** Un tanque no tiene cola táctica: por dónde le
+	# entres da igual, y exigirlo dejaría al cañón sin disparar contra tierra
+	# salvo que el avión llegara justo por detrás. El mismo cañón sirve para las
+	# dos cosas y sólo en una de ellas el ángulo significa algo.
+	if not weapon.needs_rear_aspect() or target.get_domain() != UnitType.Domain.AIR:
+		return true
+	return WeaponType.aspect_to(_unit.global_position, target) <= weapon.max_aspect_deg
 
 
 ## Cuánto se sale el blanco del morro, en radianes.

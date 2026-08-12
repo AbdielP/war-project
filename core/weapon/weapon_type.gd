@@ -62,6 +62,44 @@ enum Seeker { NONE, RADAR, HEAT }
 ## Cuánto puede estar el blanco fuera del morro para poder disparar. El arma
 ## sale hacia adelante, así que hay que enfilar antes de tirar.
 @export var firing_arc_deg: float = 30.0
+## Desde qué parte del blanco hay que atacarlo, en grados medidos **desde su
+## cola**. 0 = justo detrás; 180 = por donde sea, incluso de frente.
+##
+## Es lo que separa las tres armas de un caza y lo que le da forma al combate
+## aéreo. No es preferencia, es cómo funciona cada una:
+##
+##   - Un misil de radar da igual por dónde le entre: **180**.
+##   - Uno de calor busca la tobera, así que hay que estar por detrás: **~60**.
+##   - El cañón necesita estar en la cola y apuntando: **~45**.
+##
+## De ahí sale solo el arco del combate: se abre de lejos y de frente, se cruzan,
+## y a partir de ahí es un duelo por ganar ángulo — y cada trozo de ángulo que
+## ganas desbloquea un arma mejor.
+##
+## Contra algo que no se mueve no significa nada: un tanque no tiene cola. Las
+## armas de ataque a tierra lo dejan en 180 y siguen comportándose igual que
+## siempre.
+@export_range(0.0, 180.0, 5.0) var max_aspect_deg: float = 180.0
+## Alcance mínimo **contra lo que vuela**, cuando no es el mismo que contra
+## tierra. −1 = usa `min_range` para todo.
+##
+## Existe por el cañón, y es un caso real y no un parche: contra un tanque el
+## avión no debe meterse encima —hay una distancia por debajo de la cual atacar
+## no compensa—, pero en un duelo aéreo a quemarropa es lo único que queda. Es la
+## misma arma con dos usos, y **cada uno tiene su distancia**.
+##
+## Antes esto se resolvía subiendo `min_range` a secas, y eso ataba las dos cosas:
+## bajarlo para el aire estropeaba el ataque a tierra —dónde rompía la pasada y
+## hasta la puntería— sin que nadie tocara nada de tierra.
+@export var air_min_range: float = -1.0
+## Alcance máximo contra lo que vuela. −1 = usa `max_range` para todo.
+##
+## El mismo caso del cañón, por el otro extremo: contra un tanque quieto se
+## ametralla desde lejos, pero **acertarle a un avión a esa distancia no pasa**.
+## Sin esto, el cañón alcanzaba más lejos que el misil de corto alcance y el
+## avión se ponía a los tiros a 400 px en vez de tirar el AIM-9 — el cañón era lo
+## único que llegaba, así que "último recurso" no le quitaba el puesto.
+@export var air_max_range: float = -1.0
 
 @export_group("Daño")
 @export var damage: float = 100.0
@@ -171,3 +209,41 @@ func can_engage_domain(domain: UnitType.Domain) -> bool:
 ## desperdicia, así que quien dispara espera en vez de gastar munición.
 func in_range(distance: float) -> bool:
 	return distance >= min_range and distance <= max_range
+
+
+## Igual que [method in_range] pero sabiendo contra qué se dispara: sólo cambia
+## para las armas que tienen un mínimo propio contra blancos aéreos.
+func in_range_against(distance: float, domain: UnitType.Domain) -> bool:
+	return distance >= min_range_against(domain) \
+		and distance <= max_range_against(domain)
+
+
+## El alcance mínimo que toca según el blanco.
+func min_range_against(domain: UnitType.Domain) -> float:
+	if domain == UnitType.Domain.AIR and air_min_range >= 0.0:
+		return air_min_range
+	return min_range
+
+
+## El alcance máximo que toca según el blanco.
+func max_range_against(domain: UnitType.Domain) -> float:
+	if domain == UnitType.Domain.AIR and air_max_range >= 0.0:
+		return air_max_range
+	return max_range
+
+
+## ¿Exige atacar desde atrás? Un arma que entra por donde sea no obliga al vuelo
+## a nada más que acercarse.
+func needs_rear_aspect() -> bool:
+	return max_aspect_deg < 180.0
+
+
+## Desde dónde se le está entrando al blanco, en grados desde su cola: 0 es justo
+## detrás y 180 justo de frente.
+##
+## Estático porque lo necesitan dos que no se conocen: el armamento, para saber
+## si puede tirar, y el vuelo, para saber si tiene que seguir buscando ángulo.
+static func aspect_to(shooter: Vector2, target: Unit) -> float:
+	var tail := target.get_facing() + PI
+	var to_shooter := (shooter - target.global_position).angle()
+	return absf(rad_to_deg(angle_difference(tail, to_shooter)))

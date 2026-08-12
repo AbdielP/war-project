@@ -845,6 +845,43 @@ que es lo único sensato sin envolvente que respetar.
 
 ---
 
+#### `DogfightBehavior` — `dogfight_behavior.gd`
+```
+extends Node   class_name DogfightBehavior
+```
+Decide **a dónde** va el avión cuando pelea contra otro avión. Cuarto hermano de
+`OrbitBehavior` y `AttackRunBehavior`: los tres le dan puntos al mismo piloto y nunca corren a
+la vez. El Harrier elige entre pasadas y duelo **según el dominio del blanco**.
+
+**Existe aparte porque mezclarlo con las pasadas fue un bug real:** contra tierra el avión
+suelta el arma y **rompe** —correcto, un tanque no te persigue—, y eso dejaba al Harrier
+alejándose cada vez que soltaba un AMRAAM. Aquí no se rompe nunca: se dispara y se sigue
+maniobrando.
+
+**Lo que manda es el ángulo, no la distancia.** No vuela hacia el enemigo: vuela hacia el punto
+que lo pone **detrás** de él. Como ese punto se mueve con el blanco, perseguirlo produce solo
+las persecuciones circulares de un dogfight, sin programar ninguna maniobra. Y decide quién gana
+sin reglas extra: el que vira más cerrado cierra por dentro, así que **el radio de giro decide
+también el combate aéreo**.
+
+**A dónde ir lo dice el arma**, no una regla fija:
+
+| arma activa | destino |
+|---|---|
+| entra por donde sea (radar) | el punto de intercepción — se vuela derecho y se dispara mientras se cierra |
+| necesita la tobera (calor, cañón) | la cola del enemigo |
+
+| export | por defecto | qué es |
+|---|---|---|
+| `saddle_distance` | 120 | a qué distancia por detrás se pone la posición de tiro |
+| `lead_time` | 0,6 s | cuánto se adelanta al movimiento del enemigo |
+| `overshoot_guard` | 70 | por debajo de esto deja de cerrar, para no pasársele |
+
+Gas siempre a tope: en un duelo la energía es media posición, y frenar para apuntar —lo que se
+hace contra tierra— aquí es regalar el ángulo.
+
+---
+
 ### Armamento — `core/weapon/`
 
 Tres niveles, separados a propósito: qué es un arma, qué se monta en una salida, y
@@ -864,6 +901,26 @@ icono no se desincronizan entre misiones.
 | Objetivos | `targets` | Flags Aire / Superficie. Contra qué sirve |
 | Alcance | `min_range`, `max_range` | Envolvente de tiro. Debajo del mínimo el arma aún no se estabilizó; encima del máximo se queda sin combustible |
 | Alcance | `firing_arc_deg` | Cuánto puede estar el blanco fuera del morro para poder tirar |
+| Alcance | `air_min_range` / `air_max_range` | Envolvente **sólo contra lo que vuela**. −1 = usa la de siempre |
+| Alcance | `max_aspect_deg` | Desde qué parte del blanco hay que atacarlo, medido **desde su cola**. 180 = por donde sea |
+
+**`air_min_range` / `air_max_range` no son un capricho: el cañón necesita las dos.** Contra un
+tanque quieto se ametralla de 220 a 420 px; contra un avión, de 40 a 150. El mínimo, porque a
+quemarropa en un duelo es lo único que queda. El máximo, porque con 420 **llegaba más lejos que
+el AIM-9** y el avión se ponía a los tiros a 400 px en vez de tirar el misil.
+
+Antes esto se resolvía con un solo número de compromiso, y ataba las dos cosas: cambiarlo para
+el aire movía el alcance, **la distancia a la que rompe la pasada en tierra y hasta la
+puntería**, sin que nadie tocara nada de tierra. Ver `decisions.md`.
+
+**`max_aspect_deg` es lo que da forma al combate aéreo.** El AIM-9 pide 60° porque busca la
+tobera; el AMRAAM entra por donde sea. Así el arma decide la geometría del vuelo: si puede
+disparar de frente se vuela derecho, y sólo se va a buscar la cola cuando el arma lo exige.
+**Sólo cuenta contra blancos aéreos** — un tanque no tiene cola táctica, y exigirlo dejaría al
+cañón sin disparar contra tierra salvo llegando justo por detrás.
+
+Métodos: `in_range_against(distance, domain)`, `min_range_against(domain)`,
+`max_range_against(domain)`, `needs_rear_aspect()` y `aspect_to(shooter, target)` (estático).
 | Daño | `damage`, `blast_radius` | 0 de radio = sólo daña lo que toca |
 | Lanzamiento | `projectile_scene` | Qué se instancia al disparar |
 | Lanzamiento | `salvo_size` | 1 = de una en una; **0 = todo lo que quede** |
@@ -1711,6 +1768,43 @@ ráfagas. Medido en el Tunguska: 0,80 s de fuego / 0,70 s de pausa, exactos.
 
 ---
 
+#### `WeaponSelector` — `weapon_selector.gd`
+```
+extends Node   class_name WeaponSelector
+```
+Elige con qué arma se ataca según a qué distancia está el blanco. Cuelga de la unidad y lo usan
+el Harrier y el Tunguska — salió del script del Tunguska en cuanto hizo falta lo mismo en el
+avión.
+
+**Quién manda, que costó tres correcciones:**
+
+| situación | manda |
+|---|---|
+| duelo aéreo sin que el jugador toque nada | el automático, cambiando de banda según se cierra |
+| ataque a tierra | **el jugador**: se pone un arma que sirva al empezar y no se vuelve a tocar |
+| el jugador elige en la barra | él, hasta que el arma se agote o cambie a otro blanco |
+| elige el arma **antes** de dar la orden | él: la elección **espera** al blanco que venga |
+
+Los dos últimos son bugs que se vieron jugando, no razonando:
+
+- Elegir arma y **después** pulsar al enemigo es el orden normal, y la primera versión daba la
+  elección por caducada justo al atacar, pisándole el arma al jugador.
+- Al desactivar el automático en tierra, **el arma se quedaba pegada de lo anterior**: salías de
+  un duelo con el cañón puesto, mandabas el avión contra un tanque y se iba a ametrallar con
+  distancia de sobra para bombardear. De ahí la distinción entre *no cambiarla durante* y *poner
+  una que sirva al empezar*.
+
+**Cómo elige** (`best_for`), con el alcance y el aspecto que aplican a ese blanco:
+
+- **El cañón es siempre el último recurso.** Mientras un misil llegue, se tira el misil. Y de
+  ahí sale gratis lo que se quería: a quemarropa ningún misil llega, así que el cañón entra solo
+  sin ninguna regla que diga "usa el cañón cuando estés encima".
+- **Contra aire**, entre misiles gana el de **menor** alcance: las envolventes están hechas para
+  no solaparse apenas, así que ése es el de la banda de ahora.
+- **Contra tierra**, el de **mayor** alcance: se tira desde fuera de lo que defienda el blanco.
+
+---
+
 ### `T-14 Armata` — `core/unit/t14_armata/`
 
 Tanque enemigo. **Sin script**: instancia de `unit.tscn` con `unit_type` y `team = ENEMY`,
@@ -1768,6 +1862,24 @@ convención que confunde en el Harrier. `inherit_velocity` da igual: el vehícul
 > Cambiar el arte después no toca código: `MuzzleFlash` recibe un `SpriteFrames` y
 > `TracerStream` un `PackedScene`, los dos apuntados desde la escena. Lo único heredado es la
 > estructura de animación (`start`/`sustain` en el fogonazo, `muzzle`/`streak` en la trazadora).
+
+---
+
+### `Su-33 Flanker-D` — `core/unit/su33_flanker/`
+
+Avión enemigo. **Sin IA, y a propósito**: vuela en círculo sobre donde lo pongas y ya está. Es
+un blanco aéreo de verdad —se mueve, hay que anticiparlo, los misiles tienen que
+interceptarlo— sin decidir todavía nada del comportamiento enemigo, que es cosa de cuando haya
+misiones.
+
+No hizo falta inventar nada para eso: **reusa `PlaneController` + `OrbitBehavior` tal cual**,
+que es el circuito de espera del Harrier. Cuando llegue el momento de darle comportamiento, esto
+será su estado "sin órdenes" y no habrá que deshacer nada.
+
+70 de vida, ECM 0,25 (más que el Harrier), radio de giro 150, 90–140 px/s. Su arte apunta a **+Y
+igual que el Harrier**, así que usa el `sprite_offset_deg` por defecto.
+
+El del mapa lleva **`invulnerable = true`**: es el blanco de pruebas.
 
 ---
 
@@ -2817,6 +2929,11 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] Cuatro anillos de alcance dibujados: detección, misil, cañón y zona muerta — los dos últimos derivados del arma, no exportados aparte
 - [x] **Contramedidas**: chaff y bengalas contadas, soltadas solas al aviso de misil, con el tipo elegido según la guía del arma
 - [x] Probabilidad de librarse en dos capas (ECM del modelo + señuelo) y una resta: la batería afina la puntería con cada misil que insiste
+- [x] **Combate aéreo**: `DogfightBehavior` (se pelea por el ángulo, no se rompe tras disparar) y el Harrier elige maniobra según el dominio del blanco
+- [x] Su-33 enemigo volando en círculo, sin IA, reusando el circuito de espera
+- [x] AIM-120 (350–900) y AIM-9 (130–360, exige 60° desde la cola) definidos, y cañón con envolvente aparte contra aire (40–150)
+- [x] `WeaponSelector`: cadena automática por bandas en aire, elección del jugador respetada, y arma sensata al empezar un ataque a tierra
+- [x] `Unit.invulnerable` para tener blancos de pruebas que no se desintegran al primer impacto
 - [x] Primer enemigo en el mapa: T-14 Armata (estático, sin IA)
 - [x] Atacar: click/tap sobre un enemigo con unidad propia seleccionada, o "Atacar" en `TargetMenu`; al morir el objetivo, el Harrier orbita donde llegó
 - [x] Menú contextual (`TargetMenu`) sobre unidad ajena: click derecho en PC, pulsación mantenida en táctil (`PanCamera.long_pressed`)
@@ -2884,7 +3001,9 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [ ] Contramedidas (bengalas, chaff, ECM) como blancos falsos y degradación del guiado
 - [ ] Qué hace el avión cuando se queda sin munición y el blanco sigue vivo (hoy sigue haciendo pasadas)
 - [ ] Cadena de repliegue de arma: usar la siguiente cuando se acaba una, cañón como último recurso
-- [ ] Elección de arma por distancia en combate aéreo (sistema de dogfight, sin planear)
+- [ ] **Proyectil propio de los misiles aire-aire.** El AIM-120 y el AIM-9 usan prestado el del Maverick, igual que el 9M311: vuelan y guían, pero sale un AGM-65 con sombra de altitud
+- [ ] **Comportamiento del Su-33.** Hoy sólo orbita: no responde, no dispara, no huye. Va con las misiones
+- [ ] Revisar el sobrevuelo del ataque a tierra: rompe donde debe (263 px) pero completa el viraje pasando a 114. Es el radio de giro, no un fallo — decidir si molesta
 - [ ] Vuelo en formación (aviones del mismo escuadrón) — hoy la orden sólo llega al líder
 - [ ] Animación del elevador (placeholder `elevator_cycle_time` ya existe)
 - [ ] Misiones funcionales: SEAD/CAP/CAS tienen UI, sin comportamiento de IA

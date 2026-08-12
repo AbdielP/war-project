@@ -50,24 +50,10 @@ func _ready() -> void:
 	weapons.firing_started.connect(_on_opened_fire)
 
 
-## Elige el arma según a qué distancia esté el blanco.
-##
-## Las dos envolventes están pegadas y no se solapan —el cañón llega a 250, el
-## misil empieza ahí—, así que a cada distancia sirve una sola y no hay que
-## desempatar: **la distancia elige, no una prioridad**. De lejos, misil; cuando
-## se te ha metido dentro, cañón.
-##
-## Si el blanco queda fuera de las dos —muy lejos, o tan encima que ni el cañón
-## llega— se deja el arma como estaba. Cambiarla no serviría de nada y sólo haría
-## parpadear la barra de armas.
-func _physics_process(_delta: float) -> void:
-	if not is_instance_valid(attack_target):
-		return
-	var distance := global_position.distance_to(attack_target.global_position)
-	for weapon in get_weapons():
-		if weapon.in_range(distance) and has_ammo(weapon):
-			set_active_weapon(weapon)
-			return
+## Elegir con qué de las dos armas tira ya no se hace aquí: lo lleva el nodo
+## `WeaponSelector`, que es el mismo que usa el Harrier. Estuvo escrito en este
+## archivo hasta que hizo falta lo mismo en el avión — y entonces quedó claro que
+## no era del Tunguska, era de cualquiera que lleve más de un arma.
 
 
 ## Enganchó a alguien: se le apunta y **se le avisa**.

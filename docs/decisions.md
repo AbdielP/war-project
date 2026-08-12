@@ -2,6 +2,106 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-12
+
+### Combate aéreo y ataque a tierra son dos sistemas, y el arma es donde se tocan
+La lección más cara del día, y la causa de casi todo lo que se rompió.
+
+El Harrier usaba `AttackRunBehavior` contra **todo**, y ese comportamiento hace pasadas: entra,
+suelta y **rompe**. Contra un tanque es correcto —no te persigue, quedarse encima no aporta—.
+Contra un avión es absurdo: soltabas un AMRAAM y el avión se alejaba, regalando la iniciativa.
+De ahí salió `DogfightBehavior`, y el Harrier elige uno u otro **según el dominio del blanco**.
+
+Pero separar los comportamientos no bastó, porque **el arma la comparten los dos**. El cañón es
+un solo `.tres`, y su `min_range` alimentaba tres cosas a la vez:
+
+1. Hasta dónde alcanza.
+2. A qué distancia rompe la pasada en tierra (el vuelo lo multiplica).
+3. La puntería (se interpola entre mínimo y máximo).
+
+Bajarlo de 220 a 40 —necesario para que el cañón sirva a quemarropa en el aire— movió las tres.
+El sobrevuelo sobre los tanques y el daño por pasada cambiaron **sin que nadie tocara nada de
+tierra**, y costó varias rondas de discusión entender por qué.
+
+**El error de origen era más viejo:** ese `min_range = 220` lo puse días antes para arreglar el
+sobrevuelo, o sea que usé *el alcance del arma* para resolver *un problema de vuelo*. Un cañón
+de 25 mm alcanza desde muy cerca; que el avión no deba meterse tanto es una decisión de cómo
+vuela. Era un parche, y al quitarlo salieron los efectos que estaba tapando.
+
+La regla que queda: **lo que es del arma va en el arma, lo que es del vuelo va en el vuelo.** Y
+si una propiedad del arma significa cosas distintas según el blanco, se declara por blanco en
+vez de elegir un número de compromiso.
+
+### El mismo cañón, dos envolventes
+De lo anterior salieron `air_min_range` y `air_max_range` en `WeaponType`: el alcance que aplica
+sólo contra lo que vuela. En el cañón:
+
+| | contra tierra | contra aire |
+|---|---|---|
+| alcance | 220 – 420 | **40 – 150** |
+
+Los dos extremos importan, y cada uno arregló un fallo distinto:
+
+- **El mínimo**, porque a quemarropa en un duelo el cañón es lo único que queda.
+- **El máximo**, porque con 420 el cañón llegaba **más lejos que el AIM-9** (360). Entre 360 y
+  420 era lo único con alcance, así que el avión se ponía a los tiros a 400 px en vez de tirar
+  el misil — y la regla de "el cañón es el último recurso" no servía de nada, porque no había
+  ningún otro recurso. Acertarle a algo que se mueve a 400 px con un cañón no pasa.
+
+### El duelo se pelea por el ángulo, no por la distancia
+`DogfightBehavior` no vuela hacia el enemigo: vuela hacia **el punto que lo pone detrás de él**.
+Como ese punto se mueve con el blanco, perseguirlo produce solo las persecuciones circulares de
+un dogfight, sin programar ninguna maniobra. Y decide quién gana sin reglas extra: **el avión
+que vira más cerrado cierra por dentro**, así que el radio de giro —que ya era el parámetro
+maestro del vuelo— decide también el combate aéreo.
+
+Lo que le da forma es `WeaponType.max_aspect_deg`: desde qué parte del blanco hay que atacarlo,
+medido desde su cola. El AIM-9 pide **60°** porque busca la tobera; el AMRAAM entra por donde
+sea. Así **el arma decide la geometría del vuelo**: si puede disparar de frente se vuela derecho
+y se dispara mientras se cierra, y sólo se va a buscar la cola cuando el arma lo exige.
+
+Al cañón se le puso 45° y **se le quitó**: si el jugador lo elige, que dispare desde donde sea.
+Ya está limitado por su alcance.
+
+### Cuándo manda el automático y cuándo el jugador
+`WeaponSelector` salió del Tunguska —donde estaba escrito a mano— en cuanto hizo falta lo mismo
+en el avión. Las reglas costaron tres correcciones seguidas, todas del mismo tipo: casos donde
+el automático pisaba al jugador o donde nadie ponía un arma sensata.
+
+| situación | quién manda |
+|---|---|
+| duelo aéreo sin que el jugador toque nada | el automático, cambiando de banda según se cierra |
+| ataque a tierra | **el jugador**: se pone un arma que sirva al empezar y no se vuelve a tocar |
+| el jugador elige en la barra | él, hasta que el arma se agote o cambie a otro blanco |
+| elige el arma **antes** de dar la orden | él: la elección **espera** al blanco que venga |
+
+Ese último caso era el orden normal de las cosas —eliges arma, después pulsas al enemigo— y la
+primera versión lo daba por caducado justo al atacar, pisándole el arma.
+
+Y el que se escapó hasta que el usuario lo vio jugando: al desactivar el automático en tierra,
+**el arma se quedaba pegada de lo anterior**. Salías de un duelo con el cañón puesto, mandabas
+al avión contra un tanque, y se iba a ametrallar con distancia de sobra para bombardear. La
+distinción que faltaba: el automático **no cambia el arma durante** un ataque a tierra, pero
+**sí pone una que sirva al empezarlo**.
+
+### Una referencia liberada no es `null`, y ya van dos
+Segunda vez en pocos días que el mismo patrón revienta el juego: `WeaponSystem` con
+`attack_target`, y ahora `Projectile._shooter` al explotar una bomba cuyo lanzador ya había
+muerto. Una bomba tarda segundos en caer, así que da tiempo de sobra.
+
+Una referencia a un objeto liberado **conserva su tipo**, así que no falla al comprobarla:
+falla al **pasarla** a algo que espera un `Unit`, antes de que nadie pueda comprobar nada
+dentro. La forma de evitarlo es normalizarla a `null` en el sitio donde se lee, no confiar en
+que quien la reciba se defienda.
+
+### Un blanco que no se muere es una herramienta de trabajo
+`Unit.invulnerable`: encaja el daño pero se queda en 1 de vida. Va **en la instancia y no en el
+`UnitType`**, porque un tipo entero invulnerable se acaba colando en una misión; así el modelo
+conserva su resistencia real y sólo el que pusiste en el mapa para probar aguanta.
+
+Se queda en 1 y no a tope aposta: se sigue viendo que el arma pega, y la barra de vida —cuando
+exista— no mentirá diciendo que está intacto.
+
 ## 2026-08-10
 
 ### Simular las contramedidas no funcionó, y el porcentaje sí

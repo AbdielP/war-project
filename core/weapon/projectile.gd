@@ -71,6 +71,11 @@ func detonate() -> void:
 func _apply_damage() -> void:
 	if _weapon == null:
 		return
+	# Quien lo tiró puede haber muerto mientras esto volaba —una bomba tarda
+	# segundos en caer—, y una referencia liberada NO es `null`: conserva el tipo
+	# y revienta al pasarla a algo que espera un `Unit`. La baja se cuenta sin
+	# autor antes que no contarse.
+	var author: Unit = _shooter if is_instance_valid(_shooter) else null
 	for node in get_tree().get_nodes_in_group(Unit.GROUP):
 		var unit := node as Unit
 		if unit == null or unit == _shooter or not unit.is_alive():
@@ -79,7 +84,7 @@ func _apply_damage() -> void:
 		if damage > 0.0:
 			# El arma la tiró alguien: la baja es suya, no del proyectil, que
 			# para entonces ya no existe.
-			unit.take_damage(damage, _shooter)
+			unit.take_damage(damage, author)
 
 
 ## Daño completo dentro del radio de impacto directo, decayendo hasta cero en

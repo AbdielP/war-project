@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://core/selection/selection_manager.tscn" id="5_iy4v0"]
 [ext_resource type="PackedScene" uid="uid://le4hfnagnxy3" path="res://core/unit/t14_armata/t14_armata.tscn" id="6_7mycd"]
 [ext_resource type="PackedScene" uid="uid://dtiu54o6i56f3" path="res://core/unit/2s6_tunguska/2s6_tunguska.tscn" id="7_tung"]
+[ext_resource type="PackedScene" path="res://core/unit/su33_flanker/su33_flanker.tscn" id="8_su33"]
 
 [node name="Node2D" type="Node2D" unique_id=2086690703]
 
@@ -39,3 +40,8 @@ position = Vector2(997, 3)
 
 [node name="2S6 Tunguska" parent="." unique_id=2038326211 instance=ExtResource("7_tung")]
 position = Vector2(810, -5)
+missile_rounds = 8
+
+[node name="Su-33 Patrulla" parent="." unique_id=144634907 instance=ExtResource("8_su33")]
+position = Vector2(641, 768)
+invulnerable = true

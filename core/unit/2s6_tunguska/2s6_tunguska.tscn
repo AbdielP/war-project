@@ -17,6 +17,7 @@
 [ext_resource type="Script" uid="uid://bv57amugr3vv0" path="res://core/weapon/casing_ejector.gd" id="15"]
 [ext_resource type="PackedScene" path="res://core/weapon/casing_30mm.tscn" id="16"]
 [ext_resource type="Resource" path="res://core/weapon/9m311_missile.tres" id="17"]
+[ext_resource type="Script" uid="uid://dw0vhym2gel8b" path="res://core/weapon/weapon_selector.gd" id="18"]
 
 [sub_resource type="AtlasTexture" id="Hull"]
 atlas = ExtResource("2")
@@ -134,3 +135,6 @@ engagement_radius = 250.0
 
 [node name="WeaponSystem" type="Node" parent="." index="5" unique_id=22577873]
 script = ExtResource("8")
+
+[node name="WeaponSelector" type="Node" parent="."]
+script = ExtResource("18")

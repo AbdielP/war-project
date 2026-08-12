@@ -40,6 +40,16 @@ enum Phase { INGRESS, EGRESS }
 ## un 20% antes de quedarse corto, para no entrar en la zona donde el arma ya
 ## no sirve mientras completa el viraje.
 @export var break_off_margin: float = 1.2
+## Distancia mínima a la que rompe, pase lo que pase con el alcance del arma.
+##
+## Separa dos cosas que estaban confundidas: **hasta dónde llega un arma es del
+## arma, y a qué distancia conviene romper es del vuelo.** El cañón alcanza desde
+## muy cerca —tiene que hacerlo, o en un duelo aéreo no serviría a quemarropa—,
+## pero eso no significa que contra tierra haya que meterse encima del blanco.
+##
+## Sin este suelo, bajar el alcance mínimo del cañón para el combate aéreo hacía
+## que el avión sobrevolara los tanques.
+@export var min_break_off_px: float = 0.0
 ## Fracción del alcance máximo a la que vuelve a encarar. Por debajo de 1.0
 ## para que llegue a la nueva pasada ya dentro de la envolvente y no tenga que
 ## acercarse otro tanto.
@@ -254,7 +264,7 @@ func _set_throttle(distance: float) -> void:
 ## Distancia a la que corta la pasada. Sin alcance mínimo no hay nada de lo que
 ## alejarse y el avión entra hasta el final, como hacía antes.
 func _break_off_distance() -> float:
-	return _min_range * break_off_margin
+	return maxf(_min_range * break_off_margin, min_break_off_px)
 
 
 ## A qué distancia vuelve a encarar. Sale del alcance del arma, pero con un

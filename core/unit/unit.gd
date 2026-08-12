@@ -14,6 +14,13 @@ const ALARM_SILENCE := 8.0
 ## Bando. En la instancia y no en el `UnitType` a propósito: el mismo modelo
 ## puede ser enemigo en una misión y aliado en otra.
 @export var team: Team.Side = Team.Side.PLAYER
+## Encaja el daño pero no muere. **Es para probar**: deja un blanco fijo contra el
+## que ver un arma entera sin que se desintegre al primer impacto.
+##
+## Va en la instancia y no en el `UnitType` a propósito: así el modelo conserva
+## su resistencia de verdad y sólo el que hayas puesto en el mapa para probar es
+## indestructible. Un tipo entero invulnerable se acaba colando en una misión.
+@export var invulnerable: bool = false
 
 signal active_weapon_changed(weapon: WeaponType)
 ## Se gastó munición de un arma. `remaining` es lo que queda, -1 si es
@@ -164,6 +171,12 @@ func take_damage(amount: float, source: Unit = null) -> void:
 	if is_instance_valid(source):
 		killed_by = source
 	if health <= 0.0:
+		if invulnerable:
+			# Aguanta en el mínimo en vez de en su tope: así se sigue viendo que
+			# el arma pega, y la barra de vida —cuando exista— no mentirá diciendo
+			# que está intacto.
+			health = 1.0
+			return
 		died.emit(self)
 		queue_free()
 

@@ -80,7 +80,7 @@ func set_zoom_state(level: int, count: int) -> void:
 ## deseleccionas, desaparece; al volver a seleccionarla, vuelve.
 func _process(_delta: float) -> void:
 	var target := _current_unit.attack_target if is_instance_valid(_current_unit) else null
-	if not is_instance_valid(target):
+	if not is_instance_valid(target) or not _counts_down_to_impact(target):
 		_impact_timer.hide()
 		return
 	var eta := _current_unit.get_time_to_impact()
@@ -92,6 +92,27 @@ func _process(_delta: float) -> void:
 	_impact_timer.position = target.get_global_transform_with_canvas().origin \
 		+ _IMPACT_OFFSET
 	_impact_timer.show()
+
+
+## ¿Tiene sentido contar cuánto falta para el impacto?
+##
+## Sólo con un arma que **persigue** a un blanco de tierra, que es cuando la
+## cuenta significa algo: soltaste algo desde lejos y hay una espera real hasta
+## saber si acertaste.
+##
+## Fuera de eso estorba:
+##   - **En combate aéreo** todo pasa en segundos y el número no da tiempo ni a
+##     leerse; además el duelo se resuelve por posición, no esperando.
+##   - **Con el cañón** no hay nada en el aire que esperar: el daño es inmediato.
+##
+## El tercer caso —**la bomba tonta**, que cae donde cae y no promete impacto—
+## no se decide aquí: lo dice el propio proyectil con `guides()`, y por eso
+## `get_time_to_impact()` ya devuelve -1 con ellas.
+func _counts_down_to_impact(target: Unit) -> bool:
+	var weapon: WeaponType = _current_unit.active_weapon
+	if weapon == null or target.get_domain() == UnitType.Domain.AIR:
+		return false
+	return weapon.fire_mode == WeaponType.FireMode.LAUNCHER
 
 
 func show_selected_unit(unit: Unit) -> void:

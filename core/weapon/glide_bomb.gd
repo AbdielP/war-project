@@ -178,3 +178,8 @@ func _check_fuze() -> bool:
 	var passing := distance > _last_distance and distance <= proximity_radius
 	_last_distance = distance
 	return passing
+
+
+## Persigue: corrige el rumbo hacia el blanco mientras le quede con qué.
+func guides() -> bool:
+	return true

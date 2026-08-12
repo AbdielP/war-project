@@ -64,8 +64,6 @@ signal fuel_spent
 @export var proximity_radius: float = 12.0
 
 @export_group("Buscador")
-## Cono dentro del cual el buscador puede confundir un señuelo con el blanco.
-## Estrecho: fuera de él, una bengala no engaña a nadie por muy cerca que esté.
 ## Hasta dónde mira de lado para buscarse un señuelo al que irse, si le tocó
 ## fallar. No decide nada: sólo evita que se vaya a uno que tiene detrás.
 @export var seeker_cone_deg: float = 30.0
@@ -276,3 +274,8 @@ func _check_fuze() -> bool:
 	var passing := distance > _last_distance and distance <= proximity_radius
 	_last_distance = distance
 	return passing
+
+
+## Persigue: corrige el rumbo hacia el blanco mientras le quede con qué.
+func guides() -> bool:
+	return true

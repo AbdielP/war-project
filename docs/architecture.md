@@ -1046,6 +1046,13 @@ dónde salieron, a qué apuntan y qué pasa al explotar. Cómo vuelan lo pone ca
 | `launch(shooter, muzzle, at, weapon, aim_offset)` | **Virtual.** Las subclases llaman `super()` y arrancan su vuelo |
 | `detonate()` | Reparte daño, emite `detonated(where)` y se libera |
 | `time_to_impact()` | Segundos al ritmo actual, −1 si no se puede saber |
+| `guides()` | **Virtual, `false` por defecto** — ¿persigue al blanco, o cae donde caiga? |
+
+**Cuidado al añadir un proyectil nuevo:** `guides()` devuelve `false` salvo que se sobrescriba
+—lo normal es caer, guiar es la excepción—, y de él depende que haya cuenta atrás de impacto.
+Un proyectil que persiga y no lo declare saldrá sin contador y no habrá pista de por qué. Lo
+declaran `GuidedMissile` y `GlideBomb`; `BallisticBomb` no, y es correcto: una bomba tonta no
+promete impacto y poner un número sobre el blanco fingiría una puntería que no tiene.
 | `get_speed()` | **Virtual** — px/s. Cada tipo sabe la suya |
 | `direct_hit_radius` | Export. Por debajo, daño completo |
 

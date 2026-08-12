@@ -46,10 +46,24 @@ func launch(shooter: Unit, muzzle: Node2D, at: Unit, weapon: WeaponType,
 ## estimación honesta y no una cuenta atrás exacta: si el blanco maniobra o el
 ## arma pierde empuje, la cifra sube. Devuelve -1 si no hay forma de saberlo.
 func time_to_impact() -> float:
+	if not guides():
+		return -1.0
 	var speed := get_speed()
 	if speed <= 1.0:
 		return -1.0
 	return global_position.distance_to(_aim_point) / speed
+
+
+## ¿Va persiguiendo al blanco, o cae donde caiga?
+##
+## Lo dice el proyectil porque es lo único que lo sabe. Y decide si tiene sentido
+## enseñar una cuenta atrás: con algo que persigue, el número promete "esto le va
+## a llegar en tanto"; con una bomba tonta prometería una puntería que no tiene.
+##
+## Por defecto **no**: lo normal es caer, y guiar es la excepción que cada tipo
+## declara.
+func guides() -> bool:
+	return false
 
 
 ## A qué velocidad va, en px/s. Cada tipo de proyectil sabe la suya.

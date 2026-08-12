@@ -26,8 +26,23 @@ class_name UnitTag
 ## Desde cuántos píxeles más abajo entra el nombre, deslizándose hasta su sitio.
 @export var name_rise_px: float = 4.0
 
+@export_group("Estado")
+## De dónde salen las coordenadas del destino. Apunta al [MapView] del **mapa
+## táctico**, igual que el parte de eventos: el del minimapa agrupa las zonas
+## hasta caber en 87 px y diría lo mismo de medio mapa.
+@export var map_path: NodePath
+@export var status_idle: String = "En espera"
+@export var status_moving: String = "Moviéndose a "
+@export var status_attacking: String = "Atacando a "
+
 @onready var _line: AnimatedSprite2D = $Line
 @onready var _name: Label = $Name
+## El rótulo fijo. Su texto —"Status:"— se edita en la escena como cualquier
+## otro, porque es un letrero, no un dato.
+@onready var _status: Label = $Status
+## Lo que cambia. Cuelga del rótulo, así que se coloca **respecto a él**: mover
+## el "Status:" se lleva el valor detrás sin tocar nada más.
+@onready var _status_value: Label = $Status/Value
 ## El dibujo de la unidad, ahí sólo para poder colocar la línea y el nombre a
 ## ojo contra algo real en vez de contra el vacío. Se apaga al empezar la
 ## partida: es una regla de carpintero, no parte del HUD. Misma treta que
@@ -47,11 +62,15 @@ var _rise: float = 0.0
 ## pantalla y se sobreescribe entera.
 var _line_home: Vector2 = Vector2.ZERO
 var _name_home: Vector2 = Vector2.ZERO
+var _status_home: Vector2 = Vector2.ZERO
+var _map: MapView = null
 
 
 func _ready() -> void:
 	_line_home = _line.position
 	_name_home = _name.position
+	_status_home = _status.position
+	_map = get_node_or_null(map_path) as MapView
 	_editor_guide.hide()
 	hide()
 	set_process(false)
@@ -91,22 +110,55 @@ func _process(_delta: float) -> void:
 		clear()
 		return
 	_follow_unit()
+	_status_value.text = _status_text()
 
 
 func _follow_unit() -> void:
 	var on_screen: Vector2 = _unit.get_global_transform_with_canvas().origin
 	_line.position = on_screen + _line_home
 	_name.position = on_screen + _name_home + Vector2(0.0, _rise)
+	_status.position = on_screen + _status_home + Vector2(0.0, _rise)
+
+
+## En qué anda metida la unidad, en una línea.
+##
+## **Se compone aquí y no en la unidad**: ella expone hechos —a quién ataca, a
+## dónde va— y el HUD los pone en palabras. Así el mismo dato vale para el parte
+## de eventos, que los cuenta distinto.
+##
+## El orden importa: atacar manda sobre moverse, porque un avión que ataca
+## también se está moviendo y lo que el jugador quiere saber es lo primero.
+func _status_text() -> String:
+	if is_instance_valid(_unit.attack_target):
+		return status_attacking + _unit.attack_target.get_display_name()
+	var going: Variant = _unit.get_move_destination()
+	if going != null:
+		return status_moving + _zone_of(going)
+	return status_idle
+
+
+## La coordenada del mapa, o el punto en crudo si todavía no hay mapa que la
+## traduzca. Mejor decir dónde de forma fea que no decirlo.
+func _zone_of(world: Vector2) -> String:
+	if _map == null:
+		return "%d, %d" % [world.x, world.y]
+	var label := _map.zone_label_at(world)
+	return label if label != "" else "%d, %d" % [world.x, world.y]
 
 
 func _start_name_entrance() -> void:
 	_name.modulate.a = 0.0
+	# El estado entra con el nombre, no por su cuenta: son la misma etiqueta y
+	# verlos aparecer por separado se leería como dos cosas distintas.
+	_status.modulate.a = 0.0
+	_status_value.text = _status_text()
 	_rise = name_rise_px
 	if _tween != null:
 		_tween.kill()
 	_tween = create_tween().set_parallel(true)
 	_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_tween.tween_property(_name, ^"modulate:a", 1.0, name_fade_time).set_delay(name_delay)
+	_tween.tween_property(_status, ^"modulate:a", 1.0, name_fade_time).set_delay(name_delay)
 	_tween.tween_method(_set_rise, name_rise_px, 0.0, name_fade_time + 0.05) \
 		.set_delay(name_delay)
 

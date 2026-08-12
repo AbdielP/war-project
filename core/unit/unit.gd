@@ -193,6 +193,19 @@ func get_velocity() -> Vector2:
 	return Vector2.ZERO
 
 
+## A dónde va, o `null` si no va a ningún sitio en concreto. Lo lee el HUD para
+## decir en qué anda metida.
+##
+## Devuelve un hecho —un punto— y no un texto: **qué se está haciendo lo sabe la
+## unidad, cómo se cuenta es del HUD.** Así el mismo dato sirve para la etiqueta,
+## para el parte de eventos y para lo que venga, cada uno con sus palabras.
+##
+## Por defecto no va a ninguna parte: lo normal es estarse quieto, y moverse es
+## lo que declara quien sepa hacerlo.
+func get_move_destination() -> Variant:
+	return null
+
+
 ## A qué velocidad deja la cubierta al despegar. Lo pregunta el portaaviones
 ## para acelerarla por la pista hasta ahí y soltarla justo a esa velocidad. Las
 ## unidades que no vuelan no despegan, así que no tienen ninguna.

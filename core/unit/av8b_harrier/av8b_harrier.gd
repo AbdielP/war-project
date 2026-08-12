@@ -56,6 +56,13 @@ func get_velocity() -> Vector2:
 	return pilot.velocity
 
 
+## A dónde va, si va a algún sitio ordenado. Sólo cuenta mientras **se acerca**:
+## una vez llegado, el avión da vueltas ahí y eso ya no es ir a ninguna parte,
+## es esperar.
+func get_move_destination() -> Variant:
+	return orbit.get_destination() if orbit.has_pending_order() else null
+
+
 ## Deja la cubierta a su velocidad mínima de vuelo. Es lo más despacio que
 ## puede sostenerse en el aire y, por tanto, lo antes que puede irse: no hay
 ## motivo para gastar más pista de la necesaria. La cubierta lo acelera hasta

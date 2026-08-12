@@ -21,6 +21,7 @@ process_mode = 3
 script = ExtResource("0")
 
 [node name="UnitTag" parent="." instance=ExtResource("12")]
+map_path = NodePath("../TacticalMap/Map")
 
 [node name="BrevityCalls" parent="." instance=ExtResource("14")]
 

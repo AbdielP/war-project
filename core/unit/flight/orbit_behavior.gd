@@ -86,6 +86,14 @@ func has_pending_order() -> bool:
 	return _running and _approaching
 
 
+## Hacia dónde va, si es que va a algún sitio. El centro del circuito y el
+## destino ordenado son el mismo punto: primero se vuela hasta él y después se
+## le dan vueltas.
+func get_destination() -> Vector2:
+	return _center_node.global_position if is_instance_valid(_center_node) \
+		else _center_pos
+
+
 func stop() -> void:
 	_running = false
 	set_physics_process(false)

@@ -145,7 +145,40 @@ func best_for(target: Unit) -> WeaponType:
 			continue
 		if best == null or _closer_fit(weapon, best, against_air):
 			best = weapon
-	return best if best != null else fallback
+	if best != null:
+		return best
+	# Sólo queda el cañón. Antes de conformarse: ¿hay un misil al que sólo le
+	# falta **ángulo**? Entonces manda ése, aunque todavía no pueda dispararse.
+	#
+	# Es lo que rompe el círculo vicioso que se veía jugando: el AIM-9 no engancha
+	# de frente, así que el selector ponía el cañón; con el cañón puesto el vuelo
+	# va derecho —no necesita la cola— y de frente el AIM-9 no consigue ángulo
+	# nunca. El avión acababa metiéndose a los tiros contra un caza.
+	#
+	# **El arma que guía el vuelo es la mejor que se lleva, no la que ya se puede
+	# disparar.** Quien comprueba si se puede tirar es el armamento; esto sólo
+	# dice hacia qué se está peleando.
+	var wanted := _blocked_only_by_angle(target, distance, against_air)
+	return wanted if wanted != null else fallback
+
+
+## El mejor misil que estaría en parámetros de no ser por el ángulo. `null` si no
+## hay ninguno, o si contra este blanco el ángulo ni cuenta.
+func _blocked_only_by_angle(target: Unit, distance: float,
+		against_air: bool) -> WeaponType:
+	if not against_air:
+		return null
+	var best: WeaponType = null
+	for weapon in _unit.get_weapons():
+		if not weapon.needs_rear_aspect():
+			continue
+		if not weapon.can_engage_domain(target.get_domain()) or not _unit.has_ammo(weapon):
+			continue
+		if not weapon.in_range_against(distance, target.get_domain()):
+			continue
+		if best == null or _closer_fit(weapon, best, true):
+			best = weapon
+	return best
 
 
 ## ¿Se puede tirar esta arma ahora mismo contra ese blanco?

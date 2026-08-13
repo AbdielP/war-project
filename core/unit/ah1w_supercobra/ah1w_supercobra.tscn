@@ -1,0 +1,37 @@
+[gd_scene format=3 uid="uid://cmpusa4gx52yw"]
+
+[ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
+[ext_resource type="Texture2D" uid="uid://c806n07oeku5i" path="res://assets/art/sprites/AH-1W SuperCobra.png" id="2"]
+[ext_resource type="Resource" path="res://core/unit/ah1w_supercobra/ah1w_supercobra_type.tres" id="3"]
+[ext_resource type="Script" path="res://core/unit/ah1w_supercobra/rotor.gd" id="4"]
+
+[sub_resource type="AtlasTexture" id="Body"]
+atlas = ExtResource("2")
+region = Rect2(4, 2, 23, 48)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(23, 48)
+
+[sub_resource type="AtlasTexture" id="Blades"]
+atlas = ExtResource("2")
+region = Rect2(38, 5, 6, 47)
+
+[node name="Ah1wSuperCobra" unique_id=1330189822 groups=["unit_air"] instance=ExtResource("1")]
+z_index = 10
+unit_type = ExtResource("3")
+
+[node name="Sprite2D" parent="." index="0"]
+texture = SubResource("Body")
+
+[node name="CollisionShape2D" parent="." index="1"]
+shape = SubResource("RectangleShape2D_1")
+
+[node name="SelectionIndicator" parent="." index="2"]
+size = Vector2(23, 48)
+
+[node name="Rotor" type="Sprite2D" parent="." index="3" unique_id=321522419]
+z_index = 4
+position = Vector2(1, 6)
+texture = SubResource("Blades")
+script = ExtResource("4")
+

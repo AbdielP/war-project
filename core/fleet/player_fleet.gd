@@ -1,6 +1,7 @@
 extends Node
 
 const _HarrierLoadouts := preload("res://core/unit/av8b_harrier/av8b_harrier_loadouts.gd")
+const _CobraLoadouts := preload("res://core/unit/ah1w_supercobra/ah1w_supercobra_loadouts.gd")
 
 # Armamento que el jugador tiene disponible. Por ahora hardcodeado, igual que
 # el inventario de aeronaves: el día que exista compra/desbloqueo cambia quién
@@ -34,6 +35,13 @@ var _loadouts: Dictionary = {
 			"total": 6,
 			"deployed": 0,
 			"weapon_loadouts": _HarrierLoadouts.build(_available_weapons),
+		},
+		{
+			"display_name": "AH-1W SuperCobra",
+			"scene": preload("res://core/unit/ah1w_supercobra/ah1w_supercobra.tscn"),
+			"total": 4,
+			"deployed": 0,
+			"weapon_loadouts": _CobraLoadouts.build(_available_weapons),
 		}
 	]
 }

@@ -159,6 +159,17 @@ func _launch_next(order: Array) -> void:
 		_launch_next(order)
 		return
 
+	# Lo que no despega por pista se queda donde está. Un helicóptero llega a su
+	# sitio en cubierta y ahí espera: no tiene carrera que hacer ni proa que
+	# rebasar, así que meterlo en esta secuencia lo mandaría deslizándose hacia
+	# adelante como si fuera un avión.
+	#
+	# Se sabe preguntándole a él —`get_takeoff_speed()` a 0— y no con una lista
+	# de modelos: la cubierta no tiene por qué conocer qué aparatos existen.
+	if _launch_speed_of(unit) <= 1.0:
+		_launch_next(order)
+		return
+
 	_units[slot] = null
 	_occupied[slot] = false
 

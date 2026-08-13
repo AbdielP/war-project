@@ -103,6 +103,15 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Cómo persigue en un duelo | nodo `Dogfight` de `av8b_harrier.tscn` → `saddle_distance` (a qué distancia se pone detrás), `lead_time`, `overshoot_guard` |
 | Cada cuánto reelige arma el automático | nodo `WeaponSelector` → `interval` (0,2 s) |
 | **Blanco de pruebas que no muere** | casilla `Invulnerable` en la instancia de la unidad, dentro de `main.tscn` |
+| **Llamada de radio de un arma** | `<arma>.tres` → `brevity_code` (`Fox Three`, `Rifle`, `Pickle`, `Guns`) |
+| Duración y sitio de esas llamadas | nodo `BrevityCalls` del HUD → `hold_time`, `fade_time`, `offset`, `font_size`, `color` |
+| Que el cañón se cante repetido | mismo nodo → `gun_call_repeats` (3 = "guns, guns, guns"; 1 = "Guns!") |
+| Cada cuánto puede repetirse una llamada | mismo nodo → `same_call_window` (2,8 s) |
+| **Textos del estado en la etiqueta** | nodo raíz `UnitTag` → grupo Estado (`status_idle`, `status_moving`, `status_attacking`). El rótulo "Status:" es el texto del nodo `Status` |
+| Sitio del estado | arrastrando el nodo `Status` en `unit_tag.tscn`; el valor cuelga de él y lo sigue |
+| **Revoluciones del rotor** | nodo `Rotor` de `ah1w_supercobra.tscn` → `max_speed_deg` (1400), `spin_up_time` (4 s) |
+| Cuándo arranca el rotor | mismo nodo → `settle_time` / `still_speed`. Arranca al quedarse quieto en cubierta, no antes |
+| Cuántos helicópteros lleva el LHD | `core/fleet/player_fleet.gd` → `total` de la entrada del AH-1W (4) |
 | A qué distancia del barco esperan los aviones | nodo `OrbitBehavior` de `av8b_harrier.tscn` → `radius` |
 | **Hasta dónde ve el Tunguska** | nodo `RangeRings` de `2s6_tunguska.tscn` → `detection_radius` (400). Se ve dibujado en el editor |
 | **Hasta dónde dispara el Tunguska** | mismo nodo → `engagement_radius` (250). Hoy hay que mantenerlo a mano igual al `max_range` del arma |

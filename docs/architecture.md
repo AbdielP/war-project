@@ -1872,6 +1872,48 @@ convención que confunde en el Harrier. `inherit_velocity` da igual: el vehícul
 
 ---
 
+### `AH-1W SuperCobra` — `core/unit/ah1w_supercobra/`
+
+Helicóptero de ataque del jugador. **Todavía no vuela**: sale del hangar, hace el mismo recorrido
+de cubierta que el Harrier —elevador, taxi, colocación— y **se queda en su punto**.
+
+Arte en dos piezas del mismo PNG de 48×54: cuerpo `(4,2)` 23×48 y palas `(38,5)` 6×47, colocadas
+a mano sobre el mástil.
+
+**Cómo sabe la cubierta que no debe lanzarlo:** se lo pregunta al aparato. `get_takeoff_speed()`
+devuelve 0 en todo lo que no despega por pista, y `FlightDeck._launch_next()` se lo salta. Sin
+listas de modelos: el día que haya otro helicóptero funciona solo.
+
+**`ah1w_supercobra_loadouts.gd`** — tres misiones **sin armamento**: CAS, Escolta armada y
+Ataque antiblindaje. Al no pedir ninguna arma, `can_arm_with` las deja pasar siempre y el hangar
+las ofrece las tres. 4 unidades en el inventario del LHD.
+
+> Pendiente: **el vuelo**. `PlaneController` está construido sobre el radio de giro —no puede
+> parar, no puede ir hacia atrás, vira describiendo un círculo— y un helicóptero hace justo lo
+> contrario. Necesita controlador propio.
+
+---
+
+#### `Rotor` — `rotor.gd`
+```
+extends Sprite2D   class_name Rotor
+```
+Las palas: arrancan **cuando el aparato ya está colocado** y suben a régimen en `spin_up_time`
+(4 s) hasta `max_speed_deg` (1400°/s ≈ 4 vueltas por segundo).
+
+Sabe cuándo arrancar **mirando si el aparato se mueve**, no porque nadie se lo diga: mientras la
+cubierta lo lleva de un sitio a otro está rodando, y en cuanto se queda quieto `settle_time`
+(0,5 s) es que llegó. Así el barco no conoce qué saca ni el helicóptero avisa a nadie, y cambiar
+el recorrido de cubierta no rompe esto.
+
+**Una vez arrancado no se para**, aunque el aparato se mueva: lo contrario sería un rotor que se
+apaga justo al despegar.
+
+Es **provisional** hasta que haya animación de hélice — girar unas palas rectas se lee bien de
+lejos, pero no es el disco borroso de un rotor a régimen.
+
+---
+
 ### `Su-33 Flanker-D` — `core/unit/su33_flanker/`
 
 Avión enemigo. **Sin IA, y a propósito**: vuela en círculo sobre donde lo pongas y ya está. Es
@@ -2092,6 +2134,54 @@ en el editor se vea desplegada y no en el primer frame, que está casi vacío.
 va un instante detrás de la línea, como si la trajera ella. El deslizamiento se lleva en una
 variable propia (`_rise`) y no animando la posición: la posición se reescribe entera cada
 frame siguiendo a la unidad, así que un tween sobre ella se pisaría solo.
+
+**El estado**, debajo del nombre y con su misma entrada: `Status: En espera`,
+`Status: Moviéndose a H6`, `Status: Atacando a Su-33 Flanker-D`. Son **dos nodos**: el rótulo
+`Status` con su texto fijo —es un letrero, se edita en la escena— y `Status/Value` colgando de
+él, que es lo que cambia. Al colgar del rótulo, mover el "Status:" se lleva el valor detrás.
+
+**El texto se compone aquí, no en la unidad.** Ella expone hechos —`attack_target`, y
+`get_move_destination()`, que devuelve un punto— y el HUD los pone en palabras; así el mismo
+dato le sirve al parte de eventos, que los cuenta distinto. La coordenada sale del `MapView` del
+mapa táctico (`map_path`), la misma que usa el parte.
+
+Dos reglas de comportamiento: **atacar manda sobre moverse**, y "moviéndose" sólo cuenta
+*mientras se acerca* — una vez llegado orbita ahí, y eso ya es esperar.
+
+---
+
+### `BrevityCalls` — `ui/hud/brevity_calls/brevity_calls.gd`
+```
+@tool  extends Node2D   class_name BrevityCalls
+```
+Las llamadas de radio al disparar: `Fox Three!`, `Rifle!`, `Pickle!`. Sale sobre **cualquier
+avión propio**, esté seleccionado o no — ahí está la diferencia con `UnitTag`, que acompaña a
+uno solo: lo interesante es enterarte de lo que hacen los que no estás mirando.
+
+Vive en el HUD y en píxeles de pantalla, por lo mismo que la etiqueta. Se engancha solo a las
+unidades por el grupo, como el parte de eventos.
+
+**El código sale del arma** (`brevity_code`): un arma nueva trae su llamada puesta. Lo que es
+presentación se queda aquí — el cañón se canta `guns, guns, guns` porque en radio se repite tres
+veces, pero el `.tres` sigue diciendo `Guns` y en el parte sale corto.
+
+| export | por defecto |
+|---|---|
+| `hold_time` / `fade_time` | 1,8 s + 1,0 s |
+| `offset` | `(30, −28)` — debajo del nombre |
+| `font_size`, `color` | 16, ámbar |
+| `gun_call_repeats` / `repeated_code` | 3, `"Guns"` |
+| `same_call_window` | 2,8 s |
+
+**Contra el spam, dos cortes distintos**, porque venía por dos caminos: `same_call_window`
+agrupa repeticiones **del mismo arma** —una ristra de seis Mk-82 canta un solo `Pickle!`— y
+además **un avión canta de uno en uno**: al llegar una llamada nueva, la anterior de ese avión
+se manda a desvanecer. Sin lo segundo, soltar un misil y abrir con el cañón sacaba dos carteles
+en la misma esquina.
+
+Cada llamada es un `BrevityCall` (`brevity_call.gd`) suyo, no un `Label` reutilizado: pueden
+coincidir varias. **Sobrevive a la unidad** — si derriban al avión justo después de disparar, su
+última llamada se queda un momento donde estaba en vez de desaparecer con él.
 
 ---
 
@@ -2941,6 +3031,10 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] AIM-120 (350–900) y AIM-9 (130–360, exige 60° desde la cola) definidos, y cañón con envolvente aparte contra aire (40–150)
 - [x] `WeaponSelector`: cadena automática por bandas en aire, elección del jugador respetada, y arma sensata al empezar un ataque a tierra
 - [x] `Unit.invulnerable` para tener blancos de pruebas que no se desintegran al primer impacto
+- [x] **Llamadas de radio** al disparar (`BrevityCalls`): `Fox Three!`, `Pickle!`, sobre cualquier avión propio, con el código sacado del arma
+- [x] Estado de la unidad en su etiqueta: en espera, moviéndose a, atacando a
+- [x] **AH-1W SuperCobra**: en el hangar con sus tres misiones, sale a cubierta y se coloca en su punto. Rotor girando (provisional) que arranca al quedarse quieto
+- [x] El contador de impacto sólo sale donde significa algo: arma guiada contra tierra
 - [x] Primer enemigo en el mapa: T-14 Armata (estático, sin IA)
 - [x] Atacar: click/tap sobre un enemigo con unidad propia seleccionada, o "Atacar" en `TargetMenu`; al morir el objetivo, el Harrier orbita donde llegó
 - [x] Menú contextual (`TargetMenu`) sobre unidad ajena: click derecho en PC, pulsación mantenida en táctil (`PanCamera.long_pressed`)
@@ -3010,6 +3104,10 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [ ] Cadena de repliegue de arma: usar la siguiente cuando se acaba una, cañón como último recurso
 - [ ] **Proyectil propio de los misiles aire-aire.** El AIM-120 y el AIM-9 usan prestado el del Maverick, igual que el 9M311: vuelan y guían, pero sale un AGM-65 con sombra de altitud
 - [ ] **Comportamiento del Su-33.** Hoy sólo orbita: no responde, no dispara, no huye. Va con las misiones
+- [ ] **Vuelo del helicóptero.** Lo siguiente que toca. `PlaneController` no sirve: está construido sobre el radio de giro y un helicóptero para, gira sobre sí mismo y va en línea recta a donde le mandes
+- [ ] **Despegue del helicóptero.** Se queda en su punto de cubierta a propósito; despega en vertical y eso es otra secuencia
+- [ ] **Armamento del AH-1W.** Las tres misiones existen vacías para poder sacarlo a cubierta
+- [ ] **Animación de hélice.** Hoy `Rotor` gira unas palas rectas; a régimen debería verse el disco borroso
 - [ ] Revisar el sobrevuelo del ataque a tierra: rompe donde debe (263 px) pero completa el viraje pasando a 114. Es el radio de giro, no un fallo — decidir si molesta
 - [ ] Vuelo en formación (aviones del mismo escuadrón) — hoy la orden sólo llega al líder
 - [ ] Animación del elevador (placeholder `elevator_cycle_time` ya existe)

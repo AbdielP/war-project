@@ -4,6 +4,79 @@ Registro cronológico (más reciente arriba). Una entrada por decisión: qué se
 
 ## 2026-08-12
 
+### La unidad expone hechos; el HUD los pone en palabras
+Dos cosas del día que salieron de la misma idea, y por eso conviene leerlas juntas.
+
+**Las llamadas de radio** (`BrevityCalls`): `Fox Three!`, `Rifle!`, `Pickle!` sobre el avión que
+dispara. El código **sale del arma** (`brevity_code`), no está escrito en el HUD — un arma nueva
+trae su llamada puesta. Y lo que es presentación se queda en la presentación: el cañón se canta
+`guns, guns, guns` porque en radio se repite tres veces, pero el `.tres` sigue diciendo `Guns` a
+secas y en el parte de eventos sale corto.
+
+Salen sobre **cualquier avión propio**, esté seleccionado o no — ahí está la diferencia con
+`UnitTag`, que acompaña a uno solo. Lo interesante es justamente enterarte de lo que hacen los
+que no estás mirando.
+
+**El estado en la etiqueta** (`Status: Atacando a Su-33 Flanker-D`): se compone en el HUD a
+partir de hechos que la unidad ya sabía —a quién ataca— más uno nuevo, `get_move_destination()`,
+que devuelve **un punto y no un texto**. Así el mismo dato le sirve luego al parte de eventos,
+que lo cuenta con otras palabras.
+
+Dos detalles de comportamiento: **atacar manda sobre moverse** —un avión que ataca también se
+desplaza, y lo que interesa es lo primero—, y "moviéndose" sólo cuenta *mientras se acerca*: una
+vez llegado se pone a orbitar ahí, y eso ya es esperar.
+
+Contra el spam, dos cortes distintos porque venía por dos caminos: la ventana que agrupa
+repeticiones del mismo arma (una ristra de seis Mk-82 canta **un** `Pickle!`), y la regla de que
+**un avión canta de uno en uno** — al llegar una llamada nueva, la anterior de ese avión se
+manda a desvanecer en vez de solaparse.
+
+### Lo que no despega por pista se queda donde está
+El AH-1W usa **la misma cubierta que el Harrier**: elevador, taxi y colocación en su punto. Ahí
+se detiene. La cubierta lo sabe preguntándole al aparato —`get_takeoff_speed()` a 0— y no con
+una lista de modelos: no tiene por qué conocer qué existe, y el día que haya otro helicóptero
+funciona solo.
+
+Mismo criterio con el **rotor**: arranca cuando el aparato lleva medio segundo quieto, mirando
+si se mueve. Mientras el barco lo lleva de un sitio a otro está rodando; en cuanto se para, es
+que llegó. Ni el barco avisa ni el helicóptero pregunta, así que cambiar el recorrido de
+cubierta no rompe nada. Y una vez arrancado **no se para**: lo contrario sería un rotor que se
+apaga justo al despegar.
+
+Las tres misiones del helicóptero —CAS, Escolta, Antiblindaje— existen **sin armamento**. Al no
+pedir ninguna arma, el filtro del hangar las deja pasar siempre, que es lo que se quiere hasta
+que haya con qué armarlas.
+
+### Contar el tiempo al impacto sólo tiene sentido a veces
+El contador sobre el blanco se quitó del combate aéreo (todo pasa en segundos y no da tiempo ni
+a leerse), del cañón (no hay nada en el aire que esperar) y de las bombas tontas.
+
+Los dos primeros se cortan en el HUD, porque son decisiones de interfaz. El tercero **no**: lo
+dice el proyectil con `guides()`, porque es el único que sabe si persigue o cae donde caiga. El
+primer intento fue distinguirlas por el campo `seeker` del arma y estaba mal — ese campo se
+añadió para las contramedidas, y ni el Maverick ni la GBU-54 lo tienen puesto, así que se
+habrían quedado sin contador justo los dos casos donde hace falta.
+
+
+### El arma que guía el vuelo es la mejor que se lleva, no la que ya se puede disparar
+El bug más difícil de ver del día, porque era un **círculo cerrado** y cada pieza parecía
+correcta por separado. Con un Harrier de bombardeo (Mk-82 + AIM-9) entrando de frente a un
+Su-33:
+
+1. El AIM-9 no engancha de frente — necesita ver la tobera.
+2. Como no puede dispararse, el selector ponía el **cañón**.
+3. Con el cañón puesto, el vuelo va **derecho**: el cañón no necesita la cola.
+4. Yendo derecho, el AIM-9 no conseguía ángulo nunca. Vuelta al paso 1.
+
+El avión acababa metiéndose a los tiros contra un caza con un misil intacto colgado del ala.
+
+La corrección: si lo único disparable es el cañón pero hay un misil al que **sólo le falta
+ángulo**, manda el misil aunque todavía no se pueda tirar. El vuelo va entonces a buscar la
+posición y el disparo llega solo. Medido entrando de frente: cuatro AIM-9 y ni un cañonazo.
+
+Lo que queda como regla: **el selector dice hacia qué se está peleando; quien comprueba si se
+puede tirar es el armamento.** Confundir las dos cosas es lo que cerró el círculo.
+
 ### Combate aéreo y ataque a tierra son dos sistemas, y el arma es donde se tocan
 La lección más cara del día, y la causa de casi todo lo que se rompió.
 

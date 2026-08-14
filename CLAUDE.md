@@ -19,6 +19,9 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay, mec�
 - **Comprobar que la fuente tenga el glifo** antes de meter cualquier signo tipográfico en un texto de UI: si falta, Godot lo saca de una fuente del sistema y rompe el alto de línea. Ninguna de las dos tiene `→ ← ↑ ↓ — – … • ‹ ›`.
 - **Lo que se ve se construye como escena**, no con nodos fabricados en código: si no existe en el editor, no se puede ajustar sin arrancar el juego.
 - **Los paneles van como nine-patch.** El PNG es una muestra, no una medida: el marco y las esquinas se conservan al píxel y sólo se estira el relleno.
+- **En un nine-patch sólo las cuatro esquinas quedan 1:1.** Todo detalle figurativo —remaches, marcas de agarre, una brújula— se dibuja pegado a una esquina, o sale del PNG y se cuelga como nodo propio encima. En mitad de un borde no hay margen que lo salve. Los cortes se miden y se ponen en Godot; el PNG no los lleva dentro, así que el arte nunca necesita rehacerse por esto.
+- **Antes de dar por bueno un nine-patch**, comprobar que cada fila de los bordes superior e inferior sea de un solo color a lo ancho, y cada columna de los laterales de un solo color a lo alto. Si alguna varía, hay dibujo en zona estirable.
+- **Lo que se dibuja encima del mapa no se pega como textura, se traza.** Una textura escala con el terreno y una línea de 1 px se vuelve de 4 px al agrandar; trazada mide 1 px de pantalla siempre. Vale para la rejilla, los puntos de unidad y cualquier icono.
 
 ## Estructura de carpetas
 Organización por feature: cada unidad/barco/pantalla vive en su propia carpeta con su escena, script y arte específico juntos. `assets/` solo para lo que se comparte entre varias features (arte genérico, audio, fuentes). No hay scaffold completo creado de antemano — las carpetas se crean de forma incremental, a medida que se necesitan.

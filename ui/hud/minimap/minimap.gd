@@ -14,8 +14,9 @@ class_name Minimap
 signal expand_requested
 
 ## Franja de arriba que sirve de agarre para estirar. Fuera de ella, pulsar abre
-## el mapa grande.
-const GRIP_PX := 6.0
+## el mapa grande. Es el grosor del marco dibujado: más allá empieza el mapa, y
+## agarrar ahí sería robarle el click.
+const GRIP_PX := 10.0
 ## Hasta dónde puede crecer. Más allá tapa el registro de eventos y deja de ser
 ## un mapa "de un vistazo".
 const MAX_HEIGHT := 220.0
@@ -107,17 +108,6 @@ func _gui_input(event: InputEvent) -> void:
 		_wanted_height = clampf(_wanted_height - motion.relative.y, 0.0, MAX_HEIGHT)
 		_apply_height(_wanted_height)
 		accept_event()
-
-
-## Dos rayas en el borde de arriba: sin ellas nadie adivina que se puede
-## estirar. Caben ahí porque ese borde es más grueso justo para esto — dentro
-## las taparía el mapa, que se dibuja después.
-func _draw() -> void:
-	var mid := size.x * 0.5
-	for i in 2:
-		var y := 2.0 + i * 2.0
-		draw_line(Vector2(mid - 6.0, y), Vector2(mid + 6.0, y),
-				Color(0.19215686, 0.21176471, 0.21960784), 1.0)
 
 
 func set_order_marker(world_position: Vector2) -> void:

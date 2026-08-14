@@ -1,29 +1,34 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://ui/hud/minimap/minimap.gd" id="1"]
 [ext_resource type="Script" path="res://ui/hud/minimap/map_view.gd" id="2"]
+[ext_resource type="Texture2D" uid="uid://cpecxaunm8wyb" path="res://assets/art/UI/minimap_panel.png" id="3"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
-bg_color = Color(0.19215686, 0.21176471, 0.21960784, 1)
-border_width_left = 2
-border_width_top = 6
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.56078434, 0.827451, 1, 1)
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_1"]
+content_margin_left = 7.0
+content_margin_top = 10.0
+content_margin_right = 5.0
+content_margin_bottom = 5.0
+texture = ExtResource("3")
+texture_margin_left = 15.0
+texture_margin_top = 17.0
+texture_margin_right = 21.0
+texture_margin_bottom = 5.0
 
 [node name="Minimap" type="PanelContainer"]
-offset_right = 96.0
-offset_bottom = 96.0
+offset_right = 84.0
+offset_bottom = 87.0
 tooltip_text = "Mapa táctico (M)"
-theme_override_styles/panel = SubResource("StyleBoxFlat_1")
+theme_override_styles/panel = SubResource("StyleBoxTexture_1")
 script = ExtResource("1")
 
 [node name="MapView" type="Control" parent="."]
 layout_mode = 2
 mouse_filter = 2
 script = ExtResource("2")
-show_grid = false
+show_grid = true
 show_labels = false
+grid_border = false
 show_viewport_rect = true
 show_units = true
 marker_px = 2

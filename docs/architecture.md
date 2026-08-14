@@ -2602,8 +2602,12 @@ API además de los exportados: `set_order_marker(world)` / `clear_order_marker()
 
 | Exportado | Minimapa | Táctico | Qué hace |
 |-----------|----------|---------|----------|
-| `show_grid` | `false` | `true` | rejilla de zonas de coordenadas (**no** de celdas de terreno) |
+| `show_grid` | `true` | `true` | rejilla de zonas de coordenadas (**no** de celdas de terreno) |
 | `show_labels` | `false` | `true` | letras arriba y abajo, números a los lados |
+| `grid_texture` | — | — | celda dibujada, repetida una por zona. Sin ella se trazan líneas |
+| `grid_color` | `#2d3a4a80` | igual | color de las líneas, **translúcido**: es una guía, no debe competir con el terreno |
+| `grid_dash` / `grid_gap` | `4` / `3` | igual | punteado, **en píxeles de pantalla** |
+| `grid_border` | `false` | `true` | recuadro alrededor del mapa. Sobra cuando el panel ya trae marco dibujado |
 | `zone_cells` | — | `8` | celdas por lado de zona **que se piden**. **El número a mover si las coordenadas salen gruesas o finas** |
 | `show_viewport_rect` | `true` | `true` | recuadro de lo que se está mirando |
 | `show_units` | `true` | `true` | un punto por unidad, del color de su bando |
@@ -2618,6 +2622,16 @@ dibuja a 1. **Nunca hay escala fraccionaria**, que con Nearest es lo que hace he
 píxeles al mover la cámara — el mismo motivo por el que `PanCamera` sólo usa potencias de
 dos. Con el mapa de 64×45: minimapa 1 px/celda (imagen de 64×45 en un panel de 87), táctico
 8 px/celda (512×360). Se recalcula en `resized`, así que redimensionar el panel basta.
+
+**La rejilla se traza, no se pega.** Se probó a repetir una celda dibujada de 8×8 px, una por
+zona (`grid_texture`, que sigue soportado). Salió mal por una razón que vale para cualquier
+adorno del mapa: **la textura escala con el terreno**, así que una línea de 1 px del dibujo se
+ve de 4 px cuando el minimapa está a 4x. Trazada, la línea mide 1 px de pantalla siempre —
+igual que los puntos de las unidades y por el mismo motivo: la rejilla es un icono encima del
+mapa, no terreno. El punteado (`grid_dash` / `grid_gap`) tampoco escala.
+
+Va **translúcida** (`alpha 0.5`) y sin recuadro exterior en el minimapa, porque el marco ya lo
+pone el panel dibujado.
 
 **Sólo hay una rejilla: la de zonas.** Hubo una segunda, fina, con una línea por celda de
 terreno — 64×45 = casi 2900 cuadritos de 7 px. Se quitó: no era información sino el tamaño
@@ -2726,9 +2740,10 @@ del terreno. Aquí se mira lo que ocupa el dibujo (`MapView.drawn_size()`, avisa
 `refitted`) y el panel se recorta a esa medida, con el **borde de abajo fijo**: vive en la
 esquina y sólo tiene sentido crecer hacia arriba.
 
-**Se estira arrastrando el borde de arriba** (`GRIP_PX`, 6 px — el borde superior del estilo
-es más grueso justo para eso, y ahí caben las dos rayitas de agarre; dentro las taparía el
-mapa, que se dibuja después). **Estirar elige escala, no píxeles**: el alto pedido se traduce
+**Se estira arrastrando el borde de arriba** (`GRIP_PX`, 10 px — el grosor del marco dibujado;
+más allá empieza el mapa y agarrar ahí sería robarle el click. Las dos rayitas que avisan de
+que se puede estirar están dibujadas en el PNG, no las pinta el código). **Estirar elige
+escala, no píxeles**: el alto pedido se traduce
 a la escala entera que quepa y el panel se pone del tamaño exacto del dibujo a esa escala, así
 que salta de 1x a 2x a 3x sin franjas negras por el camino (`MAX_HEIGHT` limita el tope).
 Estirar sólo a lo alto no bastaba: el ancho también manda sobre la escala, así que crecen los
@@ -2741,6 +2756,25 @@ revés, leería el sitio viejo y quedaría un hueco descuadrado.
 
 Su `MapView` tiene `mouse_filter = IGNORE`: todo el input lo atiende el panel, que es quien
 distingue el agarre del resto.
+
+**El marco es un nine-patch sobre `assets/art/UI/minimap_panel.png`** (84×87), con cortes en
+**15 izq / 17 arriba / 21 der / 5 abajo**. Esos números no son estéticos: son dónde acaban los
+detalles dibujados. Un nine-patch sólo conserva 1:1 **las cuatro esquinas**; los bordes se
+estiran en un eje y el centro en los dos. La sombra azul de arriba a la izquierda ocupa hasta
+x14/y16 y las marcas de agarre de arriba a la derecha empiezan en x63, así que los cortes
+tienen que dejarlas dentro de la esquina o se deforman al estirar el panel. Se llegó ahí
+después de dos intentos con márgenes demasiado pequeños.
+
+**Cómo comprobarlo, que es lo que faltó las dos veces:** recorrer las cuatro franjas de borde
+y exigir que **cada fila del borde superior e inferior sea de un solo color a lo ancho, y cada
+columna del izquierdo y el derecho de un solo color a lo alto**. Si alguna varía, ahí hay
+dibujo en zona estirable. Con los cortes actuales todas son uniformes, y por eso no hace falta
+`axis_stretch = TILE`: estirar un color plano da lo mismo que repetirlo.
+
+**Regla para futuros paneles:** lo figurativo —remaches, una brújula, marcas— va pegado a una
+esquina, o sale del PNG y se cuelga como nodo propio encima. En mitad de un borde no hay
+margen que lo salve. Los cortes se ponen siempre desde Godot: el PNG no los lleva dentro, así
+que el arte no necesita cambios, sólo hay que medirlo.
 
 #### `TacticalMap` — `tactical_map.gd`
 ```
@@ -3205,6 +3239,8 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] Tres niveles de zoom (0,5x / 1x / 2x) con botones `+` / `−` en el HUD
 - [x] Pausa y play (botón + barra espaciadora); cámara, HUD y selección siguen vivos en pausa
 - [x] Minimapa y mapa táctico (`MapTerrain` / `MapView` / `Minimap` / `TacticalMap`): terreno, rejilla de celdas, coordenadas por zonas y un punto por unidad del color de su bando
+- [x] Marco del minimapa dibujado, como nine-patch con los cortes medidos para que sus detalles no se deformen al estirar la ventana
+- [x] Rejilla punteada y translúcida sobre el minimapa, trazada a 1 px de pantalla en vez de pegada como textura
 - [x] Bando `NEUTRAL` (blanco), con el que no se mete nadie
 - [x] Capa de datos `tipo` en `terrain_tileset.tres` (agua / tierra / arena), 101 tiles marcados
 - [x] **Mandar desde el mapa táctico:** dirigir, atacar y abrir el menú contextual pulsando el mapa, con los mismos gestos que en el mundo (incluida la pulsación mantenida en táctil) y sin cerrarlo. Destino marcado en los dos mapas, unidad seleccionada resaltada y rotulada, y botón `×` para cerrarlo sin teclado

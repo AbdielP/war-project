@@ -4,6 +4,50 @@ Registro cronológico (más reciente arriba). Una entrada por decisión: qué se
 
 ## 2026-08-14
 
+### En un nine-patch, el dibujo va en las esquinas
+El marco del minimapa es el PNG del usuario (`minimap_panel.png`, 84×87). Un nine-patch parte
+la imagen en nueve regiones y **sólo conserva 1:1 las cuatro esquinas**: los bordes se estiran
+en un eje y el centro en los dos. Los detalles que él dibujó —la sombra azul de arriba a la
+izquierda, las dos marcas de agarre de arriba a la derecha— caían fuera de las esquinas y se
+deformaban al estirar la ventana.
+
+Los cortes quedaron en **15 / 17 / 21 / 5**. No son estéticos: son dónde acaban esos detalles
+(la sombra llega a x14/y16, las marcas empiezan en x63).
+
+Costó dos intentos porque las dos primeras veces di el problema por resuelto mirando sólo un
+detalle. **La comprobación que hay que hacer siempre:** recorrer las cuatro franjas de borde y
+exigir que cada fila del borde superior e inferior sea de un solo color a lo ancho, y cada
+columna del izquierdo y el derecho de un solo color a lo alto. Si alguna varía, hay dibujo en
+zona estirable. Con eso verificado, `axis_stretch = TILE` no aporta nada: estirar un color
+plano da lo mismo que repetirlo.
+
+**El arte no se toca; los cortes son cosa del motor.** El PNG no lleva dentro dónde cortar, así
+que da igual cómo se dibuje: hay que medirlo y ponerlo en el `StyleBoxTexture`. Lo que sí
+decide el dibujante es *dónde* pone el detalle — pegado a una esquina el margen es chico y el
+panel conserva libertad; en mitad de un borde no hay margen que valga y hay que sacarlo del
+PNG a un nodo propio encima.
+
+### La rejilla del mapa se traza, no se pega
+Se probó a usar una celda dibujada de 8×8 px repetida una vez por zona. Falló por algo que vale
+para cualquier adorno del mapa: **una textura escala con el terreno**, así que la línea de 1 px
+del dibujo se veía de 4 px con el minimapa a 4x. Trazada por código mide 1 px de pantalla
+siempre, igual que los puntos de las unidades y por el mismo motivo — la rejilla es un icono
+encima del mapa, no terreno.
+
+Queda translúcida (`alpha 0.5`, color `#2D3A4A` sacado del dibujo) y sin recuadro exterior en el
+minimapa, que ya lo pone el marco. El soporte de textura sigue en el código por si algún día
+sirve, con un resguardo: si el lado de zona no es múltiplo exacto de la celda, vuelve a las
+líneas en vez de escalar a medio píxel.
+
+Efecto secundario que salió bien: como `_zone_side()` agrupa zonas cuando el mapa es chico, la
+rejilla es **más gruesa al tamaño mínimo y más fina al agrandar** — 2 divisiones a 1x, 8 a 4x.
+
+### El minimapa entra exacto a cualquier escala
+Ya lo hacía `_fit_to_drawing()`, pero al cambiar el marco había que rehacer las cuentas del
+relleno (12×15 con los bordes nuevos). Verificado con el terreno real a las cuatro escalas:
+**0×0 px de espacio sobrante** en todas. Estirar salta de escala entera en escala entera, así
+que nunca aparecen franjas negras.
+
 ### El registro de eventos no tiene caja
 Llegó a tener panel dibujado con marco, biseles y barra de título. Se quitó entero. El motivo
 es de presupuesto de pantalla: ocupaba 144×160 px sobre un lienzo de 640×384 —casi un cuarto

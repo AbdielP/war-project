@@ -34,6 +34,22 @@ signal refitted
 ## salen demasiado gruesas o demasiado finas.** Es una petición, no una orden:
 ## ver [method _zone_side].
 @export var zone_cells: int = 8
+## La celda de rejilla dibujada, repetida una vez por zona de coordenadas. Debe
+## medir el lado de una zona **a escala 1x** y llevar la línea sólo en dos de sus
+## bordes, o al repetirla se duplican. Sin textura se dibuja a mano — ver
+## [method _draw_grid].
+@export var grid_texture: Texture2D = null
+## Color de la rejilla dibujada a mano, sacado del dibujo del panel. Va
+## translúcida: la rejilla es una guía, no debe competir con el terreno ni con
+## los puntos de las unidades.
+@export var grid_color := Color(0.1764706, 0.22745098, 0.2901961, 0.5)
+## Largo del trazo y del hueco, en píxeles de pantalla. **No escalan con el
+## mapa**: la rejilla es una guía dibujada encima, no terreno, así que el
+## punteado tiene que verse igual de fino con el minimapa a 1x que estirado.
+@export_range(1, 16, 1) var grid_dash: int = 4
+@export_range(0, 16, 1) var grid_gap: int = 3
+## El recuadro alrededor del mapa. Sobra cuando el panel ya trae marco dibujado.
+@export var grid_border: bool = true
 ## El recuadro de lo que se ve en pantalla ahora mismo. Sin él, el mapa a
 ## pantalla completa es un cuadro bonito en el que no sabes dónde estabas.
 @export var show_viewport_rect: bool = true
@@ -336,22 +352,76 @@ func _draw_order_marker(drawn: Vector2) -> void:
 ## Una sola rejilla: la de las zonas que llevan coordenada. La de celdas de
 ## terreno se quitó — 64×45 cuadritos de 7 px no son una cuadrícula, son un
 ## rayado, y el tamaño del tile no es información de juego.
+## Con [member grid_texture] se repite la celda dibujada, una por zona; sin ella
+## se trazan las líneas a mano. Lo primero es lo que se quiere cuando la rejilla
+## es arte; lo segundo sigue ahí porque el mapa a pantalla completa usa zonas de
+## un tamaño que no tiene por qué ser múltiplo de la celda.
 func _draw_grid(drawn: Vector2) -> void:
-	_draw_lines(drawn, cell_px() * _zone_side(), Color(_COLOR_ACCENT, 0.3))
+	var paso := cell_px() * _zone_side()
+	if not _tiles_cleanly(paso):
+		_draw_lines(drawn, paso, grid_color)
+		return
+	var escala := paso / grid_texture.get_size().x
+	var y := 0.0
+	while y < drawn.y:
+		var x := 0.0
+		while x < drawn.x:
+			# La última zona de cada lado casi nunca cae entera. Se dibuja sólo
+			# el trozo que queda dentro del mapa y se recorta la textura en la
+			# misma proporción, para que no se deforme ni se salga del terreno.
+			var trozo := Vector2(minf(paso, drawn.x - x), minf(paso, drawn.y - y))
+			draw_texture_rect_region(grid_texture,
+					Rect2(_origin + Vector2(x, y), trozo),
+					Rect2(Vector2.ZERO, trozo / escala))
+			x += paso
+		y += paso
 
 
+## ¿La zona mide un número entero de celdas dibujadas? Si no, escalar la textura
+## la dejaría a medio píxel y en pixel art eso se ve sucio: mejor las líneas.
+func _tiles_cleanly(paso: float) -> bool:
+	if grid_texture == null or paso < 1.0:
+		return false
+	var lado := grid_texture.get_size().x
+	if lado <= 0.0:
+		return false
+	var veces := paso / lado
+	return is_equal_approx(veces, roundf(veces)) and veces >= 1.0
+
+
+## La rejilla se estira con el mapa porque el paso sale de `cell_px()`, que ya
+## va en la escala a la que se está dibujando: al agrandar el minimapa las
+## líneas se separan solas y siguen cayendo en los bordes de zona. Lo que **no**
+## escala es el punteado — ver [member grid_dash].
 func _draw_lines(drawn: Vector2, step: float, color: Color) -> void:
 	if step < 1.0:
 		return
 	var x := step
 	while x < drawn.x:
-		draw_line(_origin + Vector2(x, 0.0), _origin + Vector2(x, drawn.y), color, 1.0)
+		_dashed(_origin + Vector2(x, 0.0), _origin + Vector2(x, drawn.y), color)
 		x += step
 	var y := step
 	while y < drawn.y:
-		draw_line(_origin + Vector2(0.0, y), _origin + Vector2(drawn.x, y), color, 1.0)
+		_dashed(_origin + Vector2(0.0, y), _origin + Vector2(drawn.x, y), color)
 		y += step
-	draw_rect(Rect2(_origin, drawn), color, false, 1.0)
+	if grid_border:
+		draw_rect(Rect2(_origin, drawn), color, false, 1.0)
+
+
+## Punteado horizontal o vertical. Sólo sirve para eso, que es lo único que
+## dibuja la rejilla, y así el reparto de trazos cae en píxeles enteros.
+func _dashed(from: Vector2, to: Vector2, color: Color) -> void:
+	var largo := (to - from).length()
+	var paso := float(grid_dash + grid_gap)
+	if grid_gap <= 0 or paso <= 0.0:
+		draw_line(from, to, color, 1.0)
+		return
+	var dir := (to - from).normalized()
+	var at := 0.0
+	while at < largo:
+		var trazo := minf(float(grid_dash), largo - at)
+		draw_line(from + dir * at, from + dir * (at + trazo), color, 1.0)
+		at += paso
 
 
 ## Las coordenadas van FUERA del mapa, no encima: dentro no caben y taparían el

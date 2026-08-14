@@ -179,6 +179,12 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Tamaño del punto de las unidades | nodo `MapView` de cada mapa → `marker_px` (2 en el minimapa, 4 en el táctico) |
 | Color de cada bando | `core/team/team.gd` → `_COLORS` |
 | Zona de dibujo del mapa táctico (para que no la pisen los paneles) | nodo `TacticalMap/Map` → `offset_top` / `offset_right` |
+| Color y transparencia de la rejilla | nodo `MapView` de cada mapa → `grid_color` (hoy `#2d3a4a` al 50%) |
+| Grosor del punteado de la rejilla | mismo nodo → `grid_dash` / `grid_gap` (4 y 3). **En píxeles de pantalla**: no engordan al agrandar el mapa |
+| Recuadro alrededor del mapa | mismo nodo → `grid_border`. Apagado en el minimapa, que ya trae marco dibujado |
+| Marco del minimapa | `assets/art/UI/minimap_panel.png` + los cortes nine-patch en `minimap.tscn` → `StyleBoxTexture`. **Si movés un detalle del dibujo hay que volver a medir los cortes**: sólo las esquinas quedan sin estirar |
+| Dónde se agarra el minimapa para estirarlo | `ui/hud/minimap/minimap.gd` → `GRIP_PX` (10, el grosor del marco de arriba) |
+| Hasta dónde puede crecer el minimapa | mismo archivo → `MAX_HEIGHT` (220) |
 | Sitio del rótulo y del botón de cerrar | nodos `TacticalMap/Hint` y `TacticalMap/CloseButton` → `offset` |
 | Cuánto puede crecer el minimapa | `ui/hud/minimap/minimap.gd` → `MAX_HEIGHT` |
 | Cuántas líneas guarda el registro de eventos | `ui/hud/event_log/event_log.gd` → `MAX_LINES` |

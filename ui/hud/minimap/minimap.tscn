@@ -5,19 +5,19 @@
 [ext_resource type="Texture2D" uid="uid://cpecxaunm8wyb" path="res://assets/art/UI/minimap_panel.png" id="3"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_1"]
-content_margin_left = 7.0
-content_margin_top = 10.0
+content_margin_left = 5.0
+content_margin_top = 8.0
 content_margin_right = 5.0
 content_margin_bottom = 5.0
 texture = ExtResource("3")
-texture_margin_left = 15.0
-texture_margin_top = 17.0
+texture_margin_left = 6.0
+texture_margin_top = 9.0
 texture_margin_right = 21.0
 texture_margin_bottom = 5.0
 
 [node name="Minimap" type="PanelContainer"]
-offset_right = 84.0
-offset_bottom = 87.0
+offset_right = 82.0
+offset_bottom = 85.0
 tooltip_text = "Mapa táctico (M)"
 theme_override_styles/panel = SubResource("StyleBoxTexture_1")
 script = ExtResource("1")

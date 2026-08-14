@@ -129,6 +129,10 @@ func show_selected_unit(unit: Unit) -> void:
 	_desel_btn.show()
 	_unit_tag.show_for(unit)
 	_tactical_map.set_selected_unit(unit)
+	# El cuadrito del panel se marca desde aquí y no desde el propio panel: da
+	# igual cómo se haya elegido la unidad —clic en el mapa, en el panel, o la
+	# tecla— porque todas acaban pasando por esta llamada.
+	_deployed_panel.set_selected(unit)
 
 
 ## Del enemigo se ve qué es, no se le cambia el arma. Y con el mapa táctico
@@ -174,6 +178,7 @@ func clear_selected_unit() -> void:
 	_desel_btn.hide()
 	_unit_tag.clear()
 	_tactical_map.set_selected_unit(null)
+	_deployed_panel.set_selected(null)
 
 
 const _COLUMN_GAP := 6.0

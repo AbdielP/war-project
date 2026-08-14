@@ -28,6 +28,10 @@ signal active_weapon_changed(weapon: WeaponType)
 ## frame por algo que cambia de tarde en tarde.
 signal ammo_changed(weapon: WeaponType, remaining: int)
 signal attack_target_changed(target: Unit)
+## Encajó daño y le queda `current` de `maximum`. Como `ammo_changed`: la barra
+## de vida del panel se entera cuando pasa algo, en vez de preguntar cada frame
+## por un número que cambia de tarde en tarde.
+signal health_changed(current: float, maximum: float)
 ## Se emite antes de quitarla del mapa, para que quien la estuviera siguiendo
 ## se entere mientras todavía existe.
 signal died(unit: Unit)
@@ -176,9 +180,12 @@ func take_damage(amount: float, source: Unit = null) -> void:
 			# el arma pega, y la barra de vida —cuando exista— no mentirá diciendo
 			# que está intacto.
 			health = 1.0
+			health_changed.emit(health, get_max_health())
 			return
 		died.emit(self)
 		queue_free()
+		return
+	health_changed.emit(health, get_max_health())
 
 
 ## Hacia dónde mira, en radianes de mundo. Es de dónde sale el armamento y

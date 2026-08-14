@@ -7,6 +7,10 @@ enum Domain { AIR, SURFACE }
 
 @export var display_name: String = ""
 @export var actions: PackedStringArray = []
+## La silueta que la representa en el panel de desplegadas. Va en el tipo y no en
+## la instancia: dos Harrier se dibujan igual. Vacío = no sale silueta, sólo el
+## marco — es lo que pasa con las unidades ajenas, que en ese panel no aparecen.
+@export var portrait_icon: Texture2D
 ## Arma fija de la unidad: va siempre, no depende del armamento que se le
 ## cuelgue y no ocupa estación. Vacío = la unidad no tiene cañón.
 @export var cannon: WeaponType

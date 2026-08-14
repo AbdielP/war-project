@@ -2,21 +2,27 @@ extends PanelContainer
 
 signal unit_selected(unit: Unit)
 
+const PORTRAIT := preload("res://ui/hud/deployed_panel/unit_portrait.tscn")
+
+## Qué grupo va en cada fila de la escena, en orden. El nombre de la fila es el
+## del nodo: mover una categoría de sitio es mover el nodo en el editor.
 const _CATEGORIES: Array = [
-	["unit_maritime", "SEA"],
-	["unit_air", "AIR"],
-	["unit_ground", "GND"],
+	["unit_maritime", "Sea"],
+	["unit_air", "Air"],
+	["unit_ground", "Ground"],
 ]
 
-const _COLOR_TEXT   := Color(0.6705882, 0.5803922, 0.4784314)
-const _COLOR_ACCENT := Color(0.56078434, 0.827451, 1.0)
-const _COLOR_DIM    := Color(0.6705882, 0.5803922, 0.4784314, 0.4)
+@onready var _rows_box: HBoxContainer = $Rows
 
-var _rows: Array = []   # un HBoxContainer por categoría
+var _rows: Array[HBoxContainer] = []
 var _dirty := true
-## Las que se perdieron, por categoría: `{índice de fila: [nombre, ...]}`. Se
-## guarda el nombre y no la unidad porque la unidad ya no existe — el panel es lo
-## único que queda de ella.
+## La que está seleccionada ahora mismo, para volver a marcarla cuando el panel
+## se reconstruye. Sin esto, perder o desplegar una unidad apagaría el marco de
+## la que el jugador tiene delante.
+var _selected: Unit = null
+## Las que se perdieron, por categoría: `{índice de fila: [[nombre, tipo], ...]}`.
+## Se guarda el nombre **y el tipo** porque la unidad ya no existe y el cuadrito
+## sigue necesitando su silueta — el panel es lo único que queda de ella.
 ##
 ## Una baja **no desaparece del panel**: se va al final de su fila, apagada. Que
 ## un cuadrito se esfume sin más deja al jugador dudando de si perdió algo o si
@@ -25,7 +31,8 @@ var _lost: Dictionary = {}
 
 
 func _ready() -> void:
-	_build_layout()
+	for pair in _CATEGORIES:
+		_rows.append(_rows_box.get_node(pair[1]) as HBoxContainer)
 	get_tree().node_added.connect(_on_tree_changed)
 	get_tree().node_removed.connect(_on_tree_changed)
 	get_tree().node_added.connect(_watch)
@@ -54,7 +61,7 @@ func _on_unit_died(unit: Unit) -> void:
 		return
 	if not _lost.has(row):
 		_lost[row] = []
-	_lost[row].append(unit.get_display_name())
+	_lost[row].append([unit.get_display_name(), unit.unit_type])
 	_dirty = true
 
 
@@ -78,37 +85,19 @@ func _on_tree_changed(node: Node) -> void:
 		_dirty = true
 
 
-func _build_layout() -> void:
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.192, 0.212, 0.220, 0.88)
-	bg.border_color = Color(0.561, 0.827, 1.0, 0.2)
-	bg.set_border_width_all(1)
-	bg.content_margin_left = 3.0
-	bg.content_margin_right = 3.0
-	bg.content_margin_top = 2.0
-	bg.content_margin_bottom = 2.0
-	add_theme_stylebox_override("panel", bg)
+## Cuál lleva el marco de seleccionada. La selección la manda el HUD: el panel no
+## decide quién está elegida, sólo la señala.
+func set_selected(unit: Unit) -> void:
+	_selected = unit
+	_apply_selection()
 
-	var root := HBoxContainer.new()
-	root.add_theme_constant_override("separation", 14)
-	add_child(root)
 
-	for i in _CATEGORIES.size():
-		if i > 0:
-			var sep := VSeparator.new()
-			var ss := StyleBoxFlat.new()
-			ss.bg_color = Color(0.561, 0.827, 1.0, 0.18)
-			sep.add_theme_stylebox_override("separator", ss)
-			root.add_child(sep)
-
-		var group_box := HBoxContainer.new()
-		group_box.add_theme_constant_override("separation", 3)
-		root.add_child(group_box)
-
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 4)
-		group_box.add_child(row)
-		_rows.append(row)
+func _apply_selection() -> void:
+	for row in _rows:
+		for child in row.get_children():
+			var portrait := child as UnitPortrait
+			if portrait != null:
+				portrait.set_selected(portrait.unit != null and portrait.unit == _selected)
 
 
 func _refresh() -> void:
@@ -130,80 +119,21 @@ func _refresh() -> void:
 				if unit.squad in seen_squads:
 					continue
 				seen_squads.append(unit.squad)
-				row.add_child(_make_btn(unit.squad.leader, unit.squad.members.size()))
+				_add_portrait(row).show_unit(unit.squad.leader, unit.squad.members.size())
 			else:
-				row.add_child(_make_btn(unit, 1))
+				_add_portrait(row).show_unit(unit, 1)
 		# Las bajas van detrás de las vivas, siempre. Es el orden de un parte:
 		# primero con qué se cuenta, después lo que costó.
-		for name in _lost.get(i, []):
-			row.add_child(_make_lost_btn(name))
+		for lost: Array in _lost.get(i, []):
+			_add_portrait(row).show_lost(lost[0], lost[1])
+	_apply_selection()
 
 
-## El cuadrito de una unidad perdida: mismo sitio, mismo tamaño, apagado y sin
-## responder. No lleva `pressed` porque no hay a dónde llevar la cámara — lo que
-## representaba ya no está en el mapa.
-func _make_lost_btn(display_name: String) -> Button:
-	var btn := Button.new()
-	btn.text = display_name.split(" ")[0]
-	btn.clip_text = true
-	btn.custom_minimum_size = Vector2(38, 18)
-	btn.disabled = true
-	btn.tooltip_text = "%s — perdido" % display_name
-
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color(0.192, 0.212, 0.220, 0.5)
-	box.border_color = _COLOR_DIM
-	box.set_border_width_all(1)
-	box.set_content_margin_all(2)
-	for state in ["normal", "focus", "disabled", "hover", "pressed"]:
-		btn.add_theme_stylebox_override(state, box)
-
-	btn.add_theme_color_override("font_disabled_color", _COLOR_DIM)
-	return btn
-
-
-func _make_btn(unit: Unit, count: int) -> Button:
-	var btn := Button.new()
-	# primer token del nombre como etiqueta compacta
-	btn.text = unit.get_display_name().split(" ")[0]
-	btn.clip_text = true
-	btn.custom_minimum_size = Vector2(38, 18)
-
-	var normal_box := StyleBoxFlat.new()
-	normal_box.bg_color = Color(0.192, 0.212, 0.220)
-	normal_box.border_color = Color(0.561, 0.827, 1.0, 0.35)
-	normal_box.set_border_width_all(1)
-	normal_box.set_content_margin_all(2)
-
-	var hover_box := StyleBoxFlat.new()
-	hover_box.bg_color = Color(0.192, 0.212, 0.220)
-	hover_box.border_color = _COLOR_ACCENT
-	hover_box.set_border_width_all(1)
-	hover_box.set_content_margin_all(2)
-
-	for state in ["normal", "focus", "disabled"]:
-		btn.add_theme_stylebox_override(state, normal_box)
-	for state in ["hover", "pressed"]:
-		btn.add_theme_stylebox_override(state, hover_box)
-
-	btn.add_theme_color_override("font_color", _COLOR_TEXT)
-	btn.add_theme_color_override("font_hover_color", _COLOR_ACCENT)
-	btn.add_theme_color_override("font_pressed_color", _COLOR_ACCENT)
-
-	btn.pressed.connect(func() -> void:
-		if is_instance_valid(unit):
-			unit_selected.emit(unit)
-	)
-
-	if count > 1:
-		var badge := Label.new()
-		badge.text = "x%d" % count
-		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		badge.add_theme_font_size_override("font_size", 7)
-		badge.add_theme_color_override("font_color", _COLOR_ACCENT)
-		badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-		badge.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-		badge.grow_vertical = Control.GROW_DIRECTION_BEGIN
-		btn.add_child(badge)
-
-	return btn
+## Un cuadrito vacío ya colgado de su fila. Entra en el árbol **antes** de que le
+## digan a quién representa: `show_unit` toca nodos `@onready`, y hasta que no
+## entra no existen.
+func _add_portrait(row: HBoxContainer) -> UnitPortrait:
+	var portrait: UnitPortrait = PORTRAIT.instantiate()
+	row.add_child(portrait)
+	portrait.picked.connect(func(picked: Unit) -> void: unit_selected.emit(picked))
+	return portrait

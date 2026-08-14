@@ -1,8 +1,10 @@
 [gd_resource type="Resource" script_class="UnitType" format=3 uid="uid://bpcombri2c111"]
 
 [ext_resource type="Script" uid="uid://c1lw2d718qt22" path="res://core/unit/unit_type.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://b5imdtqbv5omw" path="res://assets/art/UI/icon_lhd.png" id="2"]
 
 [resource]
 script = ExtResource("1")
 display_name = "Buque de asalto anfibio"
 actions = ["Hangar"]
+portrait_icon = ExtResource("2")

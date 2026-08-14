@@ -5,18 +5,23 @@ class_name Minimap
 ## un vistazo, el recuadro de dónde estás mirando, y un botón para abrir el mapa
 ## grande. Todo el dibujo lo hace [MapView]; esto lleva el tamaño y el click.
 ##
-## **El panel se ajusta al dibujo, no al revés.** La escala del mapa es entera,
-## así que en un panel de tamaño cualquiera siempre sobra un borde muerto. Aquí
-## se hace al contrario: se mira lo que ocupa el dibujo y el panel se recorta a
-## esa medida.
+## **El panel se ajusta al dibujo, no al revés.** La escala del mapa es entera y
+## el mapa casi nunca tiene la proporción del marco, así que en un panel de
+## tamaño fijo siempre sobra un borde muerto — franjas de fondo arriba y abajo
+## que se leen como un fallo. Aquí se hace al contrario: se mira lo que ocupa el
+## mapa y el panel se recorta a esa medida.
+##
+## Por eso el marco va como nine-patch: **el sprite es una muestra, no una
+## medida**. Su tamaño en el PNG no manda sobre el panel; lo que manda son sus
+## bordes y sus esquinas, que se conservan al píxel a cualquier medida.
 
 ## El jugador quiere el mapa a pantalla completa.
 signal expand_requested
 
 ## Franja de arriba que sirve de agarre para estirar. Fuera de ella, pulsar abre
-## el mapa grande. Es el grosor del marco dibujado: más allá empieza el mapa, y
-## agarrar ahí sería robarle el click.
-const GRIP_PX := 10.0
+## el mapa grande. Es la barra de título del dibujo —donde están las rayitas—:
+## más allá empieza el mapa, y agarrar ahí sería robarle el click.
+const GRIP_PX := 8.0
 ## Hasta dónde puede crecer. Más allá tapa el registro de eventos y deja de ser
 ## un mapa "de un vistazo".
 const MAX_HEIGHT := 220.0

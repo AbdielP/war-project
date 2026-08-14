@@ -544,6 +544,12 @@ lineal, no un número a ojo.
 
 **`_hand_over_control(unit)`:** Si la unidad tiene `start_flight()`, se la llama pasándole el barco como centro de órbita. El piloto arranca a su `min_speed`, que es justo la velocidad a la que la cubierta lo soltó: el relevo no se nota. A partir de ahí el avión se pilota solo.
 
+**Lo que no despega por pista** (`get_takeoff_speed()` a 0) se salta la carrera de proa pero
+**también recibe el control**, sólo que posado en su punto. Su plaza no se da por libre ahí:
+`_free_slot_when_airborne()` la mantiene ocupada hasta que el aparato avise con `took_off`, o el
+siguiente taxiaría hasta el mismo sitio y se le montaría encima. La conexión se hace **al crearlo**,
+no al soltarlo, porque la orden de salir puede llegar mientras todavía lo están colocando.
+
 ---
 
 ### Vuelo — `core/unit/flight/`
@@ -613,6 +619,69 @@ sin soltar el compromiso en curso — para objetivos que se mueven.
 
 **Orientación:** `sprite_offset_deg` traduce rumbo → rotación del sprite.
 El arte del Harrier apunta a **+Y local** (abajo), de ahí el −90.
+
+#### `HelicopterController` — `helicopter_controller.gd`
+```
+extends Node   class_name HelicopterController
+```
+El piloto del helicóptero. Mismo papel que `PlaneController` —decide **cómo** se mueve, no a
+dónde va— y **cero código compartido con él**, a propósito: aquél está construido sobre el radio
+de giro y aquí no hay radio de giro que valga.
+
+**Dentro hay un mando, no una trayectoria.** `_stick` (adelante/atrás y costados, en ejes del
+propio aparato) y `_pedal` (el giro), que son las dos manos con las que se lleva un helicóptero
+en cualquier juego. La velocidad sale de la física de esos ejes.
+
+**Los ejes no valen lo mismo**, y eso es medio carácter: `forward_speed` 85, `strafe_speed` 38,
+`back_speed` 28. Recular es incómodo, que es lo que empuja a girar en vez de irse de espaldas
+medio mapa.
+
+**El rumbo va aparte de la traslación.** `_wanted_heading` se ata al destino sólo si está a más
+de `face_range`; más cerca se entra de lado sin girar (medido: punto a 49 px por detrás, **0
+grados** de giro). Es la separación que permitirá, cuando haya armamento, apuntar al blanco
+mientras el aparato se desplaza de costado.
+
+**Llega exacto.** Cada eje pide la velocidad que le deja pararse en lo que falta (`v² = 2·a·d`) y
+el mando es analógico, así que se planta en el punto en vez de pasarse y volver: 40 de 40 órdenes
+al azar terminan a menos de **1,5 px**. Hubo una versión con un piloto torpe —frenada mal
+calculada, mando a golpes, morro desviado— y se quitó entera; ver `decisions.md`, 2026-08-13.
+
+**Estados** (`state_changed`, y el controlador **no toca ningún sprite** — de aquí colgarán las
+animaciones de hélice, vuelo y despegue):
+
+| estado | qué es |
+|---|---|
+| `GROUNDED` | posado en cubierta; ni se mueve ni obedece hasta que se le ordene salir |
+| `LIFTING` | subiendo en vertical, `lift_time`. Hoy sólo una espera: no hay nada que dibujar |
+| `FLYING` | de camino a un punto |
+| `HOVER` | llegó, y ahí se queda con el morro donde iba |
+
+| señal | cuándo |
+|---|---|
+| `target_reached` | llegó al punto |
+| `state_changed(state)` | cambió de fase |
+| `took_off` | dejó la cubierta — lo escucha el barco para dar la plaza por libre |
+
+| export | por defecto | qué es |
+|---|---|---|
+| `forward_speed` / `strafe_speed` / `back_speed` | 85 / 38 / 28 | tope de cada eje, px/s |
+| `acceleration` / `deceleration` | 60 / 55 | px/s². La segunda decide además cuándo empieza a frenar |
+| `yaw_speed_deg` | 100 | giro sobre sí mismo a fondo. En grados y no en radio: pivota parado |
+| `yaw_ramp_time` | 0,45 s | lo que tarda la cola en coger y soltar el giro |
+| `yaw_deadzone_deg` | 1,5 | por debajo no se pelea con el último grado |
+| `stick_delay` | 0,25 s | pedal antes de cíclico. Lo único que se hace esperar |
+| `face_range` | 70 px | por debajo no gira para encarar: entra de lado |
+| `axis_deadzone` | 1,5 px | desvío por eje que ya no se corrige |
+| `arrive_radius` / `settle_speed` | 3 px / 12 px/s | llegar es estar cerca **y** lento, no cruzar el punto de paso |
+| `lift_time` | 1,6 s | el despegue vertical |
+| `sprite_offset_deg` | −90 | el arte apunta a +Y, como todo en el proyecto |
+
+**API:** `enable()` / `disable()`, `set_target()` / `clear_target()`, `get_state()`,
+`is_airborne()`.
+
+`enable()` recoge el aparato **posado** y, si ya le habían ordenado un punto mientras el barco lo
+colocaba, sale a cumplirlo en vez de olvidarlo. `set_target()` estando en `GROUNDED` es también
+la orden de despegar.
 
 #### `Countermeasures` — `countermeasures.gd`
 ```
@@ -1874,23 +1943,37 @@ convención que confunde en el Harrier. `inherit_velocity` da igual: el vehícul
 
 ### `AH-1W SuperCobra` — `core/unit/ah1w_supercobra/`
 
-Helicóptero de ataque del jugador. **Todavía no vuela**: sale del hangar, hace el mismo recorrido
-de cubierta que el Harrier —elevador, taxi, colocación— y **se queda en su punto**.
+Helicóptero de ataque del jugador. Sale del hangar, hace el mismo recorrido de cubierta que el
+Harrier —elevador, taxi, colocación— y **se queda posado en su punto** hasta que se le ordene ir
+a algún sitio.
 
 Arte en dos piezas del mismo PNG de 48×54: cuerpo `(4,2)` 23×48 y palas `(38,5)` 6×47, colocadas
 a mano sobre el mástil.
 
-**Cómo sabe la cubierta que no debe lanzarlo:** se lo pregunta al aparato. `get_takeoff_speed()`
-devuelve 0 en todo lo que no despega por pista, y `FlightDeck._launch_next()` se lo salta. Sin
-listas de modelos: el día que haya otro helicóptero funciona solo.
+**`ah1w_supercobra.gd`** (`extends Unit`) es mucho más corto que el del Harrier, y no por estar a
+medias: **un helicóptero no necesita comportamientos**. El avión los tiene porque no puede parar,
+así que hay que inventarle qué hacer cuando no hay nada que hacer —orbitar— y cómo acercarse a un
+blanco sin frenar —la pasada—. Aquí ir y esperar son lo mismo: se le manda un punto, va, y se
+queda. Sin patrón de espera a propósito.
+
+Lo que resuelve: `get_facing()` y `get_velocity()` desde el piloto, `get_move_destination()` para
+la etiqueta del HUD, `start_flight()` —que recoge el control **con el aparato en cubierta**, al
+revés que el avión— y `receive_move_order()`. Reemite `took_off` del piloto para que el barco
+libere la plaza, y `order_fulfilled` al llegar, que es lo que `SelectionManager` espera de
+cualquier unidad que cumpla una orden.
+
+**Cómo sabe la cubierta que no debe lanzarlo por pista:** se lo pregunta al aparato.
+`get_takeoff_speed()` devuelve 0 en todo lo que no despega en carrera, y `FlightDeck._launch_next()`
+se lo salta. Sin listas de modelos: el día que haya otro helicóptero funciona solo.
 
 **`ah1w_supercobra_loadouts.gd`** — tres misiones **sin armamento**: CAS, Escolta armada y
 Ataque antiblindaje. Al no pedir ninguna arma, `can_arm_with` las deja pasar siempre y el hangar
 las ofrece las tres. 4 unidades en el inventario del LHD.
 
-> Pendiente: **el vuelo**. `PlaneController` está construido sobre el radio de giro —no puede
-> parar, no puede ir hacia atrás, vira describiendo un círculo— y un helicóptero hace justo lo
-> contrario. Necesita controlador propio.
+> Pendiente: **el armamento**, y con él el gesto que le falta al vuelo — morro clavado en el
+> blanco mientras se desplaza de costado. El controlador ya lleva el rumbo separado de la
+> traslación, así que es apuntar `_wanted_heading` al objetivo y dejar que el destino mande sólo
+> en el movimiento.
 
 ---
 
@@ -2353,13 +2436,27 @@ El parte de lo que va pasando, con la coordenada del mapa. Emite
 
 | Evento | De dónde | Ejemplo |
 |--------|----------|---------|
-| Orden de movimiento | `SelectionManager` → `HUD.report_move_order()` | `LHD Wasp → F4` |
-| Empieza a atacar | `Unit.attack_target_changed` | `LHD Wasp ataca T-14 Armata B2` |
-| Disparo | `Unit.ammo_changed` | `LHD Wasp: AGM-65 (Rifle!)` |
-| Baja enemiga | `Unit.died` | `Splash! T-14 Armata B2` |
-| **Baja propia** | `Unit.died` | `UNIT LOST — AV-8B Harrier II, derribado por 2S6 Tunguska D1` |
-| **Te enganchan** | `Unit.tracked_by` | `AV-8B Harrier II: MUD SPIKE — 2S6 Tunguska D1` |
-| **Te disparan** | `Unit.fired_upon_by` | `AV-8B Harrier II: AAA, bajo fuego D1` |
+| Orden de movimiento | `SelectionManager` → `HUD.report_move_order()` | `AV-8B > F4` |
+| Empieza a atacar | `Unit.attack_target_changed` | `AV-8B ataca T-14 (RIFLE) B2` |
+| Baja enemiga | `Unit.died` | `Splash! T-14 B2` |
+| **Baja propia** | `Unit.died` | `Perdido: AV-8B D1` + `   por 2S6` |
+| **Te enganchan** | `Unit.tracked_by` | `AV-8B: MUD SPIKE D1` |
+| **Te disparan** | `Unit.fired_upon_by` | `AV-8B: AAA, bajo fuego D1` |
+| **Misil en el aire** | `Unit.missile_inbound` | `AV-8B: SAM LAUNCH D1` |
+| **Se defiende** | `Countermeasures.dispensing_started` | `AV-8B: DEFENDING` |
+
+**El disparo no tiene parte propio.** Lo tuvo: cada arma que salía escribía su línea, agrupando
+las ristras para que una andanada de seis Mk-82 no fueran seis renglones. Aun así sobraba —
+`ataca` ya dice que el compromiso empezó y `Splash!` que terminó, así que la línea del arma era
+una tercera entrada del mismo suceso, y con varias unidades a la vez tapaba lo único urgente,
+que son las alarmas. El código de brevedad se mudó a la línea de ataque, preguntándole a
+`WeaponSelector.best_for()` qué elegiría para ese blanco. La munición se ve en el `WeaponBar`,
+que es donde toca. Con esto se fue también todo el agrupador de andanadas.
+
+**Aviso pendiente:** `attack_target_changed` sólo emite cuando el blanco **cambia**. Varias
+pasadas sobre el mismo objetivo dan una sola línea y después silencio. Mientras existió la
+línea del arma eso no se notaba. Si al jugarlo queda demasiado callado, la salida no es volver
+al disparo por disparo sino reenganchar tras un rato sin atacar.
 
 **Caer no se cuenta igual según de quién sea.** `Splash!` es lo que se canta al abatir algo, no
 lo que se dice al perder a uno de los tuyos; de ahí las dos líneas distintas.
@@ -2381,15 +2478,72 @@ agrupan hasta caber en 87 px, así que el mapa entero sale como dos o tres coord
 parte diría `A1` de todo. Se piden con `MapView.zone_label_at()`, que usa el tamaño de zona
 que se está dibujando de verdad.
 
-**Cada línea es un `RichTextLabel` con BBCode**, que es lo que hace pulsable la coordenada
-(`[url]` + `meta_clicked`). El `url` lleva el **punto exacto del mundo**, no la letra: la zona
-es para leerla, pero la cámara va a donde pasó la cosa. Hay que fijarle el ancho a mano
-(`custom_minimum_size.x`): con `fit_content` y sin saber el ancho, calcula su alto mínimo
-suponiendo ancho cero y una sola línea pedía 300 px.
+**Cada línea es una instancia de `event_entry.tscn`**, no nodos fabricados en código. Ver
+[`EventEntry`](#evententry--uihudevent_logevent_entrygd) — es la diferencia entre poder ajustar
+el parte mirándolo y tener que arrancar el juego para ver qué pasó.
+
+**El registro no tiene caja ni fondo.** El panel llegó a tener marco dibujado, barra de título
+y fondo navy; se quitó entero (`StyleBoxEmpty`) porque ocupaba 144×160 px de una pantalla de
+640×384 — casi la cuarta parte del ancho y el 40% del alto — para mostrar seis renglones. Sin
+marco que descontar, el ancho útil de texto pasó de 123 a 191 px, y el registro sólo ocupa lo
+que ocupa su texto. El PNG del panel sigue en `assets/art/UI/event_log_panel.png`: es un
+nine-patch y está pensado para reusarse en las ventanas de acción (hangar, mapa táctico).
+
+**Sin fondo, el texto necesita contorno.** Va sobre el terreno —selva verde, agua, arena
+clara—, así que un color plano se pierde contra la mitad de los fondos. `outline_size = 2` en
+negro es lo que lo hace legible venga lo que venga debajo.
 
 **El panel mide lo que midan sus líneas y crece hacia arriba**, con el borde de abajo quieto,
 como una consola. Vacío no se dibuja. `set_bottom(y)` lo mueve el HUD cuando el minimapa
 cambia de tamaño: comparten columna y el minimapa manda, porque es el que el jugador estira.
+
+El alto se recalcula con `lines.minimum_size_changed`, no sólo al añadir una entrada: cuando
+llega, el texto todavía no sabe de qué ancho dispone y pide más alto del que va a necesitar.
+Sin volver a medir después, el panel se quedaba con esa primera cuenta — 299 px medidos donde
+hacían falta 104.
+
+### `EventEntry` — `ui/hud/event_log/event_entry.gd`
+```
+extends Control   class_name EventEntry
+```
+La plantilla de una línea: el filete separador, el ícono y el texto. **Es una escena, no nodos
+creados en código.** La primera versión fabricaba cada fila a mano (`HBoxContainer.new()`,
+`TextureRect.new()`…) y el resultado era invisible en el editor: no había forma de ajustar
+fuente, color o separaciones sin arrancar el juego y adivinar. Ahora se abre
+`event_entry.tscn`, se ve con contenido de muestra y se toca ahí.
+
+**Los tres nodos van a posición libre, fuera de contenedores.** No es descuido: en Godot un
+contenedor decide dónde van sus hijos y el editor bloquea el arrastre. Se eligió poder mover
+el ícono y el texto con el ratón, y el precio es que el alto no se calcula solo — de eso se
+encarga `_fit()`, y es la razón de que el script exista. La entrada mide lo que llegue más
+abajo (texto o ícono) más `padding_bottom`.
+
+| Ajuste | Dónde | Qué hace |
+|--------|-------|----------|
+| Fuente, tamaño, color, contorno | nodo `Text` | lo visual del texto |
+| Posición del ícono | nodo `Icon` | se arrastra |
+| Largo del filete | nodo `Rule`, `offset_right` | 112 px hoy |
+| `padding_bottom` | raíz, exportado | aire bajo el texto (4) |
+| `fade_after` / `fade_time` / `faded_alpha` | raíz, exportado | 6 s / 1,5 s / 0,35 |
+
+**Las entradas se transparentan, no desaparecen.** A los 6 s bajan a `alpha 0.35` y se quedan
+ahí: siguen leyéndose y su coordenada sigue siendo pulsable. El registro no pierde historia,
+sólo deja de robar la vista. Si una línea se reescribe, vuelve a plena vista — una línea que
+cambia mientras se apaga no se lee.
+
+**El texto va en `MOUSE_FILTER_PASS`.** En `IGNORE` las coordenadas dejaban de ser pulsables;
+en `STOP` el registro robaría al mapa todos los clicks de su superficie, que ahora es
+transparente. `PASS` atiende la coordenada y deja pasar el resto.
+
+**Antes de meter un signo tipográfico en el parte hay que comprobar que la fuente lo tenga.**
+El separador de las órdenes era `→` y descuadraba la línea entera: M5X7 no tiene ese glifo, así
+que Godot lo sacaba de una fuente del sistema cuyo alto de línea es de 23 px en vez de 13. La
+fila se estiraba y el ícono se quedaba arriba. Ninguna de las dos fuentes del proyecto tiene
+`→ ← ↑ ↓ — – … • ‹ ›`; sí tienen acentos, `ñ`, `¿`, `¡` y `×`.
+
+**Los nombres se acortan al primer espacio** (`_short()`): en el parte cabe `2S6`, no `2S6
+Tunguska`, y el jugador lo reconoce igual porque el nombre completo está en el panel de
+selección. Se abrevian nombres propios, nunca el verbo — `Harrier B4` no dice nada.
 
 ### Mapa — `ui/hud/minimap/`
 
@@ -3056,7 +3210,10 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Mandar desde el mapa táctico:** dirigir, atacar y abrir el menú contextual pulsando el mapa, con los mismos gestos que en el mundo (incluida la pulsación mantenida en táctil) y sin cerrarlo. Destino marcado en los dos mapas, unidad seleccionada resaltada y rotulada, y botón `×` para cerrarlo sin teclado
 - [x] Rejilla de coordenadas por zonas que **se agrupan solas** para seguir legibles pase lo que pase con el tamaño del mapa (`A1…H6` hoy)
 - [x] `LongPress`: el mismo detector de pulsación mantenida en la cámara y en el mapa
-- [x] **Registro de eventos vivo:** órdenes, ataques, disparos con código de brevedad OTAN y bajas, con la coordenada del mapa **pulsable** para llevar la mirada allí
+- [x] **Registro de eventos vivo:** órdenes, ataques con código de brevedad OTAN, alarmas y bajas, con la coordenada del mapa **pulsable** para llevar la mirada allí
+- [x] El registro es texto flotante sin caja, con contorno para leerse sobre el terreno, y sus líneas se transparentan a los 6 s sin dejar de ser pulsables
+- [x] Cada línea del registro es una escena editable (`event_entry.tscn`), no nodos fabricados en código
+- [x] Fuentes a su tamaño nativo (16) y con antialiasing/hinting/subpixel apagados: m6x11plus para títulos, M5X7 para cuerpo
 - [x] Columna izquierda que se mide sola: el minimapa se recorta a su dibujo y se estira por escalas enteras, y el registro crece hacia arriba apartándose de él
 - [x] **Bomba planeadora (`GlideBomb` / GBU-54):** el alcance sale de la altura (`fall_time`), no de un motor; cae corta de verdad si se suelta demasiado lejos
 - [x] **Viraje del avión por radio** (`turn_radius`) en vez de grados/segundo: volar más lento ya no cierra el giro, y hay entrada en viraje
@@ -3072,6 +3229,8 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Velocidad de pasada según el arma** (`slows_to_aim`): el cañón frena para apuntar, el bombardeo cruza a máxima y sale de ahí
 - [x] **Etiqueta de unidad seleccionada (`UnitTag`):** línea desplegable y nombre, en el HUD, siguiendo a la unidad en pantalla — mide igual a cualquier zoom. Sirve para cualquier unidad, no sólo el Harrier
 - [x] Sombra de la Mk-82 al caer, reusando `MissileShadow` por duck-typing (`get_distance_to_aim`) sin tocar su código
+- [x] **Vuelo del helicóptero (`HelicopterController`):** mando de ejes propios —adelante 85, costado 38, espaldas 28— con el rumbo separado de la traslación. Llega a menos de **1,5 px** del punto en 40 de 40 órdenes al azar y se planta ahí (0,1 px en 3 s de hover)
+- [x] **Despegue vertical:** la primera orden de movimiento saca al helicóptero de cubierta y libera su plaza (`took_off`). La orden vale aunque llegue mientras el barco todavía lo está colocando
 
 ### Pendiente
 - [ ] **Sombra propia para la Mk-82.** Hoy usa la del misil, que no le corresponde: es otra silueta y otra forma de caer
@@ -3104,9 +3263,11 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [ ] Cadena de repliegue de arma: usar la siguiente cuando se acaba una, cañón como último recurso
 - [ ] **Proyectil propio de los misiles aire-aire.** El AIM-120 y el AIM-9 usan prestado el del Maverick, igual que el 9M311: vuelan y guían, pero sale un AGM-65 con sombra de altitud
 - [ ] **Comportamiento del Su-33.** Hoy sólo orbita: no responde, no dispara, no huye. Va con las misiones
-- [ ] **Vuelo del helicóptero.** Lo siguiente que toca. `PlaneController` no sirve: está construido sobre el radio de giro y un helicóptero para, gira sobre sí mismo y va en línea recta a donde le mandes
-- [ ] **Despegue del helicóptero.** Se queda en su punto de cubierta a propósito; despega en vertical y eso es otra secuencia
+- [ ] **El gesto de combate del helicóptero:** morro clavado en el blanco mientras se desplaza de costado, y giro sobre su eje para apuntar. Es lo que el vuelo de hoy todavía no enseña, y no por falta de máquina: el rumbo ya va aparte de la traslación, falta que haya un blanco al que apuntar `_wanted_heading`. Va con el armamento
 - [ ] **Armamento del AH-1W.** Las tres misiones existen vacías para poder sacarlo a cubierta
+- [ ] **El helicóptero no reacciona a lo que hace.** No se inclina al acelerar, ni alabea al desplazarse de lado, ni cae de cola al frenar: es un dibujo rígido deslizándose, y eso es lo que hace que el vuelo se sienta soso por bien medido que esté. No hace falta redibujarlo en ángulos — dos o tres frames de inclinación, o un píxel de separación contra la sombra, ya cambian la lectura
+- [ ] **Snap de píxel en 2D.** Sin comprobar. A 20–40 px/s —un helicóptero colocándose— el sprite avanza un píxel cada dos o tres frames de forma irregular, y eso se ve como tirones. Los aviones no lo acusan porque van al triple. `rendering/2d/snap/*` no está tocado en `project.godot`
+- [ ] **Animación de despegue vertical.** Hoy `lift_time` (1,6 s) es sólo una espera con el aparato quieto. El hueco está: `HelicopterController` anuncia `LIFTING` por `state_changed`
 - [ ] **Animación de hélice.** Hoy `Rotor` gira unas palas rectas; a régimen debería verse el disco borroso
 - [ ] Revisar el sobrevuelo del ataque a tierra: rompe donde debe (263 px) pero completa el viraje pasando a 114. Es el radio de giro, no un fallo — decidir si molesta
 - [ ] Vuelo en formación (aviones del mismo escuadrón) — hoy la orden sólo llega al líder

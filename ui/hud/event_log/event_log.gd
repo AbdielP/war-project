@@ -12,14 +12,18 @@ class_name EventLog
 ## reenvía, igual que el resto del HUD — aquí no se conoce la cámara.
 signal look_requested(world_position: Vector2)
 
-const MAX_LINES := 6
-## Cuánto puede tardar la siguiente arma de una andanada en salir para que
-## cuente como la misma. La ristra de Mk-82 va a una décima entre bombas; esto
-## deja margen de sobra sin llegar a juntar dos ataques distintos.
-const SALVO_WINDOW := 2.0
-const TEXT_COLOR := Color(0.6705882, 0.5803922, 0.4784314)
-const ACCENT_COLOR := Color(0.56078434, 0.827451, 1.0)
-const _FONT_SIZE := 8
+## La plantilla de una línea del parte. Todo lo visual —fuente, tamaño, color,
+## el ancho de la columna del ícono, el filete separador— se toca abriendo
+## `event_entry.tscn` en el editor, que se ve con contenido de muestra.
+const ENTRY := preload("res://ui/hud/event_log/event_entry.tscn")
+
+## El ícono dice de qué clase es el suceso, y por eso el texto no tiene que
+## repetirlo: sin él las líneas tendrían que empezar por "ORDEN", "BAJA" o
+## "ATAQUE" y no cabrían en el panel.
+const _ICON_MOVE := preload("res://assets/art/UI/icon_move.png")
+const _ICON_ATTACK := preload("res://assets/art/UI/icon_attack.png")
+const _ICON_LOST := preload("res://assets/art/UI/icon_lost.png")
+const _ICON_ALERT := preload("res://assets/art/UI/icon_air.png")
 
 ## De dónde salen las coordenadas. Apunta al [MapView] **del mapa táctico**, que
 ## es la rejilla que el jugador lee. No vale el del minimapa: ahí las zonas se
@@ -27,16 +31,23 @@ const _FONT_SIZE := 8
 ## coordenadas, así que el parte diría `A1` de todo.
 @export var map_path: NodePath
 
-@onready var lines: VBoxContainer = $Lines
+## Lo visual de cada línea —fuente, tamaño, colores, ícono, filete— no está
+## aquí: se toca abriendo `event_entry.tscn`, que es la plantilla y se ve en el
+## editor. Aquí sólo queda lo que decide el parte en conjunto.
+
+## Cuántas entradas se ven a la vez. Con 6 y alguna partida en dos filas el
+## panel se estira por encima de los 160 px del dibujo; con 5 no llega.
+@export_range(1, 12, 1) var max_entries: int = 6
+## El de las coordenadas pulsables. Vive aquí y no en la plantilla porque el
+## resalte se mete como BBCode al componer el texto, en [method _zone].
+@export var accent_color := Color(0.3019608, 0.60784316, 0.9019608)
+
+@onready var lines: VBoxContainer = $VBox/Lines
 
 var _map: MapView = null
-## La última línea escrita, para poder reescribirla si la andanada sigue.
-var _last_line: RichTextLabel = null
-## De qué andanada va esa línea: arma, de quién y cuántas van.
-var _salvo_weapon: WeaponType = null
-var _salvo_unit: int = 0
-var _salvo_count: int = 0
-var _salvo_at: float = 0.0
+## La última entrada escrita. Nadie la reescribe hoy, pero es lo que hace falta
+## para poder hacerlo sin buscarla en el árbol.
+var _last_entry: EventEntry = null
 ## El borde de abajo se queda quieto y el parte crece hacia arriba, como una
 ## consola: lo último dicho queda siempre a la misma altura.
 var _bottom: float = 0.0
@@ -46,6 +57,11 @@ func _ready() -> void:
 	_bottom = position.y + size.y
 	hide()
 	_map = get_node_or_null(map_path) as MapView
+	# El alto del panel se recalcula cada vez que las entradas cambian de
+	# tamaño, no sólo al añadir una: cuando llega, el texto todavía no sabe de
+	# qué ancho dispone y pide más alto del que va a necesitar. Sin esto el
+	# panel se quedaba con esa primera cuenta, muy pasada.
+	lines.minimum_size_changed.connect(_hug_content)
 	get_tree().node_added.connect(_watch)
 	# El repaso inicial va diferido a propósito: en `_ready()` sólo existen las
 	# unidades que van antes que el HUD en la escena —las de después todavía no
@@ -61,25 +77,27 @@ func _sweep() -> void:
 
 ## El texto admite BBCode: es lo que hace pulsables las coordenadas. Ver
 ## [method _zone], que es quien las envuelve.
-func add_event(text: String) -> void:
-	var line := RichTextLabel.new()
-	line.bbcode_enabled = true
-	line.fit_content = true
-	line.scroll_active = false
-	# El panel es estrecho a propósito, así que las líneas parten en vez de
-	# cortarse: perder la coordenada del final sería perder lo pulsable.
-	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	# Hay que decirle el ancho a mano. Con `fit_content`, si no lo sabe calcula
-	# su alto mínimo suponiendo ancho cero — una línea pedía 300 px de alto.
-	line.custom_minimum_size.x = size.x - _panel_padding()
-	line.add_theme_color_override("default_color", TEXT_COLOR)
-	line.add_theme_font_size_override("normal_font_size", _FONT_SIZE)
-	line.meta_clicked.connect(_on_coordinate_clicked)
-	line.text = text
-	lines.add_child(line)
-	_last_line = line
-	if lines.get_child_count() > MAX_LINES:
-		lines.get_child(0).queue_free()
+##
+## Cada entrada es una fila —ícono a la izquierda, texto a la derecha— y no una
+## etiqueta suelta, porque el ícono es parte de lo que dice la línea.
+func add_event(text: String, icon: Texture2D = null) -> void:
+	var entry: EventEntry = ENTRY.instantiate()
+	lines.add_child(entry)
+	# Después de colgarla: la escena resuelve sus nodos al entrar en el árbol.
+	# El filete sólo se dibuja si hay algo encima de lo que separarla.
+	entry.setup(text, icon, lines.get_child_count() > 1)
+	entry.coordinate_clicked.connect(_on_coordinate_clicked)
+	_last_entry = entry
+	while lines.get_child_count() > max_entries:
+		# Se saca del árbol en el acto y no sólo con `queue_free`: si no,
+		# seguiría contando como hijo hasta el final del frame y esta vuelta
+		# volvería a coger la misma.
+		var gone := lines.get_child(0)
+		lines.remove_child(gone)
+		gone.queue_free()
+	# La que quedó primera no tiene nada encima, así que se queda sin filete.
+	if lines.get_child_count() > 0:
+		(lines.get_child(0) as EventEntry).rule.visible = false
 	show()
 	# Diferido: la línea que se acaba de tirar no desaparece del recuento hasta
 	# el final del frame, y hasta entonces el alto mínimo sale de más.
@@ -118,7 +136,11 @@ func _on_coordinate_clicked(meta: Variant) -> void:
 ## "Harrier → G5". Lo llama quien da la orden, que es el único que sabe que ha
 ## habido una.
 func report_move_order(unit: Unit, where: Vector2) -> void:
-	add_event("%s → %s" % [unit.get_display_name(), _zone(where)])
+	# El separador es ">" y no "→": M5X7 no tiene la flecha, y al no tenerla
+	# Godot la saca de una fuente del sistema cuyo alto de línea es de 23 px en
+	# vez de 13. Eso estira la fila entera y descuadra el ícono. Antes de meter
+	# cualquier signo raro en el parte hay que comprobar que la fuente lo tenga.
+	add_event("%s > %s" % [_short(unit), _zone(where)], _ICON_MOVE)
 
 
 func _watch(node: Node) -> void:
@@ -127,7 +149,6 @@ func _watch(node: Node) -> void:
 		return
 	unit.died.connect(_on_died)
 	unit.attack_target_changed.connect(_on_target_changed.bind(unit))
-	unit.ammo_changed.connect(_on_ammo_changed.bind(unit))
 	unit.tracked_by.connect(_on_tracked.bind(unit))
 	unit.fired_upon_by.connect(_on_fired_upon.bind(unit))
 	unit.missile_inbound.connect(_on_missile_inbound.bind(unit))
@@ -142,23 +163,53 @@ func _watch(node: Node) -> void:
 ## se dice al perder a uno de los tuyos.
 func _on_died(unit: Unit) -> void:
 	if not unit.is_player_controlled():
-		add_event("Splash! %s %s" % [unit.get_display_name(),
-				_zone(unit.global_position)])
+		add_event("Splash! %s %s" % [_short(unit),
+				_zone(unit.global_position)], _ICON_LOST)
 		return
-	var by := ""
+	# Quién lo derribó va en su propia línea: metido en la misma, la entrada
+	# ocupaba tres filas del parte y desplazaba a todo lo demás.
+	add_event("Perdido: %s %s" % [_short(unit),
+			_zone(unit.global_position)], _ICON_LOST)
 	if is_instance_valid(unit.killed_by):
-		by = ", derribado por %s" % unit.killed_by.get_display_name()
-	add_event("UNIT LOST — %s%s %s" % [unit.get_display_name(), by,
-			_zone(unit.global_position)])
+		add_event("   por %s" % _short(unit.killed_by), null)
 
 
+## "Harrier ataca Su-33 (FOX 2) B5". El compromiso entero en una línea: quién,
+## contra qué, con qué y dónde.
+##
+## **El arma no tiene parte propio.** Cada disparo emitía la suya, así que un
+## ataque llenaba el registro de repeticiones del mismo suceso — y con seis
+## unidades a la vez tapaba lo único urgente, que son las alarmas. Empezar a
+## atacar y destruir el blanco son las dos noticias; lo de en medio no lo es. El
+## gasto de munición se ve en el `weapon_bar`, que es donde toca.
 func _on_target_changed(target: Unit, unit: Unit) -> void:
 	# Perder el objetivo también emite, con `null`. Que deje de atacar no es
 	# noticia; que empiece, sí.
 	if not is_instance_valid(target) or not unit.is_player_controlled():
 		return
-	add_event("%s ataca %s %s" % [unit.get_display_name(), target.get_display_name(),
-			_zone(target.global_position)])
+	add_event("%s ataca %s%s %s" % [_short(unit), _short(target),
+			_brevity_of(unit, target), _zone(target.global_position)], _ICON_ATTACK)
+
+
+## El código de radio del arma con la que va a atacar, entre paréntesis. Se le
+## pregunta al selector cuál elegiría para ese blanco, que es la misma decisión
+## que va a tomar al disparar.
+##
+## Vacío si la unidad no tiene selector o si el arma no lleva código: el
+## paréntesis es sabor, no dato, y quien no lo tenga no debe dejar un hueco raro
+## en la línea.
+func _brevity_of(unit: Unit, target: Unit) -> String:
+	var selector: WeaponSelector = null
+	for child in unit.get_children():
+		selector = child as WeaponSelector
+		if selector != null:
+			break
+	if selector == null:
+		return ""
+	var weapon := selector.best_for(target)
+	if weapon == null or weapon.brevity_code == "":
+		return ""
+	return " (%s)" % weapon.brevity_code
 
 
 ## "Harrier: MUD SPIKE — 2S6 Tunguska B4". Un radar de superficie la tiene
@@ -169,16 +220,16 @@ func _on_target_changed(target: Unit, unit: Unit) -> void:
 func _on_tracked(threat: Unit, unit: Unit) -> void:
 	if not _is_worth_reporting(unit, threat):
 		return
-	add_event("%s: MUD SPIKE — %s %s" % [unit.get_display_name(),
-			threat.get_display_name(), _zone(threat.global_position)])
+	add_event("%s: MUD SPIKE %s" % [_short(unit),
+			_zone(threat.global_position)], _ICON_ALERT)
 
 
 ## "Harrier: AAA, bajo fuego B4". Esto ya no es un aviso.
 func _on_fired_upon(threat: Unit, unit: Unit) -> void:
 	if not _is_worth_reporting(unit, threat):
 		return
-	add_event("%s: AAA, bajo fuego %s" % [unit.get_display_name(),
-			_zone(threat.global_position)])
+	add_event("%s: AAA, bajo fuego %s" % [_short(unit),
+			_zone(threat.global_position)], _ICON_ALERT)
 
 
 ## "Harrier: SAM LAUNCH — 2S6 Tunguska B4". El aviso urgente: hay algo en el aire
@@ -191,8 +242,8 @@ func _on_missile_inbound(threat: Unit, weapon: WeaponType, _missile: Node2D, uni
 	if not _is_worth_reporting(unit, threat):
 		return
 	var code := weapon.brevity_code if weapon.brevity_code != "" else "MISSILE"
-	add_event("%s: %s LAUNCH — %s %s" % [unit.get_display_name(), code,
-			threat.get_display_name(), _zone(threat.global_position)])
+	add_event("%s: %s LAUNCH %s" % [_short(unit), code,
+			_zone(threat.global_position)], _ICON_ALERT)
 
 
 ## "Harrier: DEFENDING". La respuesta al aviso anterior: está soltando señuelos y
@@ -201,7 +252,7 @@ func _on_missile_inbound(threat: Unit, weapon: WeaponType, _missile: Node2D, uni
 func _on_defending(_threat: Unit, unit: Unit) -> void:
 	if not unit.is_player_controlled():
 		return
-	add_event("%s: DEFENDING" % unit.get_display_name())
+	add_event("%s: DEFENDING" % _short(unit), _ICON_ALERT)
 
 
 ## El parte es del jugador: que a un enemigo lo enganche otro enemigo no es
@@ -211,48 +262,15 @@ func _is_worth_reporting(unit: Unit, threat: Unit) -> bool:
 	return unit.is_player_controlled() and is_instance_valid(threat)
 
 
-## Se cuelga del gasto de munición y no de un "disparó" propio porque es la
-## misma cosa: una menos es un arma que salió del ala.
-##
-## **Una ristra es una línea, no seis.** Soltar seis Mk-82 gasta munición seis
-## veces con una décima entre medias, y sin agrupar el parte no diría más que
-## "Mk-82" repetido hasta llenarse. Es un solo gesto del piloto y se cuenta como
-## uno, con la cantidad al lado.
-func _on_ammo_changed(weapon: WeaponType, _remaining: int, unit: Unit) -> void:
-	if not unit.is_player_controlled():
-		return
-	if _grew_the_salvo(weapon, unit):
-		return
-	_salvo_weapon = weapon
-	_salvo_unit = unit.get_instance_id()
-	_salvo_count = 1
-	_salvo_at = Time.get_ticks_msec() / 1000.0
-	add_event(_salvo_text(weapon, unit, 1))
 
 
-## ¿Esto es otra arma de la misma andanada? Entonces se reescribe la línea que ya
-## está en vez de añadir otra.
-##
-## Tiene que ser **la última línea**: si entre dos bombas se coló otro suceso,
-## agrupar hacia atrás dejaría el parte contando cosas en desorden.
-func _grew_the_salvo(weapon: WeaponType, unit: Unit) -> bool:
-	if weapon != _salvo_weapon or unit.get_instance_id() != _salvo_unit:
-		return false
-	if Time.get_ticks_msec() / 1000.0 - _salvo_at > SALVO_WINDOW:
-		return false
-	if _last_line == null or not is_instance_valid(_last_line) \
-			or lines.get_child_count() == 0 or lines.get_child(-1) != _last_line:
-		return false
-	_salvo_count += 1
-	_salvo_at = Time.get_ticks_msec() / 1000.0
-	_last_line.text = _salvo_text(weapon, unit, _salvo_count)
-	return true
-
-
-func _salvo_text(weapon: WeaponType, unit: Unit, count: int) -> String:
-	var code: String = " (%s!)" % weapon.brevity_code if weapon.brevity_code != "" else ""
-	var many := " x%d" % count if count > 1 else ""
-	return "%s: %s%s%s" % [unit.get_display_name(), weapon.get_short_name(), many, code]
+## El nombre tal como se canta por radio: sin el modelo largo detrás. En el
+## parte cabe "2S6", no "2S6 Tunguska", y el jugador lo reconoce igual porque el
+## nombre completo lo tiene en el panel de selección.
+func _short(unit: Unit) -> String:
+	var name := unit.get_display_name()
+	var cut := name.find(" ")
+	return name if cut < 1 else name.substr(0, cut)
 
 
 ## La coordenada, envuelta para poder pulsarla. Sin mapa a la vista no hay
@@ -264,4 +282,4 @@ func _zone(world: Vector2) -> String:
 	if label == "":
 		return ""
 	return "[url=%f,%f][color=#%s]%s[/color][/url]" % [
-			world.x, world.y, ACCENT_COLOR.to_html(false), label]
+			world.x, world.y, accent_color.to_html(false), label]

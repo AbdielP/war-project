@@ -27,8 +27,8 @@ map_path = NodePath("../TacticalMap/Map")
 
 [node name="EventLog" parent="." unique_id=173143879 instance=ExtResource("1")]
 offset_left = 6.0
-offset_top = 195.0
-offset_right = 118.0
+offset_top = 126.0
+offset_right = 206.0
 offset_bottom = 286.0
 map_path = NodePath("../TacticalMap/Map")
 

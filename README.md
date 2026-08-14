@@ -109,6 +109,13 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Cada cuánto puede repetirse una llamada | mismo nodo → `same_call_window` (2,8 s) |
 | **Textos del estado en la etiqueta** | nodo raíz `UnitTag` → grupo Estado (`status_idle`, `status_moving`, `status_attacking`). El rótulo "Status:" es el texto del nodo `Status` |
 | Sitio del estado | arrastrando el nodo `Status` en `unit_tag.tscn`; el valor cuelga de él y lo sigue |
+| **Lo que corre el helicóptero** | nodo `HelicopterController` de `ah1w_supercobra.tscn` → `forward_speed` (85), `strafe_speed` (38), `back_speed` (28). **Que no valgan lo mismo es a propósito**: si los tres fueran iguales sería un icono deslizándose |
+| Lo que le cuesta arrancar y parar | mismo nodo → `acceleration` (60) / `deceleration` (55). La segunda decide además a qué distancia empieza a frenar |
+| Rapidez del giro sobre su eje | mismo nodo → `yaw_speed_deg` (100) y `yaw_ramp_time` (0,45 s), lo que tarda la cola en coger y soltar el giro |
+| **Cuándo se molesta en encarar** | mismo nodo → `face_range` (70 px). Por debajo se acerca de lado o de espaldas sin girar, que es lo que hace un helicóptero de verdad |
+| El tirón de morro al recibir la orden | mismo nodo → `stick_delay` (0,25 s de giro antes de moverse). Es lo único que se hace esperar |
+| Lo que tarda en despegar en vertical | mismo nodo → `lift_time` (1,6 s). Hoy es una espera con el aparato quieto: el hueco de la animación de despegue |
+| Cuándo da un punto por alcanzado | mismo nodo → `arrive_radius` (3 px) **y** `settle_speed` (12 px/s). Las dos: cruzar el punto a toda velocidad no es llegar |
 | **Revoluciones del rotor** | nodo `Rotor` de `ah1w_supercobra.tscn` → `max_speed_deg` (1400), `spin_up_time` (4 s) |
 | Cuándo arranca el rotor | mismo nodo → `settle_time` / `still_speed`. Arranca al quedarse quieto en cubierta, no antes |
 | Cuántos helicópteros lleva el LHD | `core/fleet/player_fleet.gd` → `total` de la entrada del AH-1W (4) |
@@ -153,6 +160,12 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Ritmo de entrada del nombre | nodo raíz `UnitTag` → `name_delay`, `name_fade_time`, `name_rise_px` |
 | Velocidad de despliegue de la línea | `ui/hud/unit_tag/selection_line_frames.tres` (10 frames a 24 fps) |
 | Fuente del resto del HUD | `assets/fonts/ui_theme.tres` → `default_font`. **Vacío a propósito**: sin decidir, cae en la del motor |
+| Todo lo visual de una línea del registro de eventos | `ui/hud/event_log/event_entry.tscn`. Los nodos van sueltos, no en contenedores: **se arrastran**. `Text` lleva fuente, tamaño, color y contorno; `Icon` la viñeta; `Rule` el filete separador |
+| Aire entre entradas del registro | mismo archivo, nodo raíz → `padding_bottom` (4). El de arriba se consigue bajando `Text` e `Icon` |
+| Cuánto tarda una entrada en apagarse | mismo nodo raíz → `fade_after` (6 s), `fade_time` (1,5 s), `faded_alpha` (0,35 — **no llega a cero: se transparenta, no desaparece, y sigue pulsable**) |
+| Cuántas entradas se ven a la vez | nodo `EventLog` → `max_entries` (6) |
+| Color de la coordenada pulsable | nodo `EventLog` → `accent_color` |
+| Ancho del registro (dónde parte el texto) | `hud.tscn`, nodo `EventLog` → `offset_right`. Sin caja, el ancho sólo decide dónde se corta la línea |
 
 ## Dónde se ajusta el mapa
 

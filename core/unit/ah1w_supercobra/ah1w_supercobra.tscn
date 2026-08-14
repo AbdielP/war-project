@@ -4,6 +4,8 @@
 [ext_resource type="Texture2D" uid="uid://c806n07oeku5i" path="res://assets/art/sprites/AH-1W SuperCobra.png" id="2"]
 [ext_resource type="Resource" path="res://core/unit/ah1w_supercobra/ah1w_supercobra_type.tres" id="3"]
 [ext_resource type="Script" path="res://core/unit/ah1w_supercobra/rotor.gd" id="4"]
+[ext_resource type="Script" path="res://core/unit/ah1w_supercobra/ah1w_supercobra.gd" id="5"]
+[ext_resource type="Script" path="res://core/unit/flight/helicopter_controller.gd" id="6"]
 
 [sub_resource type="AtlasTexture" id="Body"]
 atlas = ExtResource("2")
@@ -18,6 +20,7 @@ region = Rect2(38, 5, 6, 47)
 
 [node name="Ah1wSuperCobra" unique_id=1330189822 groups=["unit_air"] instance=ExtResource("1")]
 z_index = 10
+script = ExtResource("5")
 unit_type = ExtResource("3")
 
 [node name="Sprite2D" parent="." index="0"]
@@ -34,4 +37,7 @@ z_index = 4
 position = Vector2(1, 6)
 texture = SubResource("Blades")
 script = ExtResource("4")
+
+[node name="HelicopterController" type="Node" parent="." index="4"]
+script = ExtResource("6")
 

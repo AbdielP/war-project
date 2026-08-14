@@ -2,6 +2,133 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-14
+
+### El registro de eventos no tiene caja
+Llegó a tener panel dibujado con marco, biseles y barra de título. Se quitó entero. El motivo
+es de presupuesto de pantalla: ocupaba 144×160 px sobre un lienzo de 640×384 —casi un cuarto
+del ancho, el 40% del alto— para mostrar seis renglones de texto. Ahora es texto flotante sobre
+el mapa y ocupa sólo lo que ocupa lo que dice.
+
+Quitar el marco además resolvió de rebote el problema que más costó: con caja quedaban 123 px
+útiles, unos 20 caracteres, y las frases no cabían sin quedarse sin sentido. Sin caja son 191.
+
+Dos cosas que el cambio obliga y no son opcionales:
+- **Contorno negro de 2 px en el texto.** Va sobre selva, agua y arena; un color plano se pierde
+  contra la mitad de los fondos.
+- **`MOUSE_FILTER_PASS` en el texto.** En `IGNORE` las coordenadas dejan de ser pulsables; en
+  `STOP` el registro le roba al mapa todos los clicks de su superficie, que ahora es
+  transparente.
+
+**Las entradas se transparentan, no desaparecen**: a los 6 s bajan a `alpha 0.35` y se quedan.
+Siguen leyéndose y siguen siendo pulsables. Desaparecer habría costado la historia del parte;
+esto sólo le quita protagonismo.
+
+El PNG del panel no se tira: es un nine-patch y sirve tal cual para las ventanas de acción
+—hangar, mapa táctico—, que es lo que ya decía la entrada del 2026-07-26 sobre ventanas
+arrastrables.
+
+### Cada línea del parte es una escena, no nodos hechos en código
+La primera versión fabricaba cada fila a mano: `HBoxContainer.new()`, `TextureRect.new()`,
+`RichTextLabel.new()`. Funciona y es imposible de ajustar — nada existe hasta que corre el
+juego, así que para mover un ícono dos píxeles había que editar código, arrancar y adivinar.
+
+Ahora hay `event_entry.tscn`, que se abre en el editor con contenido de muestra y se toca ahí.
+El `EventLog` sólo la instancia y le pasa qué decir. **Regla general para la UI de aquí en
+adelante:** lo que se ve se construye como escena.
+
+Consecuencia deliberada: **dentro de la entrada nada está en contenedores**. En Godot un
+contenedor decide dónde van sus hijos y el editor bloquea el arrastre, así que un nodo dentro de
+un `HBoxContainer` no se puede colocar a mano. Se eligió poder mover el ícono y el texto con el
+ratón; el precio es que el alto no se calcula solo y lo lleva `EventEntry._fit()`.
+
+### Empezar a atacar y destruir son las dos noticias; disparar no
+Cada arma que salía escribía su línea. Estaba resuelto para no repetirse —una andanada de seis
+Mk-82 se agrupaba en un renglón con la cuenta al lado— y aun así sobraba: `ataca` ya dice que el
+compromiso empezó y `Splash!` que terminó, así que era una tercera entrada del mismo suceso. Con
+varias unidades a la vez tapaba lo único urgente, que son las alarmas.
+
+Se desconectó de `ammo_changed` y se borró el agrupador entero. El código de brevedad (`RIFLE`,
+`FOX 2`) se mudó a la línea de ataque, preguntándole a `WeaponSelector.best_for()` qué elegiría
+para ese blanco. La munición se ve en el `WeaponBar`, que es donde toca.
+
+Queda un efecto secundario anotado: `attack_target_changed` sólo emite cuando el blanco cambia,
+así que varias pasadas sobre el mismo objetivo dan una línea y después silencio. Si molesta, la
+salida es reenganchar tras un rato sin atacar, no volver al disparo por disparo.
+
+### El tamaño de la UI sale de la fuente, y la fuente sólo vale a su tamaño nativo
+Un pixel font sólo es nítido a su tamaño de diseño y a sus múltiplos enteros; por debajo Godot
+la remuestrea, y el borrón se magnifica cuando el viewport escala a ×2 o ×3. Medido: **M5X7 es
+nativa a 16** (avance de 6 px por letra, 9 de tinta) y **m6x11plus también a 16** (12 de tinta).
+A 12 y a 14 las dos salen sucias.
+
+De ahí sale el reparto: **m6x11plus 16 para títulos, M5X7 16 para cuerpo** — misma familia, y
+13 px de línea contra 17 dan jerarquía sin que el cuerpo ocupe un 30% más.
+
+Las dos venían importadas con `antialiasing=1`, `hinting=3` y `subpixel_positioning=4`, que para
+un pixel font es sencillamente estar mal: salen difuminadas por más que el tamaño sea correcto.
+Los tres van apagados. **Cualquier fuente nueva viene así por defecto y hay que corregirla.**
+
+Corolario práctico para el arte: se diseña sobre un lienzo de 640×384 a escala 1:1 —lo que se
+dibuja ahí es lo que se ve— y el escalado entero del viewport se encarga del resto. El tamaño
+que se elige no es estético, es qué fracción de esos 640×384 se come.
+
+## 2026-08-13
+
+### El helicóptero se mueve en sus propios ejes, no hacia un punto
+`PlaneController` no servía y no era cuestión de ajustarlo: está construido sobre el radio de
+giro —no puede parar, no puede ir despacio, todo lo que hace sale de un círculo mínimo— y un
+helicóptero hace exactamente lo contrario. Controlador nuevo, `HelicopterController`.
+
+Lo que lo distingue de "ir hacia un punto" es que dentro hay **un mando**: `_stick` (adelante y
+costados, en ejes del propio aparato) y `_pedal` (el giro), como las dos manos con las que se
+lleva un helicóptero en cualquier juego. De ahí salen solas las dos cosas que lo hacen
+reconocible.
+
+**Los ejes no valen lo mismo:** 85 px/s de morro, 38 de costado, 28 de espaldas. Si los tres
+fueran iguales esto sería un icono deslizándose. Que recular sea incómodo es lo que empuja a
+girar en vez de irse de espaldas medio mapa.
+
+**Girar no es consecuencia de moverse.** El rumbo lo decide `_wanted_heading`, aparte de la
+traslación: se encara si el destino está a más de `face_range` (70 px) y si no, se entra de lado
+sin molestarse en girar. Medido: un punto a 49 px por detrás se resuelve con **0 grados** de
+giro. Esa separación es la que dejará hacer, el día que haya blanco, lo que se le pide a un
+helicóptero artillado — nariz clavada en el objetivo mientras se desplaza de costado. Hoy no
+aparece porque no hay nada más a lo que mirar que el destino.
+
+Lo único que se hace esperar es `stick_delay` (0,25 s de pedal antes de tocar el cíclico): un
+helicóptero primero se encara y luego sale. Pasa siempre igual, así que se lee como arranque.
+
+### Una unidad que obedece órdenes llega exacta
+Hubo una versión intermedia con un piloto **torpe** dentro: soltaba el freno tarde y se pasaba
+del punto, corregía, movía el mando a golpes cada 0,18 s, dejaba el morro unos grados desviado.
+La idea venía de los juegos donde pilotas tú —Desert Strike, Choplifter— y ahí funciona, porque
+el error es tuyo y lo sientes en las manos.
+
+**Aquí no.** En un juego de órdenes, una unidad imprecisa no parece un piloto humano: parece que
+no te hizo caso. Se quitó entera. El mando pasó a ser analógico y la frenada exacta —se pide en
+cada eje la velocidad que permite pararse en lo que falta, `v² = 2·a·d`—, y con eso llega a menos
+de 1,5 px del punto en 40 de 40 órdenes al azar, frente a los 6 px y las 30 correcciones de la
+versión torpe. Encima llega antes: la más lenta bajó de 11,2 s a 7,4 s.
+
+Lo que queda es la regla: **el carácter va en el peso** —lo que cuesta arrancar y parar, la rampa
+de la cola, que los ejes no valgan lo mismo—, **nunca en el error**. Si un movimiento se siente
+muerto, la causa está en la representación (el sprite no se inclina, no reacciona) o en el
+render, no en meterle ruido a la lógica.
+
+### La plaza en cubierta se libera al despegar, no al soltar el aparato
+Un avión deja su plaza en cuanto empieza la carrera. Un helicóptero no: se queda posado en ella
+hasta que el jugador le da un sitio a donde ir, y **esa primera orden es también la orden de
+despegar** (sube en vertical `lift_time` y sale). Si la plaza se hubiera dado por libre al
+cederle el control, el siguiente aparato habría taxiado hasta el mismo punto y se le habría
+montado encima.
+
+Quién avisa es el propio helicóptero (`took_off`), porque es el único que sabe cuándo se va. Y el
+barco se engancha a esa señal **al crearlo, no al soltarlo**: la orden puede llegar mientras
+todavía lo están colocando en cubierta, y en ese caso se guarda y se cumple en cuanto hay
+control. Tragarse una orden que el jugador ya dio —y que ve marcada en el mapa— habría sido peor
+que cualquier bug de colocación.
+
 ## 2026-08-12
 
 ### La unidad expone hechos; el HUD los pone en palabras

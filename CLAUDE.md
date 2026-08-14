@@ -9,8 +9,16 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay, mec�
 - Filtro: Nearest en todo, incluida la fuente.
 - Paleta: Resurrect64
 - Arte: pixel art top-down
-- Fuente: pixel font externa (Pixel Operator / m5x7 / Tiny5). No dibujar fuentes a mano.
+- Fuente: pixel font externa. No dibujar fuentes a mano. En uso: **m6x11plus para títulos, M5X7 para cuerpo**, las dos a tamaño **16**.
 - Plataformas objetivo: PC, móvil, Nintendo Switch
+
+## UI
+- **Se diseña sobre 640×384 a escala 1:1.** Lo que se dibuja en el lienzo es lo que se ve; el escalado entero del viewport hace el resto. Elegir un tamaño no es estético, es decidir qué fracción de esos 640×384 se ocupa.
+- **Un pixel font sólo vale a su tamaño nativo y sus múltiplos enteros.** Por debajo se remuestrea y el borrón se magnifica al escalar. Las dos del proyecto son nativas a 16.
+- **Toda fuente nueva viene mal importada.** Hay que poner *Antialiasing*, *Hinting* y *Subpixel Positioning* en ninguno/desactivado, o sale difuminada por más que el tamaño sea correcto.
+- **Comprobar que la fuente tenga el glifo** antes de meter cualquier signo tipográfico en un texto de UI: si falta, Godot lo saca de una fuente del sistema y rompe el alto de línea. Ninguna de las dos tiene `→ ← ↑ ↓ — – … • ‹ ›`.
+- **Lo que se ve se construye como escena**, no con nodos fabricados en código: si no existe en el editor, no se puede ajustar sin arrancar el juego.
+- **Los paneles van como nine-patch.** El PNG es una muestra, no una medida: el marco y las esquinas se conservan al píxel y sólo se estira el relleno.
 
 ## Estructura de carpetas
 Organización por feature: cada unidad/barco/pantalla vive en su propia carpeta con su escena, script y arte específico juntos. `assets/` solo para lo que se comparte entre varias features (arte genérico, audio, fuentes). No hay scaffold completo creado de antemano — las carpetas se crean de forma incremental, a medida que se necesitan.

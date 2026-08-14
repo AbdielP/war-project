@@ -97,6 +97,7 @@ func _process_queue(elev_idx: int) -> void:
 		_occupied[slot] = false
 		_units[slot] = null
 	)
+	_free_slot_when_airborne(slot, unit)
 
 	get_tree().create_timer(elevator_cycle_time).timeout.connect(func() -> void:
 		_taxiing[elev_idx] = false
@@ -167,6 +168,9 @@ func _launch_next(order: Array) -> void:
 	# Se sabe preguntándole a él —`get_takeoff_speed()` a 0— y no con una lista
 	# de modelos: la cubierta no tiene por qué conocer qué aparatos existen.
 	if _launch_speed_of(unit) <= 1.0:
+		# Se le cede el control igual —ya es suyo—, pero **posado**: despega
+		# cuando su piloto quiera y no cuando el barco diga.
+		_hand_over_control(unit)
 		_launch_next(order)
 		return
 
@@ -196,6 +200,24 @@ func _launch_next(order: Array) -> void:
 		_scale_climb(unit)
 		_launch_next(order)
 	)
+
+
+## La plaza de lo que despega en vertical **no queda libre al soltarlo**: se
+## queda posado en ella hasta que se le ordene ir a algún sitio, y hasta entonces
+## sigue ocupando cubierta. Sin esto, el siguiente aparato taxiaría hasta el
+## mismo punto y se le montaría encima.
+##
+## Cuándo se va lo dice él, que es el único que lo sabe: puede tirarse ahí lo que
+## el jugador tarde en darle una orden. Se engancha al crearlo y no al soltarlo,
+## porque la orden puede llegar antes: al aparato se le puede mandar a un sitio
+## mientras el barco todavía lo está colocando.
+func _free_slot_when_airborne(slot: int, unit: Node2D) -> void:
+	if not unit.has_signal("took_off"):
+		return
+	unit.took_off.connect(func() -> void:
+		_occupied[slot] = false
+		_units[slot] = null
+	, CONNECT_ONE_SHOT)
 
 
 ## A qué velocidad sale de cubierta este avión. Se lo pregunta a él: cada

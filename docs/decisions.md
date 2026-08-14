@@ -4,6 +4,83 @@ Registro cronológico (más reciente arriba). Una entrada por decisión: qué se
 
 ## 2026-08-14
 
+### Las unidades desplegadas son retratos dibujados, no botones con texto
+El panel superior era una fila de botones grises con el nombre recortado dentro. Se cambió por
+el arte del usuario: marco dibujado, silueta de la unidad, barra de vida y el modelo debajo.
+
+Dos versiones del marco, **suelto y seleccionado, como texturas distintas y no como un tinte**:
+el seleccionado cambia el color del borde entero y añade marcas rojas en las esquinas, y eso no
+sale de ningún `modulate`. La marca la pone el `HUD` y no el panel, porque da igual cómo se
+haya elegido la unidad —clic en el mapa, en el retrato, o desde el panel—: todas acaban pasando
+por `show_selected_unit()`.
+
+La barra de vida se partió en dos PNG desde el mismo dibujo, **sin retocar un píxel**: marco
+(todo menos el verde) y relleno (sólo el verde). Así el marco se ve entero siempre y sólo se
+recorta lo lleno. Cuando el usuario la redibujó más alta, el relleno pasó a tener dos verdes
+—`a0e679` de brillo y `91db69` debajo— y los dos cuentan como relleno; si se cogiera sólo uno,
+la fila del brillo se quedaría fija mientras la de abajo baja.
+
+Dos cosas que esto obligó a añadir al núcleo:
+- `UnitType.portrait_icon` — dónde vive "qué silueta es esta unidad". Va en el tipo y no en la
+  instancia, igual que `max_health`: dos Harrier se dibujan igual.
+- `Unit.health_changed(current, maximum)` — no existía. Lo anticipaba el propio comentario de
+  `take_damage`: *"la barra de vida —cuando exista— no mentirá"*. Como `ammo_changed`, la barra
+  se entera cuando pasa algo en vez de preguntar cada frame.
+
+### Achicar un PNG de UI: quitar filas repetidas, no remuestrear
+Los retratos salieron demasiado grandes (38×38: con diez desplegadas, 400 px de los 640). Al
+pedirlos "a la mitad" se probó primero el remuestreo 1:2 y **se descartó tras mirarlo**: el
+marco perdía el filo entero —vive en filas alternas y desaparece completo— y las siluetas
+quedaban irreconocibles a 9×16.
+
+Lo que sí funcionó: el marco resultó **liso por dentro**, con 19 columnas y 20 filas idénticas
+a su vecina. Quitando repetidas se llega a cualquier medida **sin perder un píxel** del borde,
+el filo, la muesca de abajo ni los puntos rojos del seleccionado. Es lo mismo que hace un
+nine-patch, pero horneado en el PNG y verificado a mano. Igual con la barra de vida, que tenía
+29 columnas repetidas.
+
+Sólo las siluetas hubo que remuestrearlas, porque no tienen nada repetido. Ahí se usó **moda de
+bloque 2×2** en vez de descartar píxeles alternos: conserva mejor la masa del casco y las
+marcas naranjas del LHD, y no inventa colores fuera de la paleta.
+
+**Cómo se decide la medida:** el reparto se hace por mitades a cada lado (7 columnas de la
+izquierda y 7 de la derecha) para que el dibujo quede centrado. Y al medir se comprueba que las
+repetidas sean comunes a **las dos** versiones del marco, o suelto y seleccionado dejarían de
+cuadrar entre sí.
+
+### El tamaño de una fuente se mide rasterizando, no leyendo la ficha
+Silver se importó "a 8 px" porque es lo que decía la fuente. En pantalla salieron garabatos: a
+tamaño 8 sus mayúsculas ocupan **3 filas de píxeles**. No es una letra.
+
+Lo que faltó fue mirar el rasterizado de verdad. Que el avance por glifo sea entero —que era la
+comprobación que se estaba haciendo— **no basta**: dice que las letras caen en píxel entero,
+no que quede letra. Hay que sacar el glifo del atlas del `TextServer`
+(`font_render_glyph` → `font_get_glyph_uv_rect` → `font_get_texture_image`) y volcarlo píxel a
+píxel. El primer tamaño donde cada trazo de Silver cae en 1 px sólido es **14**; a 12 y 13 los
+trazos se parten a la mitad.
+
+Consecuencia de tamaño: `AV-8B` a 14 mide 22 px, así que los retratos pasaron de 19 a **24 de
+ancho** (10 desplegadas = 260 px de los 640). El arte se regeneró desde el PNG maestro con el
+mismo método de quitar repetidas.
+
+Y como todas las fuentes del proyecto, **venía mal importada**: `antialiasing=1`, `hinting=3`,
+`subpixel_positioning=4`. Los tres a 0.
+
+### El minimapa se recorta al dibujo, aunque no sea del tamaño del sprite
+Se probó lo contrario a petición del usuario —que arrancase a 82×85, el tamaño exacto del
+PNG— y se deshizo al verlo: el hueco del marco es cuadrado (72×72) y el mapa mide 64×45
+celdas, así que quedaban 8 px de fondo a los lados y **27 arriba y abajo**. Se lee como un
+fallo, no como un marco.
+
+De ahí la regla, que ya valía para el nine-patch y ahora vale también para el tamaño: **el
+sprite es una muestra, no una medida**. Lo que manda son sus bordes y sus esquinas, que se
+conservan al píxel a cualquier tamaño. El PNG puede dibujarse cuadrado y verse achatado en
+pantalla sin que se note.
+
+El hueco sólo desaparecería con un mapa cuadrado, o con un marco apaisado (82×64) — no
+agrandando el mapa: lo que sobra depende de la **proporción**, no del tamaño, porque al crecer
+el mapa se resume para caber y la banda vuelve igual.
+
 ### En un nine-patch, el dibujo va en las esquinas
 El marco del minimapa es el PNG del usuario (`minimap_panel.png`, 84×87). Un nine-patch parte
 la imagen en nueve regiones y **sólo conserva 1:1 las cuatro esquinas**: los bordes se estiran

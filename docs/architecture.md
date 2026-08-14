@@ -84,6 +84,7 @@ puso: es lo que se dice en un parte, y lo único que se sabe sin llevar la cuent
 | `active_weapon_changed(weapon)` | Cambió el arma seleccionada |
 | `attack_target_changed(target)` | Cambió a quién ataca (`null` = a nadie) |
 | `ammo_changed(weapon, remaining)` | Se gastó munición. Lo escucha `WeaponBar` |
+| `health_changed(current, maximum)` | Encajó daño. Lo escucha la barra de vida de `UnitPortrait`. Como `ammo_changed`: se avisa cuando pasa algo en vez de preguntar cada frame |
 | `died(unit)` | Antes de quitarla del mapa, mientras todavía existe |
 
 Toda unidad se añade al grupo `Unit.GROUP` (`&"units"`) en `_ready()`: es donde mira una
@@ -177,14 +178,16 @@ Resource `.tres` compartido entre todas las instancias del mismo tipo (ej. `lhd_
 |--------|------|
 | `display_name` | String (clave de traducción) |
 | `actions` | PackedStringArray (ej. `["Hangar"]`) |
+| `portrait_icon` | Texture2D — la silueta del panel de desplegadas. Vacío = sólo marco |
 | `cannon` | WeaponType — arma fija, va siempre y no ocupa estación. Vacío = sin cañón |
 | `domain` | `Domain` (AIR / SURFACE) — en qué medio se mueve. Decide qué armas pueden atacarla |
 | `max_health` | float — Harrier 60, T-14 100. Un AGM-65 pega 120 |
 | `ecm_evasion` | 0–1 — lo que se libra de un misil guiado **sin gastar nada**. 0,20 en el Harrier |
 
-**`ecm_evasion` va aquí y no en la instancia**, como `max_health`: es lo que trae el modelo de
-fábrica, así que el menú de progresión lo subirá para todos los de ese modelo de una vez. Lo que
-sí es de cada unidad es el bando, porque el mismo avión puede cambiarlo entre misiones.
+**`ecm_evasion` va aquí y no en la instancia**, como `max_health` y `portrait_icon`: es lo que
+trae el modelo de fábrica, así que el menú de progresión lo subirá para todos los de ese modelo
+de una vez, y dos Harrier se dibujan igual. Lo que sí es de cada unidad es el bando, porque el
+mismo avión puede cambiarlo entre misiones.
 
 El enum `Domain` se declara aquí y las firmas del propio archivo lo escriben
 `UnitType.Domain` — ver el patrón "Enum de una clase con `class_name`".
@@ -2145,7 +2148,7 @@ CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en 
 ├── HangarWindow     (PanelContainer)
 ├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=313
 ├── SelectionPanel   (PanelContainer) — offset_left=544, offset_top=349
-├── DeployedPanel    (PanelContainer) — panel superior, unidades desplegadas
+├── DeployedPanel    (PanelContainer) — offset (4,4), sin fondo y sin ancho fijo: retratos de las desplegadas
 ├── WeaponBar        (HBoxContainer)  — offset (160,344)-(480,376), barra de armas
 ├── AttackLabel      (Label)          — offset (160,332)-(480,343), "Atacando: X"
 ├── ZoomControls     (VBoxContainer)  — offset (622,30)-(636,60), botones + / −
@@ -2157,8 +2160,9 @@ CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en 
 **El mapa táctico va pronto en la lista a propósito.** En un `CanvasLayer` el orden de los
 hijos decide quién dibuja encima, y el mapa está donde está para que el resto del HUD le pase
 por delante y siga siendo pulsable con el mapa abierto. Lo que evita el solape no es el orden
-sino la **colocación**: el área de dibujo del mapa empieza en `y=26` (bajo `DeployedPanel`) y
-acaba en `x=486` (antes de la columna de la derecha), así que ningún panel cruza el terreno y
+sino la **colocación**: el área de dibujo del mapa empieza en `y=46` (bajo `DeployedPanel`, que
+mide 42 de alto desde y=4) y acaba en `x=486` (antes de la columna de la derecha), así que
+ningún panel cruza el terreno y
 la escala no baja por ello. Probarlo moviendo el mapa al final es tentador y sale mal:
 entonces tapa el hangar y la lista de desplegadas.
 
@@ -2307,17 +2311,76 @@ signal unit_selected(unit: Unit)
 ```
 Panel superior con las unidades desplegadas, agrupadas por categoría (grupos de Godot `unit_maritime`/`unit_air`/`unit_ground` — sin referencia directa, se descubre igual que el minimapa está pensado que haga). Se refresca (`_refresh()`) cuando se agrega/quita un `Unit` de la escena (`get_tree().node_added`/`node_removed`, con flag `_dirty` para no recalcular más de una vez por frame).
 
-Un cuadrito (`Button`, 30×14px) por unidad suelta o por **escuadrón**: si `unit.squad != null`, todos sus miembros colapsan en un solo cuadrito (con el nombre del líder), y si tiene más de 1 miembro se agrega un badge `xN` en la esquina inferior derecha (`Label` hijo del botón, `mouse_filter = IGNORE` para no tapar el click). Al presionar, emite `unit_selected(unit)` — la unidad individual, o `squad.leader` si es un escuadrón. `HUD` conecta esto a `unit_focus_requested`.
+**Las tres filas están en la escena**, no fabricadas en código: `Rows/Sea`, `Rows/Air`,
+`Rows/Ground`, y `_CATEGORIES` las empareja con su grupo por nombre de nodo. Mover una categoría
+de sitio es mover el nodo en el editor. El script sólo llena.
+
+**El panel no tiene fondo** (`StyleBoxEmpty`) y no ocupa ancho fijo: se ajusta a los retratos y
+vive en la esquina superior izquierda (4, 4). Antes era una barra de 640×24 con fondo propio, que
+a esa altura de pantalla se leía como un borde de ventana.
+
+Un [`UnitPortrait`](#unitportrait--uihuddeployed_panelunit_portraitgd) por unidad suelta o por
+**escuadrón**: si `unit.squad != null`, todos sus miembros colapsan en uno solo (con el líder), y
+el número de miembros va **en el tooltip, no dibujado** — el retrato no lleva más texto que el
+modelo. Al pulsar emite `unit_selected(unit)`, que `HUD` conecta a `unit_focus_requested`.
+
+`set_selected(unit)` marca cuál lleva el marco de seleccionada. **La manda el `HUD`**, desde
+`show_selected_unit()` / `clear_selected_unit()`: da igual cómo se haya elegido la unidad —clic
+en el mapa, en el retrato, o desde el panel—, todas pasan por ahí. Se vuelve a aplicar al final
+de cada `_refresh()`, o perder o desplegar una unidad apagaría el marco de la que el jugador
+tiene delante.
 
 **Una baja no desaparece del panel: se apaga y se va al final de su fila.** Que un cuadrito se
 esfume sin más deja al jugador dudando de si perdió algo o si nunca lo tuvo; verlo ahí, apagado,
-es el recuento de la operación. El botón va `disabled` y sin `pressed` — no hay a dónde llevar
-la cámara, lo que representaba ya no está en el mapa.
+es el recuento de la operación. Va `disabled` y sin barra de vida — no hay a dónde llevar la
+cámara ni vida que contar, lo que representaba ya no está en el mapa.
 
 Se engancha a `Unit.died` (con repaso inicial diferido, como el parte de eventos) y guarda **el
-nombre, no la unidad**: para cuando se dibuja, la unidad ya no existe y el panel es lo único que
-queda de ella. Pendiente: **las bajas se acumulan sin tope**, así que en una operación larga la
-fila se llenará de cuadritos apagados.
+nombre y el `UnitType`**, no la unidad: para cuando se dibuja, la unidad ya no existe, pero el
+tipo es un `Resource` y sobrevive — de ahí que la baja conserve su silueta. Pendiente: **las
+bajas se acumulan sin tope**, así que en una operación larga la fila se llenará de retratos
+apagados.
+
+---
+
+### `UnitPortrait` — `ui/hud/deployed_panel/unit_portrait.gd`
+```
+extends Button   class_name UnitPortrait
+signal picked(unit: Unit)
+```
+El cuadrito de una unidad, **como escena** (`unit_portrait.tscn`) y no montado en código: si no
+existe en el editor, no se puede ajustar sin arrancar el juego. Mide **24×42** y lleva cuatro
+nodos con posición libre — `Frame`, `Mark`, `Health`, `Name` —, todos con `mouse_filter = IGNORE`
+para que el click lo coja el `Button` raíz, que va con `StyleBoxEmpty` en los cinco estados.
+
+| nodo | qué | dónde |
+|---|---|---|
+| `Frame` | marco dibujado, 24×24 | y 0–23 |
+| `Mark` | silueta, `stretch_mode = KEEP_CENTERED` | centrada en el marco |
+| `Health` | `TextureProgressBar`, 24×5 | y 27–31 |
+| `Name` | modelo, Silver a 14 | y 32, tinta en 34–40 |
+
+**Marco suelto y marco seleccionado son dos texturas, no un tinte** (`_FRAME` / `_FRAME_ON`): el
+seleccionado cambia el color del borde entero y añade marcas rojas en las esquinas, y eso no sale
+de ningún `modulate`.
+
+**La barra de vida son dos PNG separados desde el mismo dibujo**, sin retocar un píxel:
+`health_bar_frame` (todo menos el verde) va de `texture_under` y `health_bar_fill` (sólo el
+verde) de `texture_progress`. Así el marco se ve entero a cualquier nivel y sólo se recorta lo
+lleno; teñir el conjunto habría oscurecido también el borde. El relleno tiene **dos verdes**
+—`a0e679` de brillo arriba y `91db69` debajo— y los dos son relleno: coger sólo uno dejaría la
+fila del brillo fija mientras la de abajo baja. `step = 0` para que acepte valores fraccionarios.
+
+Se engancha a `Unit.health_changed` en `show_unit()`; no mira la vida cada frame.
+
+**El nombre es el primer token** (`_short()`): `AH-1W SuperCobra` → `AH-1W`. Se corta por el
+modelo y no por un número de letras porque el modelo es lo que distingue una unidad de otra de un
+vistazo; recortar a ciegas daría `AH-1W S` y `AV-8B H`, que no dicen nada. El completo sigue en
+el tooltip. Anchos reales a Silver 14: `LHD` 13 px, `AH-1W` 21, `AV-8B` 22 — de ahí los 24 de
+ancho del retrato.
+
+`show_lost(nombre, tipo)` es la variante de baja: conserva la silueta, esconde la barra, apaga
+con `_LOST_TINT` y va `disabled`.
 
 ---
 
@@ -2740,10 +2803,17 @@ del terreno. Aquí se mira lo que ocupa el dibujo (`MapView.drawn_size()`, avisa
 `refitted`) y el panel se recorta a esa medida, con el **borde de abajo fijo**: vive en la
 esquina y sólo tiene sentido crecer hacia arriba.
 
-**Se estira arrastrando el borde de arriba** (`GRIP_PX`, 10 px — el grosor del marco dibujado;
-más allá empieza el mapa y agarrar ahí sería robarle el click. Las dos rayitas que avisan de
-que se puede estirar están dibujadas en el PNG, no las pinta el código). **Estirar elige
-escala, no píxeles**: el alto pedido se traduce
+Se probó lo contrario —arrancar al tamaño exacto del sprite (82×85)— y **se deshizo al verlo**:
+el hueco del marco es cuadrado (72×72) y el mapa mide 64×45 celdas, así que quedaban 8 px de
+fondo a los lados y 27 arriba y abajo. Un borde vacío de ese tamaño se lee como un fallo. El
+hueco sólo desaparece con un mapa cuadrado o con un marco apaisado (sprite de 82×64); **no con
+un mapa más grande**, porque lo que sobra depende de la proporción y al crecer el mapa se
+resume para caber.
+
+**Se estira arrastrando el borde de arriba** (`GRIP_PX`, 8 px — la barra de título del dibujo,
+donde están las rayitas; más allá empieza el mapa y agarrar ahí sería robarle el click. Las
+rayitas que avisan de que se puede estirar están dibujadas en el PNG, no las pinta el código).
+**Estirar elige escala, no píxeles**: el alto pedido se traduce
 a la escala entera que quepa y el panel se pone del tamaño exacto del dibujo a esa escala, así
 que salta de 1x a 2x a 3x sin franjas negras por el camino (`MAX_HEIGHT` limita el tope).
 Estirar sólo a lo alto no bastaba: el ancho también manda sobre la escala, así que crecen los
@@ -2757,19 +2827,22 @@ revés, leería el sitio viejo y quedaría un hueco descuadrado.
 Su `MapView` tiene `mouse_filter = IGNORE`: todo el input lo atiende el panel, que es quien
 distingue el agarre del resto.
 
-**El marco es un nine-patch sobre `assets/art/UI/minimap_panel.png`** (84×87), con cortes en
-**15 izq / 17 arriba / 21 der / 5 abajo**. Esos números no son estéticos: son dónde acaban los
-detalles dibujados. Un nine-patch sólo conserva 1:1 **las cuatro esquinas**; los bordes se
-estiran en un eje y el centro en los dos. La sombra azul de arriba a la izquierda ocupa hasta
-x14/y16 y las marcas de agarre de arriba a la derecha empiezan en x63, así que los cortes
-tienen que dejarlas dentro de la esquina o se deforman al estirar el panel. Se llegó ahí
-después de dos intentos con márgenes demasiado pequeños.
+**El marco es un nine-patch sobre `assets/art/UI/minimap_panel.png`** (82×85), con cortes
+(`texture_margin`) en **6 izq / 9 arriba / 21 der / 5 abajo** y hueco interior
+(`content_margin`) de **5 / 8 / 5 / 5**, que deja 72×72 útiles. Los cortes no son estéticos: son
+dónde acaban los detalles dibujados. Un nine-patch sólo conserva 1:1 **las cuatro esquinas**;
+los bordes se estiran en un eje y el centro en los dos. El 21 de la derecha es por las rayitas
+de agarre, que llegan hasta x60.
 
-**Cómo comprobarlo, que es lo que faltó las dos veces:** recorrer las cuatro franjas de borde
-y exigir que **cada fila del borde superior e inferior sea de un solo color a lo ancho, y cada
-columna del izquierdo y el derecho de un solo color a lo alto**. Si alguna varía, ahí hay
-dibujo en zona estirable. Con los cortes actuales todas son uniformes, y por eso no hace falta
-`axis_stretch = TILE`: estirar un color plano da lo mismo que repetirlo.
+Los cortes se recalculan **cada vez que el usuario retoca el PNG**, y no son estables: al quitar
+la sombra azul de arriba a la izquierda, el corte izquierdo bajó de 15 a 6.
+
+**Cómo medirlos, que es lo que faltó las dos primeras veces:** buscar el tramo contiguo más
+largo de **filas idénticas a la anterior** y de **columnas idénticas a la anterior**. Ese tramo
+es la zona estirable; lo que queda a cada lado son los cortes. Equivale a exigir que cada fila
+del borde superior e inferior sea de un solo color a lo ancho y cada columna de los laterales de
+un solo color a lo alto, pero sale directo de la imagen en vez de a ojo. Con los cortes
+actuales no hace falta `axis_stretch = TILE`: estirar un color plano da lo mismo que repetirlo.
 
 **Regla para futuros paneles:** lo figurativo —remaches, una brújula, marcas— va pegado a una
 esquina, o sale del PNG y se cuelga como nodo propio encima. En mitad de un borde no hay
@@ -2805,7 +2878,7 @@ hacer nada, porque cuelga del HUD y el HUD ya es `process_mode = Always`.
 ```
 Control (TacticalMap)      — 640×384, mouse_filter = STOP
 ├── Backdrop     (ColorRect) — pantalla completa, opaca
-├── Map          (MapView)   — (0,26)-(486,384): esquiva la barra superior y la columna derecha
+├── Map          (MapView)   — (0,46)-(486,384): esquiva los retratos de arriba y la columna derecha
 ├── Hint         (Label)     — (492,126), autowrap: qué hará el siguiente click
 └── CloseButton  (Button)    — (620,86), bajo el de pausa
 ```
@@ -3267,12 +3340,14 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] Sombra de la Mk-82 al caer, reusando `MissileShadow` por duck-typing (`get_distance_to_aim`) sin tocar su código
 - [x] **Vuelo del helicóptero (`HelicopterController`):** mando de ejes propios —adelante 85, costado 38, espaldas 28— con el rumbo separado de la traslación. Llega a menos de **1,5 px** del punto en 40 de 40 órdenes al azar y se planta ahí (0,1 px en 3 s de hover)
 - [x] **Despegue vertical:** la primera orden de movimiento saca al helicóptero de cubierta y libera su plaza (`took_off`). La orden vale aunque llegue mientras el barco todavía lo está colocando
+- [x] **Retratos de unidad en el panel de desplegadas (`UnitPortrait`):** marco dibujado, silueta por `UnitType.portrait_icon`, barra de vida y modelo debajo, todo como escena editable. El marco de seleccionada es una segunda textura y lo marca el `HUD`, así que responde a cualquier forma de elegir la unidad
+- [x] **Barra de vida**, colgada de la señal nueva `Unit.health_changed`. Va en dos PNG separados del mismo dibujo —marco y relleno— para que el borde se vea entero a cualquier nivel
 
 ### Pendiente
 - [ ] **Sombra propia para la Mk-82.** Hoy usa la del misil, que no le corresponde: es otra silueta y otra forma de caer
-- [ ] **Elegir la fuente del juego.** `assets/fonts/ui_theme.tres` está vacío a propósito (cae en la del motor) mientras se prueban candidatas. `UnitTag` usa m5x7 a 16 px, que es la que convence por ahora. Ojo con la cobertura: la Boxel se descartó porque no trae **ninguna** tilde ni Ñ ni `¿ ¡` — sin eso no hay español, y menos localización
+- [ ] **Elegir la fuente del juego.** `assets/fonts/ui_theme.tres` está vacío a propósito (cae en la del motor) mientras se prueban candidatas. En uso hoy: m5x7 a 16 en `UnitTag` y el registro de eventos, **Silver a 14** en los retratos, donde hacía falta algo más estrecho. Ojo con la cobertura: la Boxel se descartó porque no trae **ninguna** tilde ni Ñ ni `¿ ¡` — sin eso no hay español, y menos localización. Y con el tamaño: Silver se probó a 8 porque es lo que dice la fuente, y a 8 sus mayúsculas ocupan 3 filas de píxeles
 - [ ] Alabeo e inclinación del avión al virar y al cambiar de régimen: el enganche existe (`bank_sprite_path`, `AnimatedSprite2D` de 5 frames), falta el arte
-- [ ] Marcas de impacto en el terreno y barras de vida. Con eso se afinan las ráfagas del cañón para que varíen y no dejen siempre el mismo patrón
+- [ ] Marcas de impacto en el terreno, y barra de vida **sobre la unidad en el mapa** — la del panel de desplegadas ya está (`UnitPortrait`), y `Unit.health_changed` sirve igual para ésta. Con eso se afinan las ráfagas del cañón para que varíen y no dejen siempre el mismo patrón
 - [ ] **Definir el daño en serio.** Los números de hoy son de trabajo: un Harrier destruye un T-14 en tres pasadas de cañón, y **dos Mk-82 bastan** para lo mismo. Demasiado fácil para lo que debería costar. Va junto con las barras de vida, y hay que decidirlo por unidad y por arma, no ajustando el `damage` de cada una hasta que "quede bien"
 - [ ] **Revisar en el editor la Mk-82:** el vuelo, la ristra y el frenado están medidos, pero la animación del freno abriéndose sólo se ha comprobado por fotogramas
 - [ ] **Revisar en el editor** los efectos del cañón: verificados por medición (fotogramas, encadenado, siembra, rumbo de los trazos, dónde muere cada trazo, curvatura del rastro y las tres pasadas hasta matar), pero la lectura visual final no

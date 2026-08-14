@@ -166,6 +166,14 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Cuántas entradas se ven a la vez | nodo `EventLog` → `max_entries` (6) |
 | Color de la coordenada pulsable | nodo `EventLog` → `accent_color` |
 | Ancho del registro (dónde parte el texto) | `hud.tscn`, nodo `EventLog` → `offset_right`. Sin caja, el ancho sólo decide dónde se corta la línea |
+| Todo lo visual de un retrato de unidad | `ui/hud/deployed_panel/unit_portrait.tscn`. Los nodos van sueltos: **se arrastran**. `Frame` el marco, `Mark` la silueta, `Health` la barra, `Name` el modelo |
+| Marco suelto y marco seleccionado | `assets/art/UI/portrait_frame.png` y `portrait_frame_selected.png` (24×24). Son **dos dibujos**, no un tinte: si cambiás uno cambiá el otro o dejan de cuadrar |
+| Silueta de cada unidad | su `*_type.tres` → `portrait_icon`. Vacío = sale sólo el marco |
+| Barra de vida | `assets/art/UI/health_bar_frame.png` (todo menos el verde) y `health_bar_fill.png` (sólo el verde), 24×5. **Van en pareja**: mismo ancho y mismas columnas, o el relleno no cae donde el marco |
+| Aire entre el marco, la barra y el nombre | `unit_portrait.tscn` → `offset_top` de `Health` (27) y de `Name` (32) |
+| Fuente y tamaño del nombre | mismo archivo, nodo `Name` (Silver a **14** — a 8 y a 12 los trazos se parten; ver `CLAUDE.md`) |
+| Separación entre retratos y entre categorías | `deployed_panel.tscn` → `separation` de `Rows` (10, entre grupos) y de `Sea`/`Air`/`Ground` (2) |
+| Dónde vive el panel de desplegadas | `hud.tscn`, nodo `DeployedPanel` → `offset_left`/`offset_top` (4, 4). No tiene ancho fijo: se ajusta a lo que haya |
 
 ## Dónde se ajusta el mapa
 
@@ -182,8 +190,9 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Color y transparencia de la rejilla | nodo `MapView` de cada mapa → `grid_color` (hoy `#2d3a4a` al 50%) |
 | Grosor del punteado de la rejilla | mismo nodo → `grid_dash` / `grid_gap` (4 y 3). **En píxeles de pantalla**: no engordan al agrandar el mapa |
 | Recuadro alrededor del mapa | mismo nodo → `grid_border`. Apagado en el minimapa, que ya trae marco dibujado |
-| Marco del minimapa | `assets/art/UI/minimap_panel.png` + los cortes nine-patch en `minimap.tscn` → `StyleBoxTexture`. **Si movés un detalle del dibujo hay que volver a medir los cortes**: sólo las esquinas quedan sin estirar |
-| Dónde se agarra el minimapa para estirarlo | `ui/hud/minimap/minimap.gd` → `GRIP_PX` (10, el grosor del marco de arriba) |
+| Marco del minimapa | `assets/art/UI/minimap_panel.png` (82×85) + los cortes nine-patch en `minimap.tscn` → `StyleBoxTexture`: `texture_margin` 6/9/21/5 y `content_margin` 5/8/5/5. **Si movés un detalle del dibujo hay que volver a medir los cortes**: sólo las esquinas quedan sin estirar |
+| Que el minimapa se vea más grande o más chico | no se toca el PNG: se estira en juego. **El panel se recorta a lo que ocupa el mapa**, así que nunca queda borde vacío — y por eso no arranca al tamaño del sprite |
+| Dónde se agarra el minimapa para estirarlo | `ui/hud/minimap/minimap.gd` → `GRIP_PX` (8, la barra de título donde están las rayitas) |
 | Hasta dónde puede crecer el minimapa | mismo archivo → `MAX_HEIGHT` (220) |
 | Sitio del rótulo y del botón de cerrar | nodos `TacticalMap/Hint` y `TacticalMap/CloseButton` → `offset` |
 | Cuánto puede crecer el minimapa | `ui/hud/minimap/minimap.gd` → `MAX_HEIGHT` |

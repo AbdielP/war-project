@@ -2,18 +2,18 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://bfqkp4vhkk3tm"
-path="res://.godot/imported/Silver.ttf-8cd4fc90b8c1ff0a8fd8d4d27c93ad7f.fontdata"
+uid="uid://cjs6kmcm1r6dx"
+path="res://.godot/imported/PublicPixel.ttf-7597f4d6e55f1141684a6aae15739390.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/Silver/Silver.ttf"
-dest_files=["res://.godot/imported/Silver.ttf-8cd4fc90b8c1ff0a8fd8d4d27c93ad7f.fontdata"]
+source_file="res://assets/fonts/Public Pixel Font/PublicPixel.ttf"
+dest_files=["res://.godot/imported/PublicPixel.ttf-7597f4d6e55f1141684a6aae15739390.fontdata"]
 
 [params]
 
 Rendering=null
-antialiasing=0
+antialiasing=1
 generate_mipmaps=false
 disable_embedded_bitmaps=true
 multichannel_signed_distance_field=false
@@ -22,8 +22,8 @@ msdf_size=48
 allow_system_fallback=true
 force_autohinter=false
 modulate_color_glyphs=false
-hinting=0
-subpixel_positioning=0
+hinting=3
+subpixel_positioning=4
 keep_rounding_remainders=true
 oversampling=0.0
 Fallbacks=null

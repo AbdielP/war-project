@@ -21,6 +21,7 @@ const _LOST_TINT := Color(0.45, 0.45, 0.5, 0.7)
 @onready var _frame: TextureRect = $Frame
 @onready var _mark: TextureRect = $Mark
 @onready var _health: TextureProgressBar = $Health
+@onready var _name: Label = $Name
 
 ## A quién representa, o `null` si es una baja.
 var unit: Unit = null
@@ -39,6 +40,7 @@ func show_unit(shown: Unit, count: int = 1) -> void:
 	modulate = Color.WHITE
 	disabled = false
 	_mark.texture = shown.unit_type.portrait_icon if shown.unit_type != null else null
+	_name.text = _short(shown.get_display_name())
 	tooltip_text = shown.get_display_name() if count < 2 \
 		else "%s (%d)" % [shown.get_display_name(), count]
 	_health.show()
@@ -54,6 +56,7 @@ func show_unit(shown: Unit, count: int = 1) -> void:
 func show_lost(display_name: String, type: UnitType) -> void:
 	unit = null
 	_mark.texture = type.portrait_icon if type != null else null
+	_name.text = _short(display_name)
 	tooltip_text = "%s (perdido)" % display_name
 	modulate = _LOST_TINT
 	disabled = true
@@ -63,6 +66,15 @@ func show_lost(display_name: String, type: UnitType) -> void:
 
 func set_selected(on: bool) -> void:
 	_frame.texture = _FRAME_ON if on else _FRAME
+
+
+## El primer token del nombre, que es el modelo: "AH-1W SuperCobra" cabe en 19 px
+## como "AH-1W" y no como otra cosa. Se corta por el modelo y no por un número de
+## letras porque el modelo es lo que distingue una unidad de otra de un vistazo;
+## recortar a ciegas daría "AH-1W S" y "AV-8B H", que no dicen nada.
+func _short(full: String) -> String:
+	var cut := full.find(" ")
+	return full if cut < 1 else full.substr(0, cut)
 
 
 func _refresh_health(current: float, maximum: float) -> void:

@@ -3,6 +3,13 @@ class_name EventLog
 
 ## El parte de lo que va pasando, con la coordenada del mapa para poder situarlo.
 ##
+## El panel no tiene fondo y el texto va blanco y sin borde. Eso deja la letra
+## limpia, pero también la deja **sin nada que la despegue del terreno**: sobre
+## mar, que es azul claro, lo que se escriba en azul —la coordenada, y la marca
+## de las órdenes— se pierde, y más aún cuando la entrada se apaga a
+## `faded_alpha`. Si algún día hay que arreglarlo, se arregla por uno de esos
+## tres sitios (color, fondo o borde); no tocar el texto de los mensajes.
+##
 ## Se engancha él solo a cada unidad según aparece —igual que el mapa saca sus
 ## puntos del grupo—, así que nadie tiene que acordarse de avisarle cuando nace
 ## o muere una. Lo único que le llega de fuera son las órdenes, porque esas no
@@ -12,18 +19,34 @@ class_name EventLog
 ## reenvía, igual que el resto del HUD — aquí no se conoce la cámara.
 signal look_requested(world_position: Vector2)
 
-## La plantilla de una línea del parte. Todo lo visual —fuente, tamaño, color,
-## el ancho de la columna del ícono, el filete separador— se toca abriendo
-## `event_entry.tscn` en el editor, que se ve con contenido de muestra.
+## La plantilla de una línea del parte. Todo lo visual —fuente, tamaño, color y
+## el aire de arriba y abajo— se toca abriendo `event_entry.tscn` en el editor,
+## que se ve con contenido de muestra.
 const ENTRY := preload("res://ui/hud/event_log/event_entry.tscn")
 
-## El ícono dice de qué clase es el suceso, y por eso el texto no tiene que
-## repetirlo: sin él las líneas tendrían que empezar por "ORDEN", "BAJA" o
-## "ATAQUE" y no cabrían en el panel.
-const _ICON_MOVE := preload("res://assets/art/UI/icon_move.png")
-const _ICON_ATTACK := preload("res://assets/art/UI/icon_attack.png")
-const _ICON_LOST := preload("res://assets/art/UI/icon_lost.png")
-const _ICON_ALERT := preload("res://assets/art/UI/icon_air.png")
+## De qué clase es el suceso. Lo dice una **marca de un carácter con color**, no
+## un ícono: al ser texto entra en el flujo del renglón y se centra con él, no
+## necesita una columna propia que alinear ni un PNG que mantener, y a 8 px un
+## dibujo no daba para distinguir cinco cosas de todos modos.
+enum Kind {
+	ORDER,   ## el jugador manda algo
+	ATTACK,  ## uno de los suyos abre fuego
+	ALERT,   ## algo le apunta, le dispara o viene a por él
+	LOST,    ## cae uno de los suyos
+	KILL,    ## cae uno del otro
+}
+
+## La marca de cada clase. **Van en blanco, como todo el parte.** Se probaron con
+## color y no sirve: el parte se dibuja encima del terreno, y cualquier color que
+## se elija se pierde sobre algún terreno — el azul desaparece sobre el mar, y
+## entonces del renglón sólo se lee la mitad. Blanco se lee sobre todo.
+const _MARKS: Dictionary = {
+	Kind.ORDER: ">",
+	Kind.ATTACK: "*",
+	Kind.ALERT: "!",
+	Kind.LOST: "X",
+	Kind.KILL: "+",
+}
 
 ## De dónde salen las coordenadas. Apunta al [MapView] **del mapa táctico**, que
 ## es la rejilla que el jugador lee. No vale el del minimapa: ahí las zonas se
@@ -31,16 +54,22 @@ const _ICON_ALERT := preload("res://assets/art/UI/icon_air.png")
 ## coordenadas, así que el parte diría `A1` de todo.
 @export var map_path: NodePath
 
-## Lo visual de cada línea —fuente, tamaño, colores, ícono, filete— no está
-## aquí: se toca abriendo `event_entry.tscn`, que es la plantilla y se ve en el
-## editor. Aquí sólo queda lo que decide el parte en conjunto.
+## Lo visual de cada línea —fuente, tamaño, color, aire— no está aquí: se toca
+## abriendo `event_entry.tscn`, que es la plantilla y se ve en el editor. Aquí
+## sólo queda lo que decide el parte en conjunto.
 
 ## Cuántas entradas se ven a la vez. Con 6 y alguna partida en dos filas el
 ## panel se estira por encima de los 160 px del dibujo; con 5 no llega.
 @export_range(1, 12, 1) var max_entries: int = 6
 ## El de las coordenadas pulsables. Vive aquí y no en la plantilla porque el
 ## resalte se mete como BBCode al componer el texto, en [method _zone].
-@export var accent_color := Color(0.3019608, 0.60784316, 0.9019608)
+##
+## **Es lo único del parte que no va en blanco**, y el amarillo no es capricho:
+## el parte se dibuja encima del terreno, así que el color tiene que contrastar
+## con todo lo que haya debajo. El azul de antes se perdía sobre el mar —que es
+## azul— y la coordenada desaparecía de la línea. Un amarillo cálido aguanta
+## tanto el agua como la tierra.
+@export var accent_color := Color(0.99607843, 0.90588236, 0.38039216)
 
 @onready var lines: VBoxContainer = $VBox/Lines
 
@@ -78,14 +107,13 @@ func _sweep() -> void:
 ## El texto admite BBCode: es lo que hace pulsables las coordenadas. Ver
 ## [method _zone], que es quien las envuelve.
 ##
-## Cada entrada es una fila —ícono a la izquierda, texto a la derecha— y no una
-## etiqueta suelta, porque el ícono es parte de lo que dice la línea.
-func add_event(text: String, icon: Texture2D = null) -> void:
+## [param kind] a `-1` deja el renglón sin marca —lo usa la línea de
+## continuación de una baja, que es la misma noticia partida en dos—.
+func add_event(text: String, kind: int = -1) -> void:
 	var entry: EventEntry = ENTRY.instantiate()
 	lines.add_child(entry)
 	# Después de colgarla: la escena resuelve sus nodos al entrar en el árbol.
-	# El filete sólo se dibuja si hay algo encima de lo que separarla.
-	entry.setup(text, icon, lines.get_child_count() > 1)
+	entry.setup(_compose(text, kind))
 	entry.coordinate_clicked.connect(_on_coordinate_clicked)
 	_last_entry = entry
 	while lines.get_child_count() > max_entries:
@@ -95,13 +123,17 @@ func add_event(text: String, icon: Texture2D = null) -> void:
 		var gone := lines.get_child(0)
 		lines.remove_child(gone)
 		gone.queue_free()
-	# La que quedó primera no tiene nada encima, así que se queda sin filete.
-	if lines.get_child_count() > 0:
-		(lines.get_child(0) as EventEntry).rule.visible = false
 	show()
 	# Diferido: la línea que se acaba de tirar no desaparece del recuento hasta
 	# el final del frame, y hasta entonces el alto mínimo sale de más.
 	_hug_content.call_deferred()
+
+
+## El renglón terminado: marca y texto, alineado a la izquierda.
+func _compose(text: String, kind: int) -> String:
+	if not _MARKS.has(kind):
+		return text
+	return "%s %s" % [_MARKS[kind], text]
 
 
 ## El panel mide lo que midan sus líneas. Vacío no se dibuja: un recuadro negro
@@ -133,14 +165,14 @@ func _on_coordinate_clicked(meta: Variant) -> void:
 	look_requested.emit(Vector2(float(parts[0]), float(parts[1])))
 
 
-## "Harrier → G5". Lo llama quien da la orden, que es el único que sabe que ha
-## habido una.
+## "Harrier moviéndose a G5". Lo llama quien da la orden, que es el único que
+## sabe que ha habido una.
 func report_move_order(unit: Unit, where: Vector2) -> void:
-	# El separador es ">" y no "→": M5X7 no tiene la flecha, y al no tenerla
-	# Godot la saca de una fuente del sistema cuyo alto de línea es de 23 px en
-	# vez de 13. Eso estira la fila entera y descuadra el ícono. Antes de meter
-	# cualquier signo raro en el parte hay que comprobar que la fuente lo tenga.
-	add_event("%s > %s" % [_short(unit), _zone(where)], _ICON_MOVE)
+	# Lo que hace la unidad va **escrito**, no insinuado con un signo. Estuvo
+	# como "Harrier > G5" y no se entiende: el jugador no tiene por qué adivinar
+	# qué significa la flecha, y si la coordenada no se lee bien la línea se
+	# queda en el nombre a secas.
+	add_event("%s moviéndose%s" % [_short(unit), _to(where)], Kind.ORDER)
 
 
 func _watch(node: Node) -> void:
@@ -163,18 +195,19 @@ func _watch(node: Node) -> void:
 ## se dice al perder a uno de los tuyos.
 func _on_died(unit: Unit) -> void:
 	if not unit.is_player_controlled():
-		add_event("Splash! %s %s" % [_short(unit),
-				_zone(unit.global_position)], _ICON_LOST)
+		add_event("Splash! %s%s" % [_short(unit),
+				_at(unit.global_position)], Kind.KILL)
 		return
 	# Quién lo derribó va en su propia línea: metido en la misma, la entrada
-	# ocupaba tres filas del parte y desplazaba a todo lo demás.
-	add_event("Perdido: %s %s" % [_short(unit),
-			_zone(unit.global_position)], _ICON_LOST)
+	# ocupaba tres filas del parte y desplazaba a todo lo demás. Va sin marca —
+	# es la misma noticia partida, no otra.
+	add_event("Perdido: %s%s" % [_short(unit),
+			_at(unit.global_position)], Kind.LOST)
 	if is_instance_valid(unit.killed_by):
-		add_event("   por %s" % _short(unit.killed_by), null)
+		add_event("   por %s" % _short(unit.killed_by))
 
 
-## "Harrier ataca Su-33 (FOX 2) B5". El compromiso entero en una línea: quién,
+## "Harrier ataca Su-33 (FOX 2) en B5". El compromiso entero en una línea: quién,
 ## contra qué, con qué y dónde.
 ##
 ## **El arma no tiene parte propio.** Cada disparo emitía la suya, así que un
@@ -187,8 +220,8 @@ func _on_target_changed(target: Unit, unit: Unit) -> void:
 	# noticia; que empiece, sí.
 	if not is_instance_valid(target) or not unit.is_player_controlled():
 		return
-	add_event("%s ataca %s%s %s" % [_short(unit), _short(target),
-			_brevity_of(unit, target), _zone(target.global_position)], _ICON_ATTACK)
+	add_event("%s ataca %s%s%s" % [_short(unit), _short(target),
+			_brevity_of(unit, target), _at(target.global_position)], Kind.ATTACK)
 
 
 ## El código de radio del arma con la que va a atacar, entre paréntesis. Se le
@@ -212,7 +245,7 @@ func _brevity_of(unit: Unit, target: Unit) -> String:
 	return " (%s)" % weapon.brevity_code
 
 
-## "Harrier: MUD SPIKE — 2S6 Tunguska B4". Un radar de superficie la tiene
+## "Harrier: MUD SPIKE desde B4". Un radar de superficie la tiene
 ## enganchada, y **todavía no le disparan**: es el aviso que llega a tiempo.
 ##
 ## Se da la coordenada de LA AMENAZA, no la del avión: lo que el jugador necesita
@@ -220,19 +253,19 @@ func _brevity_of(unit: Unit, target: Unit) -> String:
 func _on_tracked(threat: Unit, unit: Unit) -> void:
 	if not _is_worth_reporting(unit, threat):
 		return
-	add_event("%s: MUD SPIKE %s" % [_short(unit),
-			_zone(threat.global_position)], _ICON_ALERT)
+	add_event("%s: MUD SPIKE%s" % [_short(unit),
+			_from(threat.global_position)], Kind.ALERT)
 
 
-## "Harrier: AAA, bajo fuego B4". Esto ya no es un aviso.
+## "Harrier: AAA, bajo fuego desde B4". Esto ya no es un aviso.
 func _on_fired_upon(threat: Unit, unit: Unit) -> void:
 	if not _is_worth_reporting(unit, threat):
 		return
-	add_event("%s: AAA, bajo fuego %s" % [_short(unit),
-			_zone(threat.global_position)], _ICON_ALERT)
+	add_event("%s: AAA, bajo fuego%s" % [_short(unit),
+			_from(threat.global_position)], Kind.ALERT)
 
 
-## "Harrier: SAM LAUNCH — 2S6 Tunguska B4". El aviso urgente: hay algo en el aire
+## "Harrier: SAM LAUNCH desde B4". El aviso urgente: hay algo en el aire
 ## viniendo a por ella.
 ##
 ## El código va del arma (`brevity_code`) y no escrito aquí, porque lo que te
@@ -242,8 +275,8 @@ func _on_missile_inbound(threat: Unit, weapon: WeaponType, _missile: Node2D, uni
 	if not _is_worth_reporting(unit, threat):
 		return
 	var code := weapon.brevity_code if weapon.brevity_code != "" else "MISSILE"
-	add_event("%s: %s LAUNCH %s" % [_short(unit), code,
-			_zone(threat.global_position)], _ICON_ALERT)
+	add_event("%s: %s LAUNCH%s" % [_short(unit), code,
+			_from(threat.global_position)], Kind.ALERT)
 
 
 ## "Harrier: DEFENDING". La respuesta al aviso anterior: está soltando señuelos y
@@ -252,7 +285,7 @@ func _on_missile_inbound(threat: Unit, weapon: WeaponType, _missile: Node2D, uni
 func _on_defending(_threat: Unit, unit: Unit) -> void:
 	if not unit.is_player_controlled():
 		return
-	add_event("%s: DEFENDING" % _short(unit), _ICON_ALERT)
+	add_event("%s: DEFENDING" % _short(unit), Kind.ALERT)
 
 
 ## El parte es del jugador: que a un enemigo lo enganche otro enemigo no es
@@ -273,13 +306,43 @@ func _short(unit: Unit) -> String:
 	return name if cut < 1 else name.substr(0, cut)
 
 
+## La coordenada con la preposición que le da sentido. Una `B4` suelta al final
+## de la línea no dice nada —el jugador no tiene por qué saber que eso es una
+## casilla del mapa—, y la preposición además distingue **qué** pasa ahí: en un
+## ataque o una baja la coordenada es dónde ocurrió la cosa, pero en una alarma
+## es de dónde viene la amenaza, no dónde está el que la sufre.
+##
+## Devuelven cadena vacía si no hay zona que dar, con preposición y todo: mejor
+## una línea sin sitio que una que acabe en "en" a secas. Por eso el espacio va
+## dentro y los formatos que las usan pegan el `%s` sin separarlo.
+func _at(world: Vector2) -> String:
+	var zone := _zone(world)
+	return "" if zone.is_empty() else " en %s" % zone
+
+
+func _from(world: Vector2) -> String:
+	var zone := _zone(world)
+	return "" if zone.is_empty() else " desde %s" % zone
+
+
+func _to(world: Vector2) -> String:
+	var zone := _zone(world)
+	return "" if zone.is_empty() else " a %s" % zone
+
+
 ## La coordenada, envuelta para poder pulsarla. Sin mapa a la vista no hay
 ## coordenada que dar, y entonces la línea se queda sin ella en vez de mentir.
+##
+## **Va entre corchetes además de en color.** Dos señales y no una porque cada
+## una falla por su lado: el color se pierde si algún día se toca la paleta o si
+## el terreno de debajo se le parece, y los corchetes se leen igual en blanco y
+## negro. Los corchetes se escriben `[lb]` y `[rb]`: escritos a pelo, el BBCode
+## se los comería creyendo que abren una etiqueta.
 func _zone(world: Vector2) -> String:
 	if _map == null:
 		return ""
 	var label := _map.zone_label_at(world)
 	if label == "":
 		return ""
-	return "[url=%f,%f][color=#%s]%s[/color][/url]" % [
+	return "[url=%f,%f][color=#%s][lb]%s[rb][/color][/url]" % [
 			world.x, world.y, accent_color.to_html(false), label]

@@ -18,4 +18,5 @@ theme_override_constants/separation = 0
 
 [node name="Lines" type="VBoxContainer" parent="VBox" unique_id=2073381655]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 0

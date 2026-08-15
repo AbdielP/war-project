@@ -160,11 +160,14 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Ritmo de entrada del nombre | nodo raíz `UnitTag` → `name_delay`, `name_fade_time`, `name_rise_px` |
 | Velocidad de despliegue de la línea | `ui/hud/unit_tag/selection_line_frames.tres` (10 frames a 24 fps) |
 | Fuente del resto del HUD | `assets/fonts/ui_theme.tres` → `default_font`. **Vacío a propósito**: sin decidir, cae en la del motor |
-| Todo lo visual de una línea del registro de eventos | `ui/hud/event_log/event_entry.tscn`. Los nodos van sueltos, no en contenedores: **se arrastran**. `Text` lleva fuente, tamaño, color y contorno; `Icon` la viñeta; `Rule` el filete separador |
-| Aire entre entradas del registro | mismo archivo, nodo raíz → `padding_bottom` (4). El de arriba se consigue bajando `Text` e `Icon` |
+| Todo lo visual de una línea del registro de eventos | `ui/hud/event_log/event_entry.tscn`. Sólo hay un nodo, `Text`, y va suelto: **se arrastra**. Lleva fuente (M5X7 a 16), tamaño y color. Ni ícono ni filete: se quitaron los dos |
+| Aire entre entradas del registro | mismo archivo: `offset_top` de `Text` (1) y `padding_bottom` de la raíz (1). **Van atados — el mismo número los dos**, o el renglón deja de estar centrado en su fila. Y ojo: el hueco que se ve son ~4 px más, que salen de la caja de la fuente |
 | Cuánto tarda una entrada en apagarse | mismo nodo raíz → `fade_after` (6 s), `fade_time` (1,5 s), `faded_alpha` (0,35 — **no llega a cero: se transparenta, no desaparece, y sigue pulsable**) |
 | Cuántas entradas se ven a la vez | nodo `EventLog` → `max_entries` (6) |
-| Color de la coordenada pulsable | nodo `EventLog` → `accent_color` |
+| Color de la coordenada pulsable | nodo `EventLog` → `accent_color` (amarillo `#fee761`). Tiene que contrastar con **todo** el terreno: el texto no lleva borde ni fondo, así que un azul se pierde sobre el mar |
+| Marca de cada clase de suceso | `event_log.gd` → `_MARKS`. Un carácter por clase (`>` orden, `*` ataque, `!` alarma, `X` baja, `+` derribo), en blanco como el resto |
+| Texto de los mensajes | `event_log.gd`, cada `report_*` / `_on_*`. La preposición de la coordenada la ponen `_at()` (ocurre ahí), `_from()` (viene de ahí, para alarmas) y `_to()` (va hacia ahí) |
+| Que el clic atraviese el registro y llegue al mapa | ya está: `Lines` y `EventEntry` en `mouse_filter = IGNORE`. Sólo la coordenada se queda el clic, y sólo mientras el cursor está encima |
 | Ancho del registro (dónde parte el texto) | `hud.tscn`, nodo `EventLog` → `offset_right`. Sin caja, el ancho sólo decide dónde se corta la línea |
 | Todo lo visual de un retrato de unidad | `ui/hud/deployed_panel/unit_portrait.tscn`. Los nodos van sueltos: **se arrastran**. `Frame` el marco, `Mark` la silueta, `Health` la barra, `Name` el modelo |
 | Marco suelto y marco seleccionado | `assets/art/UI/portrait_frame.png` y `portrait_frame_selected.png` (22×22). Son **dos dibujos**, no un tinte: si cambiás uno cambiá el otro o dejan de cuadrar |

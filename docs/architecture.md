@@ -2506,16 +2506,35 @@ El parte de lo que va pasando, con la coordenada del mapa. Emite
 `look_requested(world_position)` al pulsar una coordenada. `map_path` (exportado) apunta al
 `MapView` de donde salen esas coordenadas.
 
-| Evento | De dónde | Ejemplo |
-|--------|----------|---------|
-| Orden de movimiento | `SelectionManager` → `HUD.report_move_order()` | `AV-8B > F4` |
-| Empieza a atacar | `Unit.attack_target_changed` | `AV-8B ataca T-14 (RIFLE) B2` |
-| Baja enemiga | `Unit.died` | `Splash! T-14 B2` |
-| **Baja propia** | `Unit.died` | `Perdido: AV-8B D1` + `   por 2S6` |
-| **Te enganchan** | `Unit.tracked_by` | `AV-8B: MUD SPIKE D1` |
-| **Te disparan** | `Unit.fired_upon_by` | `AV-8B: AAA, bajo fuego D1` |
-| **Misil en el aire** | `Unit.missile_inbound` | `AV-8B: SAM LAUNCH D1` |
-| **Se defiende** | `Countermeasures.dispensing_started` | `AV-8B: DEFENDING` |
+| Evento | Marca | De dónde | Ejemplo |
+|--------|:-:|----------|---------|
+| Orden de movimiento | `>` | `SelectionManager` → `HUD.report_move_order()` | `AV-8B moviéndose a [F4]` |
+| Empieza a atacar | `*` | `Unit.attack_target_changed` | `AV-8B ataca T-14 (RIFLE) en [B2]` |
+| Baja enemiga | `+` | `Unit.died` | `Splash! T-14 en [B2]` |
+| **Baja propia** | `X` | `Unit.died` | `Perdido: AV-8B en [D1]` + `   por 2S6` |
+| **Te enganchan** | `!` | `Unit.tracked_by` | `AV-8B: MUD SPIKE desde [D1]` |
+| **Te disparan** | `!` | `Unit.fired_upon_by` | `AV-8B: AAA, bajo fuego desde [D1]` |
+| **Misil en el aire** | `!` | `Unit.missile_inbound` | `AV-8B: SAM LAUNCH desde [D1]` |
+| **Se defiende** | `!` | `Countermeasures.dispensing_started` | `AV-8B: DEFENDING` |
+
+**La clase de suceso la dice una marca de un carácter, no un ícono.** Hubo cuatro PNG
+(`icon_move`, `icon_attack`, `icon_lost`, `icon_air`) en una columna a la izquierda del texto;
+siguen en `assets/art/UI/` pero ya no los usa nadie. Al ser texto, la marca entra en el flujo
+del renglón: no hay columna que alinear, ni PNG que mantener, ni ícono que se descuadre cuando
+la línea parte en dos. A 8 px un dibujo tampoco daba para distinguir cinco cosas.
+
+**Las marcas van en blanco.** Estuvieron en color, una por clase, y no sirve: el parte se
+dibuja encima del terreno y cualquier color se pierde sobre algún terreno. El azul de las
+órdenes desaparecía sobre el mar, y del renglón sólo se leía el nombre de la unidad.
+
+**La coordenada lleva preposición, y no siempre la misma.** `en` para lo que ocurre en un sitio
+—el ataque, que da la posición del blanco; la baja; el derribo—, `desde` para las alarmas y `a`
+para la orden. No es adorno gramatical: la coordenada de una alarma es **de dónde viene la
+amenaza**, no dónde está quien la sufre, y sin la preposición el jugador la leía justo al revés.
+Una `B4` suelta al final de la línea tampoco decía nada — nadie tiene por qué saber que eso es
+una casilla del mapa. Lo montan `_at()`, `_from()` y `_to()`, que devuelven cadena vacía **con
+la preposición dentro** cuando no hay zona que dar, para que ninguna línea acabe en un `en`
+colgando.
 
 **El disparo no tiene parte propio.** Lo tuvo: cada arma que salía escribía su línea, agrupando
 las ristras para que una andanada de seis Mk-82 no fueran seis renglones. Aun así sobraba —
@@ -2550,6 +2569,14 @@ agrupan hasta caber en 87 px, así que el mapa entero sale como dos o tres coord
 parte diría `A1` de todo. Se piden con `MapView.zone_label_at()`, que usa el tamaño de zona
 que se está dibujando de verdad.
 
+**La coordenada se marca dos veces: corchetes y color** (`[B4]` en amarillo `#fee761`, que es
+`accent_color`). Dos señales y no una porque cada una falla por su lado — el color se pierde si
+se toca la paleta o si el terreno de debajo se le parece, y los corchetes se leen igual sin
+color. El amarillo se eligió por contraste contra lo que hay debajo, que cambia: aguanta tanto
+el agua como la tierra. El azul de antes no, y ése fue el fallo que dejó las líneas ilegibles.
+Los corchetes se escriben `[lb]` y `[rb]`: a pelo, el BBCode se los come creyendo que abren
+etiqueta.
+
 **Cada línea es una instancia de `event_entry.tscn`**, no nodos fabricados en código. Ver
 [`EventEntry`](#evententry--uihudevent_logevent_entrygd) — es la diferencia entre poder ajustar
 el parte mirándolo y tener que arrancar el juego para ver qué pasó.
@@ -2561,9 +2588,14 @@ marco que descontar, el ancho útil de texto pasó de 123 a 191 px, y el registr
 que ocupa su texto. El PNG del panel sigue en `assets/art/UI/event_log_panel.png`: es un
 nine-patch y está pensado para reusarse en las ventanas de acción (hangar, mapa táctico).
 
-**Sin fondo, el texto necesita contorno.** Va sobre el terreno —selva verde, agua, arena
-clara—, así que un color plano se pierde contra la mitad de los fondos. `outline_size = 2` en
-negro es lo que lo hace legible venga lo que venga debajo.
+**El texto va blanco y sin contorno.** Tuvo `outline_size = 2` en negro, que es lo que lo
+despegaba del terreno; se quitó a petición del usuario, que lo quería limpio. Con eso, la única
+protección que le queda es que el blanco contrasta con casi todo — **y por eso ningún otro
+elemento del parte puede ir en un color oscuro o azulado**. Es la lección que costó dos rondas:
+sin borde y sin fondo, el color deja de ser decoración y pasa a decidir si la línea se lee.
+
+Si algún día hay que arreglarlo, se arregla por uno de tres sitios —color, fondo o borde—;
+**no acortando los mensajes**. Eso se intentó y fue un error: los textos son del usuario.
 
 **El panel mide lo que midan sus líneas y crece hacia arriba**, con el borde de abajo quieto,
 como una consola. Vacío no se dibuja. `set_bottom(y)` lo mueve el HUD cuando el minimapa
@@ -2578,40 +2610,61 @@ hacían falta 104.
 ```
 extends Control   class_name EventEntry
 ```
-La plantilla de una línea: el filete separador, el ícono y el texto. **Es una escena, no nodos
-creados en código.** La primera versión fabricaba cada fila a mano (`HBoxContainer.new()`,
-`TextureRect.new()`…) y el resultado era invisible en el editor: no había forma de ajustar
-fuente, color o separaciones sin arrancar el juego y adivinar. Ahora se abre
-`event_entry.tscn`, se ve con contenido de muestra y se toca ahí.
+La plantilla de una línea: **sólo el texto**. Es una escena, no nodos creados en código. La
+primera versión fabricaba cada fila a mano (`HBoxContainer.new()`, `TextureRect.new()`…) y el
+resultado era invisible en el editor: no había forma de ajustar fuente, color o separaciones
+sin arrancar el juego y adivinar. Ahora se abre `event_entry.tscn`, se ve con contenido de
+muestra y se toca ahí.
 
-**Los tres nodos van a posición libre, fuera de contenedores.** No es descuido: en Godot un
-contenedor decide dónde van sus hijos y el editor bloquea el arrastre. Se eligió poder mover
-el ícono y el texto con el ratón, y el precio es que el alto no se calcula solo — de eso se
-encarga `_fit()`, y es la razón de que el script exista. La entrada mide lo que llegue más
-abajo (texto o ícono) más `padding_bottom`.
+**El texto va a posición libre, fuera de contenedores.** No es descuido: en Godot un contenedor
+decide dónde van sus hijos y el editor bloquea el arrastre. El precio es que el alto no se
+calcula solo — de eso se encarga `_fit()`, y es la razón de que el script exista.
 
 | Ajuste | Dónde | Qué hace |
 |--------|-------|----------|
-| Fuente, tamaño, color, contorno | nodo `Text` | lo visual del texto |
-| Posición del ícono | nodo `Icon` | se arrastra |
-| Largo del filete | nodo `Rule`, `offset_right` | 112 px hoy |
-| `padding_bottom` | raíz, exportado | aire bajo el texto (4) |
+| Fuente, tamaño, color | nodo `Text` | M5X7 a 16, blanco, alineado a la izquierda |
+| Hueco de arriba | nodo `Text`, `offset_top` | 1 px |
+| `padding_bottom` | raíz, exportado | 1 px — **va atado al de arriba** |
 | `fade_after` / `fade_time` / `faded_alpha` | raíz, exportado | 6 s / 1,5 s / 0,35 |
+
+Fila de 15 px: 13 de caja de fuente más 1 y 1.
+
+**Ni filete ni fondo: lo que separa una entrada de la siguiente es el aire.** Hubo un
+`ColorRect` de 112×1 px arriba de cada fila. Se quitó porque no hay ancho que le cuadre —cada
+renglón mide una cosa— y porque se apagaba junto con la entrada, dejando un hilo mal medido y
+medio invisible. El fondo del panel se probó y también fuera: `StyleBoxEmpty`.
+
+**El aire que se ve no es el número del padding.** Es `offset_top + padding_bottom + 4`, y esos
+4 px salen de la caja de la fuente: en M5X7 a 16 la caja mide 13 px y una mayúscula ocupa las
+filas 3 a 12, así que sobran 3 arriba y 1 abajo aunque el padding valga cero. Con 3 y 3 el hueco
+real era de **10 px para letras de 9**, el doble de lo que sugería el número. Con 1 y 1 queda en
+6. Por debajo de 1 y 1 no se puede bajar: los descendentes (`g`, `p`, `¿`) llegan a la fila 14 y
+se salen de la caja, así que tocarían la tilde del renglón siguiente.
 
 **Las entradas se transparentan, no desaparecen.** A los 6 s bajan a `alpha 0.35` y se quedan
 ahí: siguen leyéndose y su coordenada sigue siendo pulsable. El registro no pierde historia,
 sólo deja de robar la vista. Si una línea se reescribe, vuelve a plena vista — una línea que
 cambia mientras se apaga no se lee.
 
-**El texto va en `MOUSE_FILTER_PASS`.** En `IGNORE` las coordenadas dejaban de ser pulsables;
-en `STOP` el registro robaría al mapa todos los clicks de su superficie, que ahora es
-transparente. `PASS` atiende la coordenada y deja pasar el resto.
+**Sólo la coordenada se queda el clic; el resto del renglón lo deja pasar al mapa.** El parte
+flota encima del terreno, y en combate se da la orden bajo una línea del parte y no pasa nada,
+sin ninguna señal de por qué. Lo que lo bloqueaba no era el texto —que ya iba en `PASS`— sino
+`Lines` y `EventEntry`, que se habían quedado con el `MOUSE_FILTER_STOP` que Godot pone **por
+defecto** y se comían el clic en los 200 px de ancho de la fila, hubiera texto o no. Los dos van
+ahora en `IGNORE`.
+
+El texto alterna: `PASS` en reposo, y `STOP` mientras el cursor está encima de un `[url]`, que
+es cuando el clic sí es suyo. Lo conmutan `meta_hover_started` / `meta_hover_ended`, que además
+ponen el cursor en `CURSOR_POINTING_HAND` y devuelven la entrada a plena vista — una coordenada
+que se va a pulsar no puede estar a medio apagar. Al salir se reinicia el desvanecido.
 
 **Antes de meter un signo tipográfico en el parte hay que comprobar que la fuente lo tenga.**
 El separador de las órdenes era `→` y descuadraba la línea entera: M5X7 no tiene ese glifo, así
-que Godot lo sacaba de una fuente del sistema cuyo alto de línea es de 23 px en vez de 13. La
-fila se estiraba y el ícono se quedaba arriba. Ninguna de las dos fuentes del proyecto tiene
-`→ ← ↑ ↓ — – … • ‹ ›`; sí tienen acentos, `ñ`, `¿`, `¡` y `×`.
+que Godot lo sacaba de una fuente del sistema cuyo alto de línea es de 23 px en vez de 13, y la
+fila se estiraba. Ninguna fuente del proyecto tiene `→ ← ↑ ↓ — – … • ‹ ›`. Lo que sí tienen,
+comprobado glifo a glifo: **M5X7 cubre los diez conjuntos probados** —español,
+portugués, francés, alemán, italiano, polaco, turco, nórdico, checo y signos—, así que por
+localización ninguna de las dos ata las manos.
 
 **Los nombres se acortan al primer espacio** (`_short()`): en el parte cabe `2S6`, no `2S6
 Tunguska`, y el jugador lo reconoce igual porque el nombre completo está en el panel de
@@ -3354,7 +3407,14 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 
 ### Pendiente
 - [ ] **Sombra propia para la Mk-82.** Hoy usa la del misil, que no le corresponde: es otra silueta y otra forma de caer
-- [ ] **Elegir la fuente del juego.** `assets/fonts/ui_theme.tres` está vacío a propósito (cae en la del motor) mientras se prueban candidatas. En uso hoy: m5x7 a 16 en `UnitTag` y el registro de eventos, **Public Pixel a 8** en los retratos. Ojo con la cobertura: la Boxel se descartó porque no trae **ninguna** tilde ni Ñ ni `¿ ¡` — sin eso no hay español, y menos localización. Y con el tamaño: la Silver se probó a 8 porque es lo que dice la fuente, y a 8 sus mayúsculas ocupan 3 filas de píxeles; se llevó a 14, que sí se leía, y aun así se cambió por la Public Pixel, cuyo nativo real **sí** es 8. El precio de la Public Pixel es que es monoespaciada: 8 px por letra sin excepción, así que el ancho de cualquier etiqueta suya es múltiplo de 8 y no se negocia
+- [ ] **Elegir la fuente del juego.** `assets/fonts/ui_theme.tres` está vacío a propósito (cae en la del motor) mientras se prueban candidatas. En uso hoy: **M5X7 a 16** en `UnitTag` y el registro de eventos, **Public Pixel a 8** en los retratos. Las cuatro, medidas con la misma frase de 28 letras en el panel de 200 px del parte:
+
+  | fuente | ancho/letra | alto de línea | tinta | veredicto |
+  |---|---|---|---|---|
+  | **M5X7 @16** | ~5,2 px | 13 | trazo 1 px | la que se usa: cabe y se lee |
+  | Public Pixel @8 | 8 px | 8 | trazo 2 px | monoespaciada; parte las líneas largas |
+
+  Tres cosas que costaron sangre y conviene no repetir: **el tamaño se comprueba rasterizando**, no leyendo la ficha —hubo una candidata cuya ficha no daba ningún tamaño y que al importarla "a 8" salían garabatos—; **el número pequeño no implica letra pequeña** (Public Pixel a 8 ocupa más que M5X7 a 16, porque es monoespaciada y de trazo doble); y **el alto de línea no es el alto de la letra**, porque ese hueco se suma al padding y engaña al doble. Cobertura comprobada glifo a glifo: M5X7 pasa los diez conjuntos de idiomas; la Boxel se descartó porque no trae **ninguna** tilde ni Ñ ni `¿ ¡`. Y mirar la licencia antes de encariñarse: una de las candidatas exigía atribución y dejaba de ser gratis por encima de cierto presupuesto
 - [ ] Alabeo e inclinación del avión al virar y al cambiar de régimen: el enganche existe (`bank_sprite_path`, `AnimatedSprite2D` de 5 frames), falta el arte
 - [ ] Marcas de impacto en el terreno, y barra de vida **sobre la unidad en el mapa** — la del panel de desplegadas ya está (`UnitPortrait`), y `Unit.health_changed` sirve igual para ésta. Con eso se afinan las ráfagas del cañón para que varíen y no dejen siempre el mismo patrón
 - [ ] **Definir el daño en serio.** Los números de hoy son de trabajo: un Harrier destruye un T-14 en tres pasadas de cañón, y **dos Mk-82 bastan** para lo mismo. Demasiado fácil para lo que debería costar. Va junto con las barras de vida, y hay que decidirlo por unidad y por arma, no ajustando el `damage` de cada una hasta que "quede bien"

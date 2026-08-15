@@ -2,12 +2,87 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-15 — registro de eventos
+
+### El parte no lleva íconos, ni filete, ni fondo: sólo texto y aire
+Los cuatro PNG de la columna izquierda se cambiaron por una **marca de un carácter** (`>` orden,
+`*` ataque, `!` alarma, `X` baja propia, `+` derribo). Al ser texto entra en el flujo del
+renglón: no hay columna que alinear, ni ícono que se quede arriba cuando la línea parte en dos,
+y a 8 px un dibujo tampoco distinguía cinco cosas. Los PNG siguen en `assets/art/UI/` sin uso.
+
+El filete de 112×1 px se quitó por dos razones que se refuerzan: **no hay ancho que le cuadre**
+—cada renglón mide una cosa distinta— y se apagaba junto con la entrada, así que dejaba un hilo
+mal medido y medio invisible. Lo que separa una entrada de otra es el aire.
+
+Y ahí está el descubrimiento que importa: **el aire que se ve no es el número del padding**, es
+`offset_top + padding_bottom + 4`. Esos 4 px salen de la caja de la fuente, que es más alta que
+la letra. Con 3 y 3 el hueco real era de 10 px para letras de 9 px. Con 1 y 1 queda en 6, y por
+debajo no se puede bajar porque los descendentes se salen de la caja y tocarían la tilde del
+renglón siguiente.
+
+### Sin borde negro en la letra, el color deja de ser decoración
+El texto del parte iba blanco con `outline_size = 2`. Al quitar el borde —pedido, para dejar la
+fuente limpia— se descubrió que ese contorno era lo único que despegaba el texto del terreno.
+
+La consecuencia no fue que el texto se viera mal: fue que **desapareció información**. La
+coordenada iba en azul `#4d9be6`, el mar es azul, y las líneas pasaron a leerse como `AV-8B` a
+secas. Parecía que el registro había dejado de funcionar; el texto estaba entero.
+
+De ahí la regla: en un HUD sin fondo ni contorno, ningún color puede elegirse por gusto — tiene
+que contrastar con **todo** el terreno posible. La coordenada quedó en amarillo `#fee761`, que
+aguanta agua y tierra, y además entre corchetes: dos señales, porque el color se pierde si se
+toca la paleta y los corchetes no.
+
+Lo que **no** hay que hacer para arreglar un problema de legibilidad: acortar los mensajes. Se
+intentó y fue un error — los textos son del usuario, y el ancho se arregla por la fuente o por
+el panel.
+
+### La coordenada lleva preposición, y no siempre la misma
+Una `B4` suelta al final del renglón no dice nada: el jugador no tiene por qué saber que eso es
+una casilla del mapa. Se pusieron `en` para lo que ocurre en un sitio, `a` para la orden y
+**`desde` para las alarmas**.
+
+La tercera no es gramática, es información: la coordenada de una alarma es de dónde viene la
+amenaza, no dónde está quien la sufre. El código siempre pasó la posición de la amenaza, pero
+la línea no lo contaba y se leía justo al revés.
+
+### En el parte, sólo la coordenada se queda el clic
+El registro flota sobre el mapa. Dar una orden bajo una línea del parte no hacía nada, sin
+señal de por qué. El culpable no era el texto —que ya iba en `PASS`— sino `Lines` y
+`EventEntry`, **con el `MOUSE_FILTER_STOP` que Godot pone por defecto**: se comían el clic en
+los 200 px de ancho de la fila, hubiera texto o no, y también cuando la entrada ya estaba
+apagada al 35%.
+
+Los dos pasan a `IGNORE`, y el texto alterna `PASS`/`STOP` según el cursor esté o no sobre la
+coordenada, usando `meta_hover_started` / `meta_hover_ended`. De paso esos dos avisos ponen el
+cursor en mano y devuelven la entrada a plena vista.
+
+Vale como recordatorio general: **`mouse_filter` no configurado es `STOP`**, así que cualquier
+Control decorativo encima del mundo roba clics hasta que se le diga que no.
+
+### La fuente del parte es M5X7 a 16, después de probar tres
+Se probaron con la misma frase de 28 letras en el panel de 200 px. **Public Pixel a 8** es
+monoespaciada a 8 px por letra: dos de los seis mensajes partían en dos filas. Una tercera
+candidata era la más estrecha de todas (118 px) pero con minúsculas de 3 filas de píxeles, y al
+tamaño en que sí se leía reservaba 19 px de caja para 8 de tinta, subiendo el bloque al 39% de
+la pantalla. M5X7 a 16 cabe entera, se lee y deja el panel en 200×90.
+
+Tres lecciones del recorrido, cada una contraintuitiva:
+- **El número pequeño no implica letra pequeña.** Public Pixel a 8 ocupa más que M5X7 a 16:
+  monoespaciada y de trazo doble, está dibujada para escalarse ×2.
+- **El tamaño bueno se rasteriza, no se lee de la ficha.** Hay fuentes que no dan ninguno.
+- **El alto de línea no es el alto de la letra**, y la diferencia se suma al padding.
+
+Y una cuarta que no es de tipografía: **mirar la licencia antes de encariñarse**. La candidata
+descartada exigía atribución en los créditos y dejaba de ser gratis por encima de cierto
+presupuesto. Se acabó borrando del proyecto para no dejar peso muerto en `assets/fonts/`.
+
 ## 2026-08-15
 
 ### La fuente de los retratos es Public Pixel a 8, y por ser monoespaciada manda el ancho
-La Silver a 14 se leía, pero mal: el usuario la descartó de un vistazo. Se cambió por **Public
-Pixel a 8**, que es su tamaño nativo de verdad —rasterizada, cada trazo cae en 2 px sólidos— y
-viene con las medidas recomendadas escritas en su documentación (8, 16, 32…, siempre múltiplos).
+La fuente anterior se leía, pero mal: el usuario la descartó de un vistazo. Se cambió por
+**Public Pixel a 8**, que es su tamaño nativo de verdad —rasterizada, cada trazo cae en 2 px
+sólidos— y trae las medidas recomendadas en su documentación (8, 16, 32…, siempre múltiplos).
 
 Lo que esto cambió no es cosmético: **es monoespaciada, 8 px por letra sin excepción**. El ancho
 de una etiqueta suya no se ajusta, se calcula, y eso invierte quién manda en el tamaño de un
@@ -87,19 +162,18 @@ repetidas sean comunes a **las dos** versiones del marco, o suelto y seleccionad
 cuadrar entre sí.
 
 ### El tamaño de una fuente se mide rasterizando, no leyendo la ficha
-Silver se importó "a 8 px" porque es lo que decía la fuente. En pantalla salieron garabatos: a
-tamaño 8 sus mayúsculas ocupan **3 filas de píxeles**. No es una letra.
+La fuente de los retratos se importó "a 8 px" porque es lo que decía. En pantalla salieron
+garabatos: a tamaño 8 sus mayúsculas ocupan **3 filas de píxeles**. No es una letra.
 
 Lo que faltó fue mirar el rasterizado de verdad. Que el avance por glifo sea entero —que era la
 comprobación que se estaba haciendo— **no basta**: dice que las letras caen en píxel entero,
 no que quede letra. Hay que sacar el glifo del atlas del `TextServer`
 (`font_render_glyph` → `font_get_glyph_uv_rect` → `font_get_texture_image`) y volcarlo píxel a
-píxel. El primer tamaño donde cada trazo de Silver cae en 1 px sólido es **14**; a 12 y 13 los
-trazos se parten a la mitad.
+píxel, y quedarse con el menor tamaño en que cada trazo cae en 1 px sólido.
 
-Consecuencia de tamaño: `AV-8B` a 14 mide 22 px, así que los retratos pasaron de 19 a **24 de
-ancho** (10 desplegadas = 260 px de los 640). El arte se regeneró desde el PNG maestro con el
-mismo método de quitar repetidas.
+Consecuencia de tamaño: el nombre más largo pasó a medir 22 px, así que los retratos pasaron de
+19 a **24 de ancho** (10 desplegadas = 260 px de los 640). El arte se regeneró desde el PNG
+maestro con el mismo método de quitar repetidas.
 
 Y como todas las fuentes del proyecto, **venía mal importada**: `antialiasing=1`, `hinting=3`,
 `subpixel_positioning=4`. Los tres a 0.

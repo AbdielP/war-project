@@ -6,5 +6,6 @@
 [resource]
 script = ExtResource("1")
 display_name = "2S6 Tunguska"
+short_name = "2S6"
 cannon = ExtResource("2")
 max_health = 70.0

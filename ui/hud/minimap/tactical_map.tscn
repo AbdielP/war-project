@@ -17,7 +17,7 @@ mouse_filter = 2
 color = Color(0.19215686, 0.21176471, 0.21960784, 1)
 
 [node name="Map" type="Control" parent="."]
-offset_top = 46.0
+offset_top = 42.0
 offset_right = 486.0
 offset_bottom = 384.0
 mouse_filter = 0

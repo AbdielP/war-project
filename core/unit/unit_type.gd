@@ -6,6 +6,12 @@ class_name UnitType
 enum Domain { AIR, SURFACE }
 
 @export var display_name: String = ""
+## Cómo se llama en el panel de desplegadas, donde el cuadrito mide 24 px y la
+## fuente gasta 8 px por letra: **tres caracteres, ni uno más**. Va a mano y no
+## recortado del nombre largo porque no hay regla que saque "LHD" de "Buque de
+## asalto anfibio". Vacío = se recorta el nombre largo, que para los modelos con
+## designación ("AH-1W SuperCobra") sale bien solo.
+@export var short_name: String = ""
 @export var actions: PackedStringArray = []
 ## La silueta que la representa en el panel de desplegadas. Va en el tipo y no en
 ## la instancia: dos Harrier se dibujan igual. Vacío = no sale silueta, sólo el

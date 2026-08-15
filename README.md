@@ -167,11 +167,12 @@ va en su recurso, y **cómo vuela** lo que dispara va en la escena del proyectil
 | Color de la coordenada pulsable | nodo `EventLog` → `accent_color` |
 | Ancho del registro (dónde parte el texto) | `hud.tscn`, nodo `EventLog` → `offset_right`. Sin caja, el ancho sólo decide dónde se corta la línea |
 | Todo lo visual de un retrato de unidad | `ui/hud/deployed_panel/unit_portrait.tscn`. Los nodos van sueltos: **se arrastran**. `Frame` el marco, `Mark` la silueta, `Health` la barra, `Name` el modelo |
-| Marco suelto y marco seleccionado | `assets/art/UI/portrait_frame.png` y `portrait_frame_selected.png` (24×24). Son **dos dibujos**, no un tinte: si cambiás uno cambiá el otro o dejan de cuadrar |
-| Silueta de cada unidad | su `*_type.tres` → `portrait_icon`. Vacío = sale sólo el marco |
-| Barra de vida | `assets/art/UI/health_bar_frame.png` (todo menos el verde) y `health_bar_fill.png` (sólo el verde), 24×5. **Van en pareja**: mismo ancho y mismas columnas, o el relleno no cae donde el marco |
-| Aire entre el marco, la barra y el nombre | `unit_portrait.tscn` → `offset_top` de `Health` (27) y de `Name` (32) |
-| Fuente y tamaño del nombre | mismo archivo, nodo `Name` (Silver a **14** — a 8 y a 12 los trazos se parten; ver `CLAUDE.md`) |
+| Marco suelto y marco seleccionado | `assets/art/UI/portrait_frame.png` y `portrait_frame_selected.png` (22×22). Son **dos dibujos**, no un tinte: si cambiás uno cambiá el otro o dejan de cuadrar |
+| Silueta de cada unidad | su `*_type.tres` → `portrait_icon` (16×16, entra justo en la ventana del marco). Vacío = sale sólo el marco |
+| Nombre de tres letras | su `*_type.tres` → `short_name`. Vacío = se recorta `display_name`, que sólo sale bien si el modelo lleva designación |
+| Barra de vida | `unit_portrait.tscn`, nodo `Health` → los dos `StyleBoxFlat`. Es color plano, no hay PNG: hueco `#3e3546`, relleno `#91db69` |
+| Aire entre el marco, la barra y el nombre | `unit_portrait.tscn` → `offset_top` de `Health` (24) y de `Name` (29) |
+| Fuente y tamaño del nombre | mismo archivo, nodo `Name` (Public Pixel a **8**, su nativo). Es monoespaciada: **8 px por letra**, así que el ancho del retrato decide cuántas caben — con 24, tres |
 | Separación entre retratos y entre categorías | `deployed_panel.tscn` → `separation` de `Rows` (10, entre grupos) y de `Sea`/`Air`/`Ground` (2) |
 | Dónde vive el panel de desplegadas | `hud.tscn`, nodo `DeployedPanel` → `offset_left`/`offset_top` (4, 4). No tiene ancho fijo: se ajusta a lo que haya |
 

@@ -2,6 +2,44 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-15
+
+### La fuente de los retratos es Public Pixel a 8, y por ser monoespaciada manda el ancho
+La Silver a 14 se leía, pero mal: el usuario la descartó de un vistazo. Se cambió por **Public
+Pixel a 8**, que es su tamaño nativo de verdad —rasterizada, cada trazo cae en 2 px sólidos— y
+viene con las medidas recomendadas escritas en su documentación (8, 16, 32…, siempre múltiplos).
+
+Lo que esto cambió no es cosmético: **es monoespaciada, 8 px por letra sin excepción**. El ancho
+de una etiqueta suya no se ajusta, se calcula, y eso invierte quién manda en el tamaño de un
+elemento de UI. Antes el retrato medía lo que medía el arte y el nombre se recortaba a lo que
+cupiera; ahora el nombre sólo puede medir 8, 16, 24 o 32, y el retrato tiene que ser al menos
+eso. Con el cuadrito en 24 px caben **tres caracteres y ni uno más**.
+
+De ahí sale `UnitType.short_name`: tres caracteres puestos a mano por unidad. Va a mano porque
+no hay regla que saque `LHD` de "Buque de asalto anfibio" — recortar el primer token daba `BUQ`.
+Para los modelos con designación el recorte automático sí sirve y se queda de respaldo
+(`AH-1W SuperCobra` → `AH1`).
+
+### El tamaño de un retrato lo fija su ventana interior, no la mitad de la medida original
+Al achicar los retratos a la mitad, la cadena de medidas sólo encaja en un sitio. El arte trae
+marco de 38 con ventana interior de 32 y silueta de 32 que la llena al píxel. La silueta a la
+mitad da 16, que es exacto (2:1, moda de bloque 2×2). El marco a la mitad daría 19 — y ahí se
+rompe: con 19 la ventana cae a 14, la silueta de 16 ya no entra, y habría que achicarla a 14,
+que no es 2:1 y la ensucia.
+
+Así que **el marco se para en 22**, la medida más pequeña que deja ventana de 16. Se prefiere
+desviarse 3 px de "la mitad" antes que degradar el dibujo: la silueta es lo que se mira, el
+marco sólo la rodea. La regla general: al escalar un conjunto de piezas encajadas, la que manda
+es la que no admite escalado sucio, y las demás se ajustan a ella.
+
+### La barra de vida del retrato pasa a color plano
+Eran dos PNG partidos del mismo dibujo (marco y relleno). El usuario quitó la barra del PNG
+maestro y pidió "una barra verde sencilla", así que ahora es un `ProgressBar` con dos
+`StyleBoxFlat` —hueco `#3e3546`, relleno `#91db69`—. La ventaja no es sólo que haya menos arte
+que mantener: un rectángulo se estira a cualquier ancho sin romper nada, mientras que la versión
+dibujada había que rehacerla cada vez que el retrato cambiaba de medida, y en esta sesión cambió
+tres veces.
+
 ## 2026-08-14
 
 ### Las unidades desplegadas son retratos dibujados, no botones con texto

@@ -9,7 +9,7 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay, mec�
 - Filtro: Nearest en todo, incluida la fuente.
 - Paleta: Resurrect64
 - Arte: pixel art top-down
-- Fuente: pixel font externa. No dibujar fuentes a mano. En uso: **m6x11plus para títulos, M5X7 para cuerpo**, las dos a tamaño **16**.
+- Fuente: pixel font externa. No dibujar fuentes a mano. En uso: **m6x11plus para títulos, M5X7 para cuerpo**, las dos a tamaño **16**, y **Public Pixel a 8** para etiquetas cortas.
 - Plataformas objetivo: PC, móvil, Nintendo Switch
 
 ## UI
@@ -17,7 +17,9 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay, mec�
 - **Un pixel font sólo vale a su tamaño nativo y sus múltiplos enteros.** Por debajo se remuestrea y el borrón se magnifica al escalar. Las dos del proyecto son nativas a 16.
 - **Toda fuente nueva viene mal importada.** Hay que poner *Antialiasing*, *Hinting* y *Subpixel Positioning* en ninguno/desactivado, o sale difuminada por más que el tamaño sea correcto.
 - **Comprobar que la fuente tenga el glifo** antes de meter cualquier signo tipográfico en un texto de UI: si falta, Godot lo saca de una fuente del sistema y rompe el alto de línea. Ninguna de las dos tiene `→ ← ↑ ↓ — – … • ‹ ›`.
-- **El tamaño nativo de una fuente se comprueba rasterizando un glifo, no leyendo su ficha.** Que el avance sea entero no basta: dice que las letras caen en píxel entero, no que quede letra. Sacar el glifo del atlas (`font_render_glyph` → `font_get_glyph_uv_rect` → `font_get_texture_image`) y volcarlo píxel a píxel; el tamaño bueno es el menor en que cada trazo cae en 1 px sólido. En uso: **Silver a 14** para etiquetas cortas.
+- **El tamaño nativo de una fuente se comprueba rasterizando un glifo, no leyendo su ficha.** Que el avance sea entero no basta: dice que las letras caen en píxel entero, no que quede letra. Sacar el glifo del atlas (`font_render_glyph` → `font_get_glyph_uv_rect` → `font_get_texture_image`) y volcarlo píxel a píxel; el tamaño bueno es el menor en que cada trazo cae en 1 px sólido. Si la fuente trae tamaños recomendados en su documentación, empezar por ahí y confirmarlos rasterizando igual.
+- **Con una fuente monoespaciada el texto deja de adaptarse al hueco: es el hueco el que tiene que adaptarse al texto.** Public Pixel gasta 8 px por letra, sin excepción, así que el ancho de una etiqueta suya sólo puede ser múltiplo de 8 y no hay recorte que lo arregle. Contar las letras **antes** de fijar la medida del elemento, no después.
+- **Cuando varias piezas de arte encajan unas dentro de otras, la que manda al escalar es la que no admite escalado sucio.** Un marco liso se achica a cualquier medida quitando repetidas; una silueta figurativa sólo baja limpia a la mitad exacta. Así que se fija primero la silueta y el marco se ajusta a ella, aunque eso deje el marco 3 px lejos de la medida pedida.
 - **Para achicar un PNG de UI, quitar filas y columnas repetidas antes que remuestrear.** Casi todo marco es liso por dentro; quitando las idénticas a su vecina se llega a cualquier medida sin perder un píxel de borde, filo ni esquinas. Remuestrear se guarda para lo figurativo, que no tiene repetidas, y ahí conviene moda de bloque 2×2 en vez de descartar píxeles alternos: conserva las masas y no inventa colores fuera de paleta.
 - **Antes de dar por bueno un texto o un asset, mirarlo.** Que el juego arranque sin errores de script no dice nada de si se lee. Componer el resultado y verlo, o se entrega arte roto.
 - **Lo que se ve se construye como escena**, no con nodos fabricados en código: si no existe en el editor, no se puede ajustar sin arrancar el juego.

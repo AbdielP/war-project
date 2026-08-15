@@ -178,7 +178,8 @@ Resource `.tres` compartido entre todas las instancias del mismo tipo (ej. `lhd_
 |--------|------|
 | `display_name` | String (clave de traducción) |
 | `actions` | PackedStringArray (ej. `["Hangar"]`) |
-| `portrait_icon` | Texture2D — la silueta del panel de desplegadas. Vacío = sólo marco |
+| `portrait_icon` | Texture2D — la silueta del panel de desplegadas, 16×16. Vacío = sólo marco |
+| `short_name` | String — cómo se llama en el retrato: **tres caracteres**. Vacío = se recorta `display_name` |
 | `cannon` | WeaponType — arma fija, va siempre y no ocupa estación. Vacío = sin cañón |
 | `domain` | `Domain` (AIR / SURFACE) — en qué medio se mueve. Decide qué armas pueden atacarla |
 | `max_health` | float — Harrier 60, T-14 100. Un AGM-65 pega 120 |
@@ -2160,8 +2161,8 @@ CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en 
 **El mapa táctico va pronto en la lista a propósito.** En un `CanvasLayer` el orden de los
 hijos decide quién dibuja encima, y el mapa está donde está para que el resto del HUD le pase
 por delante y siga siendo pulsable con el mapa abierto. Lo que evita el solape no es el orden
-sino la **colocación**: el área de dibujo del mapa empieza en `y=46` (bajo `DeployedPanel`, que
-mide 42 de alto desde y=4) y acaba en `x=486` (antes de la columna de la derecha), así que
+sino la **colocación**: el área de dibujo del mapa empieza en `y=42` (bajo `DeployedPanel`, que
+mide 37 de alto desde y=4) y acaba en `x=486` (antes de la columna de la derecha), así que
 ningún panel cruza el terreno y
 la escala no baja por ello. Probarlo moviendo el mapa al final es tentador y sale mal:
 entonces tapa el hangar y la lista de desplegadas.
@@ -2349,35 +2350,43 @@ extends Button   class_name UnitPortrait
 signal picked(unit: Unit)
 ```
 El cuadrito de una unidad, **como escena** (`unit_portrait.tscn`) y no montado en código: si no
-existe en el editor, no se puede ajustar sin arrancar el juego. Mide **24×42** y lleva cuatro
+existe en el editor, no se puede ajustar sin arrancar el juego. Mide **24×37** y lleva cuatro
 nodos con posición libre — `Frame`, `Mark`, `Health`, `Name` —, todos con `mouse_filter = IGNORE`
 para que el click lo coja el `Button` raíz, que va con `StyleBoxEmpty` en los cinco estados.
 
 | nodo | qué | dónde |
 |---|---|---|
-| `Frame` | marco dibujado, 24×24 | y 0–23 |
-| `Mark` | silueta, `stretch_mode = KEEP_CENTERED` | centrada en el marco |
-| `Health` | `TextureProgressBar`, 24×5 | y 27–31 |
-| `Name` | modelo, Silver a 14 | y 32, tinta en 34–40 |
+| `Frame` | marco dibujado, 22×22 | (1,0) |
+| `Mark` | silueta, 16×16 | (4,3) — dentro de la ventana del marco |
+| `Health` | `ProgressBar`, 22×3 | (1,24) |
+| `Name` | modelo, Public Pixel a 8 | (0,29), 24×8 |
 
 **Marco suelto y marco seleccionado son dos texturas, no un tinte** (`_FRAME` / `_FRAME_ON`): el
-seleccionado cambia el color del borde entero y añade marcas rojas en las esquinas, y eso no sale
-de ningún `modulate`.
+seleccionado cambia el color del borde entero y añade una marca de esquina, y eso no sale de
+ningún `modulate`.
 
-**La barra de vida son dos PNG separados desde el mismo dibujo**, sin retocar un píxel:
-`health_bar_frame` (todo menos el verde) va de `texture_under` y `health_bar_fill` (sólo el
-verde) de `texture_progress`. Así el marco se ve entero a cualquier nivel y sólo se recorta lo
-lleno; teñir el conjunto habría oscurecido también el borde. El relleno tiene **dos verdes**
-—`a0e679` de brillo arriba y `91db69` debajo— y los dos son relleno: coger sólo uno dejaría la
-fila del brillo fija mientras la de abajo baja. `step = 0` para que acepte valores fraccionarios.
+**Las tres medidas se atan entre sí, y el orden importa.** El arte original trae marco de 38 con
+ventana interior de 32, y silueta de 32 que llena la ventana al píxel. A la mitad la silueta cae
+en 16, que es exacto (2:1, moda de bloque 2×2). El marco **no** baja a 19: con 19 la ventana
+queda en 14 y la silueta ya no entra, así que habría que achicarla a 14 —que no es 2:1— y se
+ensucia. De ahí los 22: es la medida más pequeña que deja ventana de 16. Los marcos se achican
+quitando 16 filas y 16 columnas repetidas comunes a las dos variantes, sin perder un píxel de
+borde ni el triángulo de esquina del seleccionado.
+
+**La barra de vida es color plano, no textura**: un `ProgressBar` con dos `StyleBoxFlat` —hueco
+`#3e3546`, relleno `#91db69`—, `show_percentage = false` y `step = 0` para aceptar valores
+fraccionarios. Antes eran dos PNG (`texture_under` + `texture_progress`) partidos del mismo
+dibujo; se cambió cuando el dibujo desapareció del PNG maestro. Un rectángulo se estira a
+cualquier ancho sin romper ningún borde, que es justo lo que un marco dibujado no aguanta.
 
 Se engancha a `Unit.health_changed` en `show_unit()`; no mira la vida cada frame.
 
-**El nombre es el primer token** (`_short()`): `AH-1W SuperCobra` → `AH-1W`. Se corta por el
-modelo y no por un número de letras porque el modelo es lo que distingue una unidad de otra de un
-vistazo; recortar a ciegas daría `AH-1W S` y `AV-8B H`, que no dicen nada. El completo sigue en
-el tooltip. Anchos reales a Silver 14: `LHD` 13 px, `AH-1W` 21, `AV-8B` 22 — de ahí los 24 de
-ancho del retrato.
+**El nombre son tres caracteres** (`_short()`), y el número no es de estilo: Public Pixel es
+monoespaciada y gasta 8 px por letra, así que en los 24 px del retrato entran tres y ni una más.
+Manda [`UnitType.short_name`](#unittype--coreunitunit_typegd) cuando está puesto, porque no hay
+regla que saque `LHD` de "Buque de asalto anfibio" — el recorte automático daba `BUQ`. Sin él se
+recorta el primer token quitándole separadores: `AH-1W SuperCobra` → `AH1`. El completo sigue en
+el tooltip.
 
 `show_lost(nombre, tipo)` es la variante de baja: conserva la silueta, esconde la barra, apaga
 con `_LOST_TINT` y va `disabled`.
@@ -2878,7 +2887,7 @@ hacer nada, porque cuelga del HUD y el HUD ya es `process_mode = Always`.
 ```
 Control (TacticalMap)      — 640×384, mouse_filter = STOP
 ├── Backdrop     (ColorRect) — pantalla completa, opaca
-├── Map          (MapView)   — (0,46)-(486,384): esquiva los retratos de arriba y la columna derecha
+├── Map          (MapView)   — (0,42)-(486,384): esquiva los retratos de arriba y la columna derecha
 ├── Hint         (Label)     — (492,126), autowrap: qué hará el siguiente click
 └── CloseButton  (Button)    — (620,86), bajo el de pausa
 ```
@@ -3340,12 +3349,12 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] Sombra de la Mk-82 al caer, reusando `MissileShadow` por duck-typing (`get_distance_to_aim`) sin tocar su código
 - [x] **Vuelo del helicóptero (`HelicopterController`):** mando de ejes propios —adelante 85, costado 38, espaldas 28— con el rumbo separado de la traslación. Llega a menos de **1,5 px** del punto en 40 de 40 órdenes al azar y se planta ahí (0,1 px en 3 s de hover)
 - [x] **Despegue vertical:** la primera orden de movimiento saca al helicóptero de cubierta y libera su plaza (`took_off`). La orden vale aunque llegue mientras el barco todavía lo está colocando
-- [x] **Retratos de unidad en el panel de desplegadas (`UnitPortrait`):** marco dibujado, silueta por `UnitType.portrait_icon`, barra de vida y modelo debajo, todo como escena editable. El marco de seleccionada es una segunda textura y lo marca el `HUD`, así que responde a cualquier forma de elegir la unidad
+- [x] **Retratos de unidad en el panel de desplegadas (`UnitPortrait`):** cuadrito de 24×37 con marco de 22 dibujado, silueta de 16 por `UnitType.portrait_icon`, barra de vida de color plano y modelo de tres letras debajo, todo como escena editable. El marco de seleccionada es una segunda textura y lo marca el `HUD`, así que responde a cualquier forma de elegir la unidad. Diez desplegadas ocupan 258 px de los 640
 - [x] **Barra de vida**, colgada de la señal nueva `Unit.health_changed`. Va en dos PNG separados del mismo dibujo —marco y relleno— para que el borde se vea entero a cualquier nivel
 
 ### Pendiente
 - [ ] **Sombra propia para la Mk-82.** Hoy usa la del misil, que no le corresponde: es otra silueta y otra forma de caer
-- [ ] **Elegir la fuente del juego.** `assets/fonts/ui_theme.tres` está vacío a propósito (cae en la del motor) mientras se prueban candidatas. En uso hoy: m5x7 a 16 en `UnitTag` y el registro de eventos, **Silver a 14** en los retratos, donde hacía falta algo más estrecho. Ojo con la cobertura: la Boxel se descartó porque no trae **ninguna** tilde ni Ñ ni `¿ ¡` — sin eso no hay español, y menos localización. Y con el tamaño: Silver se probó a 8 porque es lo que dice la fuente, y a 8 sus mayúsculas ocupan 3 filas de píxeles
+- [ ] **Elegir la fuente del juego.** `assets/fonts/ui_theme.tres` está vacío a propósito (cae en la del motor) mientras se prueban candidatas. En uso hoy: m5x7 a 16 en `UnitTag` y el registro de eventos, **Public Pixel a 8** en los retratos. Ojo con la cobertura: la Boxel se descartó porque no trae **ninguna** tilde ni Ñ ni `¿ ¡` — sin eso no hay español, y menos localización. Y con el tamaño: la Silver se probó a 8 porque es lo que dice la fuente, y a 8 sus mayúsculas ocupan 3 filas de píxeles; se llevó a 14, que sí se leía, y aun así se cambió por la Public Pixel, cuyo nativo real **sí** es 8. El precio de la Public Pixel es que es monoespaciada: 8 px por letra sin excepción, así que el ancho de cualquier etiqueta suya es múltiplo de 8 y no se negocia
 - [ ] Alabeo e inclinación del avión al virar y al cambiar de régimen: el enganche existe (`bank_sprite_path`, `AnimatedSprite2D` de 5 frames), falta el arte
 - [ ] Marcas de impacto en el terreno, y barra de vida **sobre la unidad en el mapa** — la del panel de desplegadas ya está (`UnitPortrait`), y `Unit.health_changed` sirve igual para ésta. Con eso se afinan las ráfagas del cañón para que varíen y no dejen siempre el mismo patrón
 - [ ] **Definir el daño en serio.** Los números de hoy son de trabajo: un Harrier destruye un T-14 en tres pasadas de cañón, y **dos Mk-82 bastan** para lo mismo. Demasiado fácil para lo que debería costar. Va junto con las barras de vida, y hay que decidirlo por unidad y por arma, no ajustando el `damage` de cada una hasta que "quede bien"

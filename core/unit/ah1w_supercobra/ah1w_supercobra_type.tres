@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1")
 display_name = "AH-1W SuperCobra"
+short_name = "AH1"
 actions = []
 portrait_icon = ExtResource("2")
 domain = 0

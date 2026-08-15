@@ -5,7 +5,16 @@ class_name UnitPortrait
 ##
 ## Marco suelto y marco seleccionado son **dos texturas dibujadas**, no un tinte
 ## sobre la misma: la versión seleccionada cambia el color del borde entero y le
-## añade marcas rojas en las esquinas, y eso no sale de ningún `modulate`.
+## añade una marca de esquina, y eso no sale de ningún `modulate`.
+##
+## El marco mide 22 y su ventana interior 16, que es justo lo que miden las
+## siluetas: entran al píxel y no hay que escalar nada. Las dos medidas salen de
+## achicar el arte original a la mitad —silueta de 32 a 16, marco de 38 a 22—,
+## y el marco no baja a 19 porque entonces la ventana quedaría en 14 y habría
+## que estropear la silueta con un achicado que no es 2:1.
+##
+## La barra de vida es color plano y no textura: un rectángulo verde basta y así
+## se estira al ancho que haga falta sin romper ningún borde.
 
 ## Lo pulsó el jugador. Quien escucha decide qué es "seleccionar": el panel sólo
 ## sabe que este cuadrito representa a esa unidad.
@@ -20,7 +29,7 @@ const _LOST_TINT := Color(0.45, 0.45, 0.5, 0.7)
 
 @onready var _frame: TextureRect = $Frame
 @onready var _mark: TextureRect = $Mark
-@onready var _health: TextureProgressBar = $Health
+@onready var _health: ProgressBar = $Health
 @onready var _name: Label = $Name
 
 ## A quién representa, o `null` si es una baja.
@@ -40,7 +49,7 @@ func show_unit(shown: Unit, count: int = 1) -> void:
 	modulate = Color.WHITE
 	disabled = false
 	_mark.texture = shown.unit_type.portrait_icon if shown.unit_type != null else null
-	_name.text = _short(shown.get_display_name())
+	_name.text = _short(shown.get_display_name(), shown.unit_type)
 	tooltip_text = shown.get_display_name() if count < 2 \
 		else "%s (%d)" % [shown.get_display_name(), count]
 	_health.show()
@@ -56,7 +65,7 @@ func show_unit(shown: Unit, count: int = 1) -> void:
 func show_lost(display_name: String, type: UnitType) -> void:
 	unit = null
 	_mark.texture = type.portrait_icon if type != null else null
-	_name.text = _short(display_name)
+	_name.text = _short(display_name, type)
 	tooltip_text = "%s (perdido)" % display_name
 	modulate = _LOST_TINT
 	disabled = true
@@ -68,13 +77,18 @@ func set_selected(on: bool) -> void:
 	_frame.texture = _FRAME_ON if on else _FRAME
 
 
-## El primer token del nombre, que es el modelo: "AH-1W SuperCobra" cabe en 19 px
-## como "AH-1W" y no como otra cosa. Se corta por el modelo y no por un número de
-## letras porque el modelo es lo que distingue una unidad de otra de un vistazo;
-## recortar a ciegas daría "AH-1W S" y "AV-8B H", que no dicen nada.
-func _short(full: String) -> String:
+## Lo que cabe en el cuadrito: tres caracteres, porque la fuente gasta 8 px por
+## letra y el cuadrito mide 24. Manda `UnitType.short_name` cuando está puesto;
+## sin él se recorta el primer token del nombre —el modelo, que es lo que
+## distingue una unidad de otra de un vistazo— quitándole los separadores, que
+## sólo gastan sitio: "AH-1W SuperCobra" acaba en "AH1".
+func _short(full: String, type: UnitType) -> String:
+	if type != null and not type.short_name.is_empty():
+		return type.short_name
 	var cut := full.find(" ")
-	return full if cut < 1 else full.substr(0, cut)
+	var model := full if cut < 1 else full.substr(0, cut)
+	model = model.replace("-", "").replace(".", "").to_upper()
+	return model.substr(0, 3)
 
 
 func _refresh_health(current: float, maximum: float) -> void:

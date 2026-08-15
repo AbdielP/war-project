@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1")
 display_name = "Su-33 Flanker-D"
+short_name = "SU3"
 actions = []
 domain = 0
 max_health = 70.0

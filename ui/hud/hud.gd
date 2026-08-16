@@ -118,7 +118,9 @@ func _counts_down_to_impact(target: Unit) -> bool:
 func show_selected_unit(unit: Unit) -> void:
 	_disconnect_current()
 	_current_unit = unit
-	_selection_panel.show_unit(unit.get_display_name())
+	# La unidad entera y no sólo su nombre: la caja lleva una cámara en vivo
+	# apuntándola, así que necesita a quién mirar.
+	_selection_panel.show_unit(unit)
 	_actions_panel.show_actions(unit.get_actions() if unit.is_player_controlled() else [])
 	_refresh_weapon_bar()
 	# El objetivo puede cambiar sin tocar la selección — si muere, por ejemplo —,

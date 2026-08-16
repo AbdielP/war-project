@@ -178,8 +178,9 @@ Resource `.tres` compartido entre todas las instancias del mismo tipo (ej. `lhd_
 |--------|------|
 | `display_name` | String (clave de traducción) |
 | `actions` | PackedStringArray (ej. `["Hangar"]`) |
-| `portrait_icon` | Texture2D — la silueta del panel de desplegadas, 16×16. Vacío = sólo marco |
+| `portrait_icon` | Texture2D — la silueta del panel de desplegadas, **32×32**. Vacío = sólo marco |
 | `short_name` | String — cómo se llama en el retrato: **tres caracteres**. Vacío = se recorta `display_name` |
+| `thumb_zoom` | `ThumbZoom` (FULL / HALF / QUARTER / EIGHTH) — a qué escala se ve en la cámara de la caja de selección. Enum y no número suelto para que sólo quepan potencias de dos. Hoy todas a 1:1 salvo el LHD, a 1/4 |
 | `cannon` | WeaponType — arma fija, va siempre y no ocupa estación. Vacío = sin cañón |
 | `domain` | `Domain` (AIR / SURFACE) — en qué medio se mueve. Decide qué armas pueden atacarla |
 | `max_health` | float — Harrier 60, T-14 100. Un AGM-65 pega 120 |
@@ -2147,8 +2148,8 @@ CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en 
 ├── Minimap          (PanelContainer) — esquina inferior izquierda, estirable
 ├── TacticalMap      (Control)        — pantalla completa, visible=false
 ├── HangarWindow     (PanelContainer)
-├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=277
-├── SelectionPanel   (TextureRect)    — offset (540,313)-(637,381), caja dibujada 97×68
+├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=259
+├── SelectionPanel   (TextureRect)    — offset (438,291)-(535,377), caja 97×86: cámara en vivo + nombre
 ├── DeployedPanel    (PanelContainer) — offset (4,4), sin fondo y sin ancho fijo: retratos de las desplegadas
 ├── WeaponBar        (HBoxContainer)  — offset (160,344)-(480,376), barra de armas
 ├── AttackLabel      (Label)          — offset (160,332)-(480,343), "Atacando: X"
@@ -2277,31 +2278,60 @@ coincidir varias. **Sobrevive a la unidad** — si derriban al avión justo desp
 ```
 extends TextureRect
 ```
-La caja dibujada de la unidad seleccionada (`selection_box.png`, 97×68), en la esquina
-inferior derecha. API sin cambios: `show_unit(name)` / `clear()`.
+La caja dibujada de la unidad seleccionada (`selection_box.png`, 97×86). **Toma la unidad
+entera, no su nombre**: `show_unit(unit)` / `clear()`.
 
 ```
-TextureRect (SelectionPanel)   offset (540,313)-(637,381)
-├── Thumbnail (Control)        offset (3,3)-(94,43)    — 91×40, VACÍO
-└── Name      (Label)          offset (6,46)-(91,65)   — 85×19, M5X7 a 16
+TextureRect (SelectionPanel)      offset (438,291)-(535,377)
+├── Thumbnail    (SubViewportContainer) offset (2,2)-(95,61)   — stretch = false
+│   └── Feed     (SubViewport)          93×59, canvas_cull_mask = 2, update = ALWAYS
+│       └── Lens (Camera2D)
+├── WeaponButton (TextureButton)        offset (-51,47)-(-15,82) — 36×35, FUERA de la caja
+│   ├── Ammo       (Label)  (2,2)-(11,12)   — M5X7 a 8
+│   └── WeaponName (Label)  (7,24)-(34,33)  — M5X7 a 8
+└── Name          (Label)   offset (4,64)-(93,84) — 89×20, m6x11plus a 16
 ```
 
-`Thumbnail` está reservado y vacío a propósito: es donde irá la vista en vivo de la unidad
-(`SubViewport` compartiendo `World2D`). Existe ya como nodo para poder colocarlo en el editor
-antes de tener contenido.
+**La miniatura es una cámara al mundo de la partida, no un retrato.** El `SubViewport` comparte
+el `World2D` (se asigna en `_ready()`: no existe hasta que la partida corre, así que no puede
+dejarse puesto desde el editor) y `Lens` persigue a la unidad. Se la ve moverse, girar y disparar
+en vivo con sus efectos.
 
-**Los tres nodos van en `MOUSE_FILTER_IGNORE`.** La caja flota sobre el mapa y sin eso se come
-los clics de sus 97×68 px, tenga dibujo o no — la misma trampa que costó las órdenes bajo el
-registro de eventos.
+**Cómo se queda sola en el cuadro.** El viewport mira una capa que nace vacía
+(`_FEED_LAYER`, vía `canvas_cull_mask`) y al seleccionar se le presta a la unidad. Lo demás queda
+fuera por no estar invitado. Tres detalles que no se ven venir:
 
-**`_fit()` aprieta el espaciado sólo del nombre que no entra.** Cuatro de los seis caben con
-espaciado natural; `AV-8B Harrier II` (88 px) y `AH-1W SuperCobra` (95) se pasan de los 85 de
-hueco útil y bajan a 73 y 80 con `spacing_glyph = -1`. Apretar siempre pega las letras y
-empeora los seis — ver `decisions.md`. Se mide contra `_name.size.x`, no contra un número
-escrito aquí, para que mover el Label en el editor siga valiendo. Es un remiendo: con 10 px más
-de ancho de banda la condición no se dispara nunca.
+- **El descarte es por rama.** Si un ancestro no pasa el filtro se corta ahí y se cae todo lo que
+  cuelga. Por eso `_lend_layer()` sube también por los padres — y aun así el terreno se queda
+  fuera, porque es hermano de la unidad, no ancestro.
+- **`visibility_layer` no se hereda**, así que hay que recorrer la rama entera hacia abajo o
+  saldría el casco del avión y no su fogonazo.
+- **Lo que cuelga entra gratis**, incluido lo que estorba. El grupo `sin_miniatura` marca en la
+  escena lo que no debe salir: hoy el anillo de selección y los `RangeRings` del 2S6.
 
-**No meter botones dentro** — no hay sitio.
+**La cámara NO se redondea a píxel entero.** Viaja pegada a la unidad, así que cuadrarla a la
+rejilla mientras ella avanza en decimales la hace vibrar. Ver `decisions.md`.
+
+**`_visual_offset()` apunta al centro del círculo envolvente de todas las piezas**, no al origen
+ni al sprite principal. Es lo que decide cuánto zoom aguanta cada unidad: con el centro corrido
+2 px el Cobra pasa de media escala a 1:1. La escala la declara `UnitType.thumb_zoom`.
+
+**Todo va en `MOUSE_FILTER_IGNORE` salvo el botón.** La caja flota sobre el mapa y sin eso se come
+los clics de sus 97×86 px — la misma trampa que costó las órdenes bajo el registro de eventos.
+
+**`_fit()` aprieta el espaciado sólo del nombre que no entra.** Con m6x11plus a 16 entran los seis
+(`Su-33 Flanker-D` es el peor con 88 de 89), así que hoy la condición casi no se dispara. Se mide
+contra `_name.size.x`, no contra un número escrito aquí, para que mover el Label en el editor siga
+valiendo.
+
+**`WeaponButton` cuelga del panel con offsets negativos**, así que se muestra, se oculta y se
+mueve con la caja aunque se dibuje fuera de ella.
+
+> **Pendiente.** El nombre del arma va en M5X7 a 8 porque es lo único que cabe en su banda de
+> 27×7, pero a ese tamaño las mayúsculas miden 4 px y **no se leen**. Las salidas están medidas en
+> `decisions.md`: banda de 44×11 (botón ~53×39), designaciones de 4 caracteres, o quitar el nombre
+> del botón y dejar sólo icono y cantidad — que es lo recomendado. Los textos son de muestra: aún
+> **no están conectados al arma seleccionada**.
 
 ---
 

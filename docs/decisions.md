@@ -2,6 +2,106 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-16 — cámara en vivo de la unidad, retratos a tamaño nativo y el coste del texto
+
+### El texto en 640×384 cuesta 7 px de alto y 6 por letra, y ese número manda sobre el arte
+La lección más cara de la sesión, y se pagó en un botón de 36 px. **Por debajo de 7 px de alto
+una mayúscula tiene trazos de 4 px y deja de distinguirse**: `GBU-54` y `GAU-12` se confunden.
+Eso fija un suelo que ninguna fuente esquiva, porque no es cuestión de elegir mejor sino de
+cuántos píxeles tiene una letra.
+
+De ahí sale el presupuesto de cualquier etiqueta, medido con M5X7 a 16:
+
+| texto | hueco que necesita |
+|---|---|
+| `AIM-120` (7 caracteres) | 44 × 11 |
+| `MK82` (4 caracteres) | 25 × 11 |
+| `x12` | 18 × 11 |
+
+**El error de método fue dibujar el hueco primero y meter el texto después.** Con pixel fonts va
+al revés y sin excepciones: se mide lo que ocupa el texto, ese número es el tamaño mínimo del
+elemento, y el arte se dibuja alrededor. Se perdieron tres iteraciones agrandando y encogiendo
+un botón porque nadie había puesto ese número sobre la mesa.
+
+Y la salida cuando aun así no cabe **no es encoger la fuente: es quitar el requisito**. Un botón
+de arma de 36×35 no necesita decir `AIM-120` — necesita que se reconozca el misil y se lea
+cuántos quedan. El nombre va donde hay sitio. Si algo no cabe legible, es que no va ahí.
+
+### M5X7 a 8 es nítida y aun así no sirve para leer
+Rasterizada a 8, cada trazo cae en 1 px sólido: es tamaño nativo legítimo, no está remuestreada.
+Pero sus mayúsculas miden **4 px de alto**, y a esa altura las letras dejan de ser distinguibles.
+
+La lección corrige a medias una regla anterior del proyecto: **que un tamaño sea nativo dice que
+saldrá limpio, no que se pueda leer.** Son dos comprobaciones distintas y hay que hacer las dos —
+rasterizar para ver si está limpia, y mirar una palabra real para ver si se entiende.
+
+### La miniatura de la unidad seleccionada es una cámara al mundo, no un retrato
+El hueco de la caja lleva un `SubViewport` que comparte el `World2D` de la partida y apunta a la
+unidad elegida. Se la ve moverse, girar y disparar en directo con sus efectos, porque es la misma
+unidad del mapa vista desde otro sitio.
+
+**Se queda sola en el cuadro por invitación, no por exclusión.** Ocultar el terreno y las demás
+una por una sería una lista interminable que habría que mantener cada vez que se añade algo. En
+vez de eso la miniatura mira una capa que nace vacía (`canvas_cull_mask`), y al seleccionar se le
+presta esa capa a la unidad. Todo lo demás queda fuera por no estar invitado.
+
+Dos cosas que sólo se descubren estrellándose:
+
+- **El descarte del canvas es por rama, no por nodo.** La unidad tenía la capa y el cuadro salía
+  negro, porque su padre no la tenía y cortaba por arriba. Hay que prestársela también a los
+  ancestros — y eso no cuela el terreno, que es hermano de la unidad y sigue sin capa.
+- **Lo que cuelga de la unidad entra gratis, y eso incluye lo que estorba.** Los anillos de
+  alcance del 2S6 llenaban el cuadro de puntos verdes. Se resuelve con un grupo (`sin_miniatura`)
+  que se marca en la escena, para que sacar algo más no obligue a tocar código.
+
+### La cámara de la miniatura NO se redondea a píxel entero
+Parece que redondear da nitidez y aquí hace lo contrario. Esta cámara no mira un escenario
+quieto: **viaja pegada al objeto que enfoca**. Cuadrarla a la rejilla mientras la unidad avanza en
+decimales deja entre las dos una diferencia que cambia cada frame, y la unidad vibra dentro del
+cuadro. Pegada a ella sin redondeos la diferencia es constante y la imagen se queda clavada.
+
+Verificado moviendo un tanque en pasos decimales durante 20 frames: el dibujo ocupó **un solo
+sitio en los 20**. Con redondeo saltaba en todos.
+
+### Centrar bien es lo que decide cuánto zoom aguanta una unidad
+El Cobra no cabía a 1:1 y las palas asomaban por el borde. La causa no era su tamaño: la cámara
+apuntaba al fuselaje, y el rotor cuelga desplazado en `(1,6)`, así que el conjunto barría un
+círculo de 59 px alrededor de un centro que no era el suyo — justo el borde de la ventana.
+
+Apuntando al **centro del círculo envolvente más pequeño** de todas sus piezas, el mismo
+helicóptero barre 56 px y entra de sobra. Cada pieza entra como círculo y no como rectángulo
+porque aquí todo gira: la unidad entera, y el rotor además por su cuenta.
+
+La diferencia no es cosmética: con el centro corrido 2 px, el Cobra pasa de media escala a 1:1.
+**Centrar bien es lo que decide si una unidad se ve entera o hay que tirar medio dibujo.**
+
+Medido girando las seis unidades en 36 rumbos cada una: cinco de seis a 1:1 sin tocar el borde en
+ningún rumbo; sólo el LHD baja a 1/4, y ahí no hay nada que hacer porque mide 247 px girando.
+
+### Los retratos vuelven a tamaño nativo: reducir arte figurativo lo destruye
+Se venían achicando el marco (38→22) y las siluetas (32→16) para que diez desplegadas no comieran
+la pantalla. El resultado se veía mal por una razón sencilla: **un icono de 32×32 bajado a 16×16
+pierde tres de cada cuatro píxeles.** El «1» de la cubierta del LHD desaparece, la cuadrícula del
+borde se vuelve una línea sucia y el rotor del Cobra queda en un palito. Por bien que esté dibujado
+a 32, a 16 no cabe esa información.
+
+Se anula el escalado: retrato de **38×53** (marco 38×38, silueta 32×32). Con nueve desplegadas
+ocupa 376 px de 640 (59%) y llegan a caber unas quince.
+
+La regla general: **el pixel art se dibuja al tamaño en que se va a ver.** Si hace falta más
+pequeño, se dibuja otra versión simplificando la silueta a propósito — no se encoge la grande.
+
+### Agrupar retratos por tipo se descartó: es una solución que se rompe al crecer
+Se propuso una casilla por tipo con contador (`AH1 ×4`) para recuperar espacio. **Mala idea en un
+juego en desarrollo**: hoy hay seis tipos y va a haber muchos más, así que el ahorro desaparece
+justo cuando más falta hace. Queda anotado para no volver a proponerlo.
+
+### Al depurar, no filtrar los errores de script de la salida
+Se perdió un buen rato persiguiendo un fallo fantasma —«se sale en 36 de 36 rumbos»— que en
+realidad era el panel corriendo **sin script**, porque una variable mal tipada impedía compilarlo.
+Los `grep` de las sondas venían descartando `SCRIPT ERROR` para limpiar ruido. Un panel sin script
+no da error visible: se comporta como un nodo vacío y todo lo que se mide sale mal.
+
 ## 2026-08-15 — botones con icono y caja de unidad seleccionada
 
 ### Pausa y zoom pasan a icono dibujado, y el arte que cambia con el estado va exportada

@@ -9,3 +9,4 @@ display_name = "Buque de asalto anfibio"
 short_name = "LHD"
 actions = ["Hangar"]
 portrait_icon = ExtResource("2")
+thumb_zoom = 2

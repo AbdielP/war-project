@@ -16,7 +16,7 @@ signal map_context_requested(world_position: Vector2, unit: Unit)
 signal look_requested(world_position: Vector2)
 
 @onready var _event_log: EventLog = $EventLog
-@onready var _selection_panel: PanelContainer = $SelectionPanel
+@onready var _selection_panel: TextureRect = $SelectionPanel
 @onready var _actions_panel: PanelContainer = $ActionsPanel
 @onready var _hangar_window: PanelContainer = $HangarWindow
 @onready var _desel_btn: Button = $DeselButton

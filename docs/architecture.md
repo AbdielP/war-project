@@ -2147,13 +2147,13 @@ CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en 
 ├── Minimap          (PanelContainer) — esquina inferior izquierda, estirable
 ├── TacticalMap      (Control)        — pantalla completa, visible=false
 ├── HangarWindow     (PanelContainer)
-├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=313
-├── SelectionPanel   (PanelContainer) — offset_left=544, offset_top=349
+├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=277
+├── SelectionPanel   (TextureRect)    — offset (540,313)-(637,381), caja dibujada 97×68
 ├── DeployedPanel    (PanelContainer) — offset (4,4), sin fondo y sin ancho fijo: retratos de las desplegadas
 ├── WeaponBar        (HBoxContainer)  — offset (160,344)-(480,376), barra de armas
 ├── AttackLabel      (Label)          — offset (160,332)-(480,343), "Atacando: X"
-├── ZoomControls     (VBoxContainer)  — offset (622,30)-(636,60), botones + / −
-├── PauseButton      (Button)         — offset (622,66)-(636,80), alterna la pausa
+├── ZoomControls     (VBoxContainer)  — offset (620,30)-(636,64), lupas dibujadas 16×16
+├── PauseButton      (TextureButton)  — offset (618,70)-(636,88), alterna la pausa
 ├── TargetMenu       (PanelContainer) — menú contextual, se posiciona en runtime
 └── DeselButton      (Button)         — offset (526,351), visible=false, flat, text="×"
 ```
@@ -2275,10 +2275,33 @@ coincidir varias. **Sobrevive a la unidad** — si derriban al avión justo desp
 
 ### `SelectionPanel` — `ui/hud/selection_panel/selection_panel.gd`
 ```
-extends PanelContainer
+extends TextureRect
 ```
-Solo un `Label` con autowrap. `show_unit(name)` / `clear()`.
-**No meter botones dentro** — el panel es muy pequeño (~93×31px) y rompe el layout.
+La caja dibujada de la unidad seleccionada (`selection_box.png`, 97×68), en la esquina
+inferior derecha. API sin cambios: `show_unit(name)` / `clear()`.
+
+```
+TextureRect (SelectionPanel)   offset (540,313)-(637,381)
+├── Thumbnail (Control)        offset (3,3)-(94,43)    — 91×40, VACÍO
+└── Name      (Label)          offset (6,46)-(91,65)   — 85×19, M5X7 a 16
+```
+
+`Thumbnail` está reservado y vacío a propósito: es donde irá la vista en vivo de la unidad
+(`SubViewport` compartiendo `World2D`). Existe ya como nodo para poder colocarlo en el editor
+antes de tener contenido.
+
+**Los tres nodos van en `MOUSE_FILTER_IGNORE`.** La caja flota sobre el mapa y sin eso se come
+los clics de sus 97×68 px, tenga dibujo o no — la misma trampa que costó las órdenes bajo el
+registro de eventos.
+
+**`_fit()` aprieta el espaciado sólo del nombre que no entra.** Cuatro de los seis caben con
+espaciado natural; `AV-8B Harrier II` (88 px) y `AH-1W SuperCobra` (95) se pasan de los 85 de
+hueco útil y bajan a 73 y 80 con `spacing_glyph = -1`. Apretar siempre pega las letras y
+empeora los seis — ver `decisions.md`. Se mide contra `_name.size.x`, no contra un número
+escrito aquí, para que mover el Label en el editor siga valiendo. Es un remiendo: con 10 px más
+de ancho de banda la condición no se dispara nunca.
+
+**No meter botones dentro** — no hay sitio.
 
 ---
 
@@ -2456,12 +2479,12 @@ munición, y se enganchan a `Countermeasures.spent` para bajar solos.
 extends VBoxContainer
 signal zoom_change_requested(step: int)
 ```
-Dos botones cuadrados de 14×14 (`+` y `−`, `font_size` 8) apilados en el borde derecho,
-debajo de `DeployedPanel` — hueco libre entre ese panel y `ActionsPanel` (y=313). Estilo
-por `StyleBoxFlat` en código, misma paleta que `WeaponBar`.
+Dos `TextureButton` de 16×16 con las lupas dibujadas (`icon_zoom_in.png` /
+`icon_zoom_out.png`), apilados en el borde derecho, offset (620,30)-(636,64).
 
 **No sabe qué zoom hay puesto.** Emite `+1` / `−1` y recibe `set_state(level, count)`, con
-lo que apaga el botón que ya no lleva a ninguna parte (`disabled` + alpha 0,3). Es el mismo
+lo que apaga el botón que ya no lleva a ninguna parte (`disabled` + `modulate.a` 0,3 — las
+lupas no traen versión oscura, así que no hay textura de "agotado" que poner). Es el mismo
 criterio de `WeaponBar` con las armas agotadas: se distingue de un vistazo "puedes" de "no
 puedes", y la fuente de verdad sigue estando en un solo sitio, la cámara.
 
@@ -2471,17 +2494,23 @@ Para moverlos basta cambiar los `offset` del nodo en `hud.tscn`.
 
 ### `PauseButton` — `ui/hud/pause_button/pause_button.gd`
 ```
-extends Button
+extends TextureButton
 signal pause_toggled(paused: bool)
 ```
-Alterna `get_tree().paused`. Botón de 14×14 debajo de `ZoomControls`, misma columna.
-`shortcut_key` es `@export` (por defecto `KEY_SPACE`; `KEY_NONE` lo desactiva) y se atiende
-en `_unhandled_key_input`, igual que el ESC de `SelectionManager` — sin inventar un recurso
-`Shortcut` para una sola tecla.
+Alterna `get_tree().paused`. `TextureButton` de 18×18 debajo de `ZoomControls`, misma columna,
+offset (618,70)-(636,88). `shortcut_key` es `@export` (por defecto `KEY_SPACE`; `KEY_NONE` lo
+desactiva) y se atiende en `_unhandled_key_input`, igual que el ESC de `SelectionManager` —
+sin inventar un recurso `Shortcut` para una sola tecla.
 
-**Enseña la acción disponible, no el estado:** corriendo `||`, pausado `>`. Y pausado se
-pinta en color de acento, porque con todo congelado no queda nada en pantalla que delate
-en qué estado está.
+**Los cuatro iconos van `@export`** (`texture_pause`, `texture_pause_held`, `texture_play`,
+`texture_play_held`), no en `preload`: el botón cambia de arte según el estado, así que las dos
+parejas tienen que poder cambiarse desde el inspector. La versión oscura de cada una entra como
+`texture_pressed`, que Godot ya enseña sola mientras se mantiene el clic.
+
+**Enseña la acción disponible, no el estado:** corriendo el icono de pausa, pausado el de
+play. Es lo que hace cualquier reproductor; enseñar el estado obliga a pensar cuál de los dos
+significa qué. Con arte dibujada el propio cambio de icono ya distingue las dos situaciones,
+así que se fue el tinte de color de acento que llevaba la versión de texto.
 
 **Sin cableado con nadie.** `paused` es estado del árbol, no de otro nodo: no hay a quién
 pedírselo ni a quién avisar, así que no pasa por `HUD` → `SelectionManager` como el zoom.

@@ -1,23 +1,23 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://ui/hud/zoom_controls/zoom_controls.gd" id="1"]
+[ext_resource type="Texture2D" path="res://ui/hud/zoom_controls/icon_zoom_in.png" id="2"]
+[ext_resource type="Texture2D" path="res://ui/hud/zoom_controls/icon_zoom_out.png" id="3"]
 
 [node name="ZoomControls" type="VBoxContainer"]
-offset_left = 622.0
+offset_left = 620.0
 offset_top = 30.0
 offset_right = 636.0
-offset_bottom = 60.0
+offset_bottom = 64.0
 theme_override_constants/separation = 2
 script = ExtResource("1")
 
-[node name="ZoomIn" type="Button" parent="."]
-custom_minimum_size = Vector2(14, 14)
+[node name="ZoomIn" type="TextureButton" parent="."]
+custom_minimum_size = Vector2(16, 16)
 tooltip_text = "Acercar"
-theme_override_font_sizes/font_size = 8
-text = "+"
+texture_normal = ExtResource("2")
 
-[node name="ZoomOut" type="Button" parent="."]
-custom_minimum_size = Vector2(14, 14)
+[node name="ZoomOut" type="TextureButton" parent="."]
+custom_minimum_size = Vector2(16, 16)
 tooltip_text = "Alejar"
-theme_override_font_sizes/font_size = 8
-text = "-"
+texture_normal = ExtResource("3")

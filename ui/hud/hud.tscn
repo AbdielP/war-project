@@ -12,18 +12,18 @@
 [ext_resource type="PackedScene" path="res://ui/hud/zoom_controls/zoom_controls.tscn" id="9"]
 [ext_resource type="PackedScene" path="res://ui/hud/pause_button/pause_button.tscn" id="10"]
 [ext_resource type="PackedScene" path="res://ui/hud/minimap/tactical_map.tscn" id="11"]
-[ext_resource type="PackedScene" path="res://ui/hud/unit_tag/unit_tag.tscn" id="12"]
-[ext_resource type="PackedScene" path="res://ui/hud/countermeasure_bar/countermeasure_bar.tscn" id="13"]
+[ext_resource type="PackedScene" uid="uid://b5s1m0lbu5wwg" path="res://ui/hud/unit_tag/unit_tag.tscn" id="12"]
+[ext_resource type="PackedScene" uid="uid://ctkl2vdhxhu6k" path="res://ui/hud/countermeasure_bar/countermeasure_bar.tscn" id="13"]
 [ext_resource type="PackedScene" path="res://ui/hud/brevity_calls/brevity_calls.tscn" id="14"]
 
 [node name="HUD" type="CanvasLayer" unique_id=1219806315]
 process_mode = 3
 script = ExtResource("0")
 
-[node name="UnitTag" parent="." instance=ExtResource("12")]
+[node name="UnitTag" parent="." unique_id=1482052654 instance=ExtResource("12")]
 map_path = NodePath("../TacticalMap/Map")
 
-[node name="BrevityCalls" parent="." instance=ExtResource("14")]
+[node name="BrevityCalls" parent="." unique_id=1855857543 instance=ExtResource("14")]
 
 [node name="EventLog" parent="." unique_id=173143879 instance=ExtResource("1")]
 offset_left = 6.0
@@ -38,31 +38,31 @@ offset_top = 294.0
 offset_right = 87.0
 offset_bottom = 379.0
 
-[node name="TacticalMap" parent="." instance=ExtResource("11")]
+[node name="TacticalMap" parent="." unique_id=1799333361 instance=ExtResource("11")]
+layout_mode = 3
+anchors_preset = 0
 
-[node name="HangarWindow" parent="." instance=ExtResource("5")]
+[node name="HangarWindow" parent="." unique_id=400897078 instance=ExtResource("5")]
 
-[node name="ActionsPanel" parent="." instance=ExtResource("4")]
-offset_left = 544.0
-offset_top = 313.0
-offset_right = 637.0
+[node name="ActionsPanel" parent="." unique_id=1894496512 instance=ExtResource("4")]
 
 [node name="SelectionPanel" parent="." unique_id=464690185 instance=ExtResource("3")]
-offset_left = 544.0
-offset_top = 349.0
+offset_left = 540.0
+offset_top = 313.0
 offset_right = 637.0
+offset_bottom = 381.0
 
-[node name="DeployedPanel" parent="." instance=ExtResource("6")]
+[node name="DeployedPanel" parent="." unique_id=2021548655 instance=ExtResource("6")]
 offset_left = 4.0
 offset_top = 4.0
 offset_right = 4.0
 offset_bottom = 4.0
 
-[node name="WeaponBar" parent="." instance=ExtResource("7")]
+[node name="WeaponBar" parent="." unique_id=788493443 instance=ExtResource("7")]
 
-[node name="CountermeasureBar" parent="." instance=ExtResource("13")]
+[node name="CountermeasureBar" parent="." unique_id=1190024034 instance=ExtResource("13")]
 
-[node name="AttackLabel" type="Label" parent="."]
+[node name="AttackLabel" type="Label" parent="." unique_id=1557856103]
 visible = false
 offset_left = 160.0
 offset_top = 332.0
@@ -74,7 +74,7 @@ horizontal_alignment = 1
 vertical_alignment = 1
 clip_text = true
 
-[node name="ImpactTimer" type="Label" parent="."]
+[node name="ImpactTimer" type="Label" parent="." unique_id=106900932]
 visible = false
 offset_right = 24.0
 offset_bottom = 9.0
@@ -82,17 +82,21 @@ theme_override_colors/font_color = Color(0.9098039, 0.23137255, 0.23137255, 1)
 theme_override_font_sizes/font_size = 7
 vertical_alignment = 1
 
-[node name="ZoomControls" parent="." instance=ExtResource("9")]
+[node name="ZoomControls" parent="." unique_id=1381776980 instance=ExtResource("9")]
+offset_top = 33.0
+offset_bottom = 67.0
 
-[node name="PauseButton" parent="." instance=ExtResource("10")]
+[node name="PauseButton" parent="." unique_id=1730715536 instance=ExtResource("10")]
+offset_top = 6.0
+offset_bottom = 24.0
 
-[node name="TargetMenu" parent="." instance=ExtResource("8")]
+[node name="TargetMenu" parent="." unique_id=1637245030 instance=ExtResource("8")]
 
-[node name="DeselButton" type="Button" parent="."]
+[node name="DeselButton" type="Button" parent="." unique_id=24893359]
 visible = false
 offset_left = 526.0
 offset_top = 351.0
 offset_right = 542.0
 offset_bottom = 367.0
-flat = true
 text = "×"
+flat = true

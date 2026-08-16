@@ -18,7 +18,7 @@ content_margin_bottom = 4.0
 [node name="ActionsPanel" type="PanelContainer"]
 visible = false
 offset_left = 544.0
-offset_top = 313.0
+offset_top = 277.0
 offset_right = 637.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_1")
 theme = ExtResource("2")

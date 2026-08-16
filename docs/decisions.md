@@ -2,6 +2,81 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-15 — botones con icono y caja de unidad seleccionada
+
+### Pausa y zoom pasan a icono dibujado, y el arte que cambia con el estado va exportada
+Los tres botones eran `Button` con texto (`+`, `-`, `||`). Ahora son `TextureButton` con el
+arte del usuario. La versión oscura de cada icono entra como `texture_pressed`, que Godot ya
+enseña solo mientras se mantiene el clic — no hay que programar nada.
+
+El botón de pausa **sigue enseñando la acción y no el estado** (corriendo se ve la pausa,
+pausado se ve el play), que es lo que ya hacía con texto. Lo que cambió es de dónde salen sus
+cuatro iconos: empezaron como `preload` dentro del script y **eso fue un error que el usuario
+detectó a la primera** — desde el inspector no se podía cambiar ninguno. Pasan a cuatro
+`@export`.
+
+De ahí el corolario de "lo que se ve se construye como escena": **si un nodo cambia de arte
+según su estado, todas las variantes van exportadas, no sólo la que se ve al arrancar.** Con
+`preload` la escena miente: enseña una textura que el script sustituirá.
+
+Las lupas no traen versión oscura, así que el estado "ya no queda zoom" se resuelve bajando el
+`modulate` al 30% en vez del `StyleBoxFlat` que llevaban antes.
+
+### El editor no relee una escena instanciada dentro de una pestaña abierta
+Al cambiar los `.tscn` desde fuera, Godot reimportó los PNG nuevos él solo —los `.ctex` se
+generaron— pero el HUD seguía enseñando los botones de texto. No era caché de texturas: es que
+**una escena instanciada dentro de una pestaña abierta se sirve del `PackedScene` en memoria**,
+y ése no se relee. Recargar la pestaña del padre tampoco basta.
+
+Se arregla con *Proyecto → Recargar Proyecto Actual*. Queda apuntado porque costó una vuelta
+entera de "está roto / no, está bien" y volverá a pasar cada vez que se editen escenas fuera
+del editor.
+
+### La caja de la unidad seleccionada no se dimensiona al sprite — el zoom se dimensiona a la caja
+El error más caro de la sesión, y lo cazó el usuario: se estaba eligiendo el tamaño de la caja
+para que las unidades cupieran a 1:1. **Es imposible por construcción.** Medido:
+
+| unidad | sprite |
+|---|---|
+| AH-1W SuperCobra | 23×53 |
+| 2S6 Tunguska | 24×35 |
+| AV-8B Harrier II | 48×48 |
+| **LHD Wasp** | **160×304** |
+
+Entre el helicóptero y el barco hay un factor de 8. Ninguna medida sirve para los dos: la caja
+que enseña el LHD entero deja el helicóptero como un punto, y a la inversa. A 0,125x el LHD
+queda en 20×38, que no es un barco sino una mancha.
+
+La causa del error fue aplicar a los sprites la regla que sólo vale para las fuentes —*"es el
+hueco el que tiene que adaptarse al texto"*—. **No vale, y la diferencia es que una fuente no
+escala y un sprite sí** (por potencias de dos, que es lo que permite la regla de escala entera
+del proyecto). Así que el orden es el inverso: **el tamaño de la caja lo decide cuánto de los
+640×384 se quiere gastar, y el zoom por `UnitType` ajusta cada unidad.**
+
+Y la segunda mitad de la lección: **la miniatura no tiene por qué enseñar la unidad entera.**
+Es una cámara en vivo, no un retrato. El LHD recortado —un trozo de cubierta con la isla— dice
+"esto es un barco grande" mucho mejor que el mismo barco entero y diminuto.
+
+### Apretar la fuente para que quepa un nombre estropea todos los demás
+La banda del nombre quedó en 91 px de hueco y `AH-1W SuperCobra` mide 95 con M5X7 a 16. Se dijo
+que los 4 px se absorbían apretando 1 px el espaciado entre letras. **Compuesto y mirado, era
+falso:** con `spacing_glyph = -1` las letras se pegan unas a otras y `AH-1W` o `Tunguska` se
+leen como un borrón. Se habían empeorado los seis nombres para arreglar uno.
+
+Quedó apretando **sólo el nombre que se sale**, midiendo contra el ancho del propio Label
+—no contra un número escrito en el script, para que mover el Label en el editor siga
+valiendo—. Cuatro de seis salen con espaciado natural; se aprietan `AV-8B Harrier II` (88) y
+`AH-1W SuperCobra` (95) contra 85 de hueco útil.
+
+Es un remiendo declarado como tal en el código. **La salida limpia son 10 px más de ancho de
+banda** (hueco de 101), y entonces la condición no se dispara nunca. Lo que no se hizo, otra
+vez, fue acortar el nombre: la regla del parte de eventos sigue valiendo — el ancho se arregla
+por la caja, nunca por el mensaje.
+
+Nota de método que se repite: **los tres hallazgos de esta entrada salieron de renderizar y
+mirar**, no de leer números. Los 88 px de `AV-8B Harrier II` "cabían" en 91 y en pantalla el
+texto tocaba los dos filetes.
+
 ## 2026-08-15 — registro de eventos
 
 ### El parte no lleva íconos, ni filete, ni fondo: sólo texto y aire

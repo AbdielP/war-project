@@ -10,15 +10,12 @@ extends VBoxContainer
 ## +1 acerca, −1 aleja. Quien lo escuche decide qué significa eso.
 signal zoom_change_requested(step: int)
 
-const _COLOR_TEXT   := Color(0.6705882, 0.5803922, 0.4784314)
-const _COLOR_ACCENT := Color(0.56078434, 0.827451, 1.0)
-const _COLOR_BG     := Color(0.19215686, 0.21176471, 0.21960784)
-
-## Cuánto se apaga el botón que ya no puede ir más lejos.
+## Cuánto se apaga el botón que ya no puede ir más lejos. El icono no trae
+## una versión "agotado" propia, así que se simula atenuando el `modulate`.
 const _DISABLED_ALPHA := 0.3
 
-@onready var _in_btn: Button = $ZoomIn
-@onready var _out_btn: Button = $ZoomOut
+@onready var _in_btn: TextureButton = $ZoomIn
+@onready var _out_btn: TextureButton = $ZoomOut
 
 
 func _ready() -> void:
@@ -40,16 +37,5 @@ func _restyle() -> void:
 	_style(_out_btn)
 
 
-func _style(btn: Button) -> void:
-	var alpha := _DISABLED_ALPHA if btn.disabled else 1.0
-	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
-		var box := StyleBoxFlat.new()
-		box.bg_color = Color(_COLOR_BG, alpha)
-		box.set_border_width_all(1)
-		box.border_color = Color(_COLOR_ACCENT, alpha * 0.6)
-		box.set_content_margin_all(0)
-		btn.add_theme_stylebox_override(state, box)
-	btn.add_theme_color_override("font_color", Color(_COLOR_TEXT, alpha))
-	btn.add_theme_color_override("font_disabled_color", Color(_COLOR_TEXT, alpha))
-	btn.add_theme_color_override("font_hover_color", _COLOR_ACCENT)
-	btn.add_theme_color_override("font_pressed_color", _COLOR_ACCENT)
+func _style(btn: TextureButton) -> void:
+	btn.modulate.a = _DISABLED_ALPHA if btn.disabled else 1.0

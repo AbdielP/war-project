@@ -1,14 +1,22 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://ui/hud/pause_button/pause_button.gd" id="1"]
+[ext_resource type="Texture2D" path="res://ui/hud/pause_button/icon_pause_normal.png" id="2"]
+[ext_resource type="Texture2D" path="res://ui/hud/pause_button/icon_pause_pressed.png" id="3"]
+[ext_resource type="Texture2D" path="res://ui/hud/pause_button/icon_play_normal.png" id="4"]
+[ext_resource type="Texture2D" path="res://ui/hud/pause_button/icon_play_pressed.png" id="5"]
 
-[node name="PauseButton" type="Button"]
-custom_minimum_size = Vector2(14, 14)
-offset_left = 622.0
-offset_top = 66.0
+[node name="PauseButton" type="TextureButton"]
+custom_minimum_size = Vector2(18, 18)
+offset_left = 618.0
+offset_top = 70.0
 offset_right = 636.0
-offset_bottom = 80.0
+offset_bottom = 88.0
 tooltip_text = "Pausa"
-theme_override_font_sizes/font_size = 8
-text = "||"
+texture_normal = ExtResource("2")
+texture_pressed = ExtResource("3")
 script = ExtResource("1")
+texture_pause = ExtResource("2")
+texture_pause_held = ExtResource("3")
+texture_play = ExtResource("4")
+texture_play_held = ExtResource("5")

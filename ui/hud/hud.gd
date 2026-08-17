@@ -21,7 +21,7 @@ signal look_requested(world_position: Vector2)
 @onready var _hangar_window: PanelContainer = $HangarWindow
 @onready var _desel_btn: Button = $DeselButton
 @onready var _deployed_panel: PanelContainer = $DeployedPanel
-@onready var _weapon_bar: HBoxContainer = $WeaponBar
+@onready var _weapon_bar: Control = $WeaponBar
 @onready var _countermeasure_bar: CountermeasureBar = $CountermeasureBar
 @onready var _target_menu: PanelContainer = $TargetMenu
 @onready var _attack_label: Label = $AttackLabel
@@ -54,6 +54,10 @@ func _ready() -> void:
 			func(step: int) -> void: zoom_change_requested.emit(step))
 	_event_log.look_requested.connect(
 			func(where: Vector2) -> void: look_requested.emit(where))
+	# "A bordo" abre, por ahora, el hangar. Cuando exista la pantalla del buque
+	# entera —hangar, pañol, tropas—, se cambia aquí y la etiqueta ni se entera:
+	# ella sólo dice que quieren entrar.
+	_unit_tag.boarding_requested.connect(func(unit: Unit) -> void: _hangar_window.open(unit))
 	# El minimapa se estira a mano y crece hacia arriba, justo hacia donde está
 	# el registro. Que se aparte él, que es el que no lo pidió.
 	_minimap.resized.connect(_push_event_log_above_minimap)

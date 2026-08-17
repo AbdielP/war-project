@@ -37,7 +37,16 @@ enum FireMode {
 ## nadie tiene que acordarse de añadirla a una lista aparte. Vacío = no se canta
 ## nada y el registro sólo dice el nombre.
 @export var brevity_code: String = ""
+## El arma tal y como se ve **colgada del ala**: es el sprite que cuelga el
+## `HardpointRack` en el mundo, no un icono de menú.
 @export var icon: Texture2D
+## El arma tal y como se ve **en el HUD**, en un lienzo de 32×32 con la silueta
+## ya centrada. Es un dibujo aparte de `icon` y no el mismo a otro tamaño: el
+## del ala se ve desde arriba y a la escala del mundo, éste se ve de frente y
+## tiene que leerse dentro de un botón. Varias armas comparten dibujo cuando la
+## silueta no las distingue —los dos cañones, por ejemplo—: el icono dice de
+## qué **clase** es el arma; el nombre exacto lo dice la barra de armas.
+@export var ui_icon: Texture2D
 
 ## Cómo busca el blanco lo que dispara esta arma. **Decide qué señuelo la
 ## engaña**: chaff contra radar, bengalas contra calor. Soltar el que no es no

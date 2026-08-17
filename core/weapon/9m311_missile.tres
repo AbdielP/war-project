@@ -2,12 +2,14 @@
 
 [ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
 [ext_resource type="PackedScene" path="res://core/weapon/agm65_missile.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://core/weapon/icons/icon_missile_long.png" id="3"]
 
 [resource]
 script = ExtResource("1")
 display_name = "9M311"
 short_name = "SAM"
 brevity_code = "SAM"
+ui_icon = ExtResource("3")
 targets = 1
 min_range = 250.0
 max_range = 380.0

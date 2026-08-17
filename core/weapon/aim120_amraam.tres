@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://d3ht3t54sa7vl" path="res://assets/art/sprites/aim120_amraam.tres" id="2"]
 [ext_resource type="PackedScene" uid="uid://dgpbq55vf6cfr" path="res://core/weapon/agm65_missile.tscn" id="3"]
+[ext_resource type="Texture2D" path="res://core/weapon/icons/icon_missile_long.png" id="4"]
 
 [resource]
 script = ExtResource("1")
@@ -10,6 +11,7 @@ display_name = "AIM-120 AMRAAM"
 short_name = "AIM120"
 brevity_code = "Fox Three"
 icon = ExtResource("2")
+ui_icon = ExtResource("4")
 targets = 1
 min_range = 350.0
 max_range = 900.0

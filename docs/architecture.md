@@ -177,8 +177,10 @@ Resource `.tres` compartido entre todas las instancias del mismo tipo (ej. `lhd_
 | Export | Tipo |
 |--------|------|
 | `display_name` | String (clave de traducción) |
-| `actions` | PackedStringArray (ej. `["Hangar"]`) |
-| `portrait_icon` | Texture2D — la silueta del panel de desplegadas, **32×32**. Vacío = sólo marco |
+| `actions` | PackedStringArray — órdenes que se resuelven solas, una por botón de texto en `ActionsPanel`. Hoy vacío en todos los tipos |
+| `has_interior` | bool — la unidad se visita por dentro (hangar, pañol, tropas). Enciende el botón "Comandar" de `UnitTag`. Sólo el LHD |
+| `tag_offset` | Vector2 — cuánto se aparta la etiqueta de selección, **además** de donde esté puesta en su escena. LHD `(80,0)`, el resto cero |
+| `portrait_icon` | Texture2D — la silueta del panel de desplegadas, **centrada en 20×20**. Vacío = sólo marco |
 | `short_name` | String — cómo se llama en el retrato: **tres caracteres**. Vacío = se recorta `display_name` |
 | `thumb_zoom` | `ThumbZoom` (FULL / HALF / QUARTER / EIGHTH) — a qué escala se ve en la cámara de la caja de selección. Enum y no número suelto para que sólo quepan potencias de dos. Hoy todas a 1:1 salvo el LHD, a 1/4 |
 | `cannon` | WeaponType — arma fija, va siempre y no ocupa estación. Vacío = sin cañón |
@@ -190,6 +192,16 @@ Resource `.tres` compartido entre todas las instancias del mismo tipo (ej. `lhd_
 trae el modelo de fábrica, así que el menú de progresión lo subirá para todos los de ese modelo
 de una vez, y dos Harrier se dibujan igual. Lo que sí es de cada unidad es el bando, porque el
 mismo avión puede cambiarlo entre misiones.
+
+**`has_interior` va aparte de `actions` a propósito.** Una acción es una orden que se le da a la
+unidad y se resuelve sola, y por eso cabe en una lista de textos que el panel convierte en botones
+iguales. Abrir el interior del buque es otra cosa: es una puerta a otra pantalla, tiene arte
+propio, sitio propio en el HUD y sólo puede haber una. Metida en la lista volvería a dibujarse
+como un botón de texto más.
+
+**`tag_offset` no se deduce del sprite.** El dibujo dice cuánto ocupa la unidad, pero no por qué
+lado hay sitio libre ni cuánto aire pide — eso es composición, no un dato. Se suma a la colocación
+de la escena, así que cero es lo normal.
 
 El enum `Domain` se declara aquí y las firmas del propio archivo lo escriben
 `UnitType.Domain` — ver el patrón "Enum de una clase con `class_name`".
@@ -969,9 +981,10 @@ icono no se desincronizan entre misiones.
 | Grupo | Export | Uso |
 |-------|--------|-----|
 | — | `display_name` | String |
-| — | `short_name` | Para los botones de `WeaponBar`, donde caben ~6 caracteres |
+| — | `short_name` | Designación corta. Ya no la pinta `WeaponBar` —ahora usa el icono— pero sigue valiendo como nombre de ~6 caracteres |
 | — | `brevity_code` | Código OTAN que se canta al soltarla, para el `EventLog` |
-| — | `icon` | Texture2D (`AtlasTexture` sobre `Jet_bombs_missiles.png`) |
+| — | `icon` | Texture2D — el arma **colgada del ala**, el sprite que cuelga `HardpointRack` en el mundo |
+| — | `ui_icon` | Texture2D — el arma **en el HUD**, centrada en 32×34 (`core/weapon/icons/`). Dibujo aparte del anterior: el del ala se ve desde arriba, éste de frente |
 | Objetivos | `targets` | Flags Aire / Superficie. Contra qué sirve |
 | Alcance | `min_range`, `max_range` | Envolvente de tiro. Debajo del mínimo el arma aún no se estabilizó; encima del máximo se queda sin combustible |
 | Alcance | `firing_arc_deg` | Cuánto puede estar el blanco fuera del morro para poder tirar |
@@ -992,6 +1005,11 @@ tobera; el AMRAAM entra por donde sea. Así el arma decide la geometría del vue
 disparar de frente se vuela derecho, y sólo se va a buscar la cola cuando el arma lo exige.
 **Sólo cuenta contra blancos aéreos** — un tanque no tiene cola táctica, y exigirlo dejaría al
 cañón sin disparar contra tierra salvo llegando justo por detrás.
+
+**`ui_icon` puede repetirse entre armas.** Dice de qué **clase** es —bomba, bomba guiada, misil
+corto, misil largo, cañón—; el nombre exacto lo lleva el tooltip. Hoy: GBU-54 la bomba guiada,
+Mk-82 el par de bombas, AIM-9 el par de misiles, AIM-120 y 9M311 el misil largo, AGM-65 el corto,
+y GAU-12 y 2A38M comparten la ráfaga.
 
 Métodos: `in_range_against(distance, domain)`, `min_range_against(domain)`,
 `max_range_against(domain)`, `needs_rear_aspect()` y `aspect_to(shooter, target)` (estático).
@@ -2138,20 +2156,23 @@ Ruteo de acciones en `_on_action_pressed(name)`:
 match action_name.to_lower():
     "hangar": _hangar_window.open(_current_unit)
 ```
-Agregar casos aquí al implementar nuevas acciones.
+Agregar casos aquí al implementar nuevas acciones. Hoy ningún tipo declara acciones, así que este
+`match` no se dispara: el hangar se abre por otro camino —`UnitTag.boarding_requested`, el botón
+"Comandar"—, conectado en `_ready()`. Cuando exista la pantalla del buque entera se cambia ahí y
+la etiqueta ni se entera.
 
 **Árbol de `hud.tscn`:**
 ```
 CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en pausa
-├── UnitTag          (Node2D)         — etiqueta de la unidad seleccionada, sigue su posición
+├── UnitTag          (Node2D)         — etiqueta de la unidad seleccionada: nombre, estado y "Comandar"
 ├── EventLog         (PanelContainer) — columna izquierda, se mide y se coloca solo
 ├── Minimap          (PanelContainer) — esquina inferior izquierda, estirable
 ├── TacticalMap      (Control)        — pantalla completa, visible=false
 ├── HangarWindow     (PanelContainer)
-├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=259
+├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=259. Hoy sin inquilinos
 ├── SelectionPanel   (TextureRect)    — offset (438,291)-(535,377), caja 97×86: cámara en vivo + nombre
 ├── DeployedPanel    (PanelContainer) — offset (4,4), sin fondo y sin ancho fijo: retratos de las desplegadas
-├── WeaponBar        (HBoxContainer)  — offset (160,344)-(480,376), barra de armas
+├── WeaponBar        (Control)        — offset (160,344)-(480,384): bandeja de fondo + fila de botones
 ├── AttackLabel      (Label)          — offset (160,332)-(480,343), "Atacando: X"
 ├── ZoomControls     (VBoxContainer)  — offset (620,30)-(636,64), lupas dibujadas 16×16
 ├── PauseButton      (TextureButton)  — offset (618,70)-(636,88), alterna la pausa
@@ -2237,6 +2258,48 @@ mapa táctico (`map_path`), la misma que usa el parte.
 Dos reglas de comportamiento: **atacar manda sobre moverse**, y "moviéndose" sólo cuenta
 *mientras se acerca* — una vez llegado orbita ahí, y eso ya es esperar.
 
+El valor va en **verde `#91db69`** de Resurrect64, que es el mismo de la barra de vida de los
+retratos: dos verdes parecidos para la misma idea se leerían como dos ideas.
+
+**La línea se alarga hasta el final del nombre** repitiendo su tramo recto, nunca estirándolo.
+De los 36 px del último fotograma sólo los 10 primeros son dibujo —la diagonal—; las 26 columnas
+restantes son idénticas entre sí. El nodo `Line/Tail` es un `NinePatchRect` en modo mosaico que
+repite una de ellas, así que el trazo mide 1 px mida lo que mida el resultado. Estirado habría
+engordado a 3.
+
+La animación dibujada **no se toca**: se reproduce entera y `Tail` sigue creciendo desde donde
+ella acaba. El empalme no se ve porque va al mismo ritmo, y ese ritmo se midió en la tira —el
+trazo avanza 4 px por fotograma a 24 fps, o sea **96 px/s**, expuesto como `line_speed_px`—. El
+retraso tampoco es un número escrito: es `frames / speed` del propio `SpriteFrames`, para que
+retocar la tira no deje esto desincronizado. El ancho se redondea a píxel entero, o el mosaico
+deja media columna en la punta.
+
+| Unidad | Texto | Línea |
+|---|---|---|
+| 2S6 Tunguska | 70 px | 79 px |
+| AV-8B Harrier II | 88 px | 97 px |
+| AH-1W SuperCobra | 95 px | 104 px |
+
+**El botón "Comandar"** (`Boarding`, un `TextureButton` de 96×25) es la puerta al interior del
+buque. Sale sólo si la unidad es del jugador y su tipo declara `has_interior`, entra con el mismo
+fundido que el nombre y el estado, y **no sube con ellos**: un botón que se mueve mientras aparece
+se pulsa mal. Emite `boarding_requested(unit)` y nada más — es el HUD quien decide que hoy eso
+abre la `HangarWindow`.
+
+Sus dos texturas (normal y pulsado, esta última también en `texture_hover`) llevan el ancla y la
+flecha **pegadas dentro del PNG**, no colgadas como nodos: así el botón cambia entero al pulsarse
+en vez de dejar los adornos sin atenuar. El texto sí es un `Label`, y ocupa 49 px de los 64 libres
+entre el ancla y la flecha.
+
+**El desvío por unidad.** La etiqueta está colocada contra un avión de 23×53; sobre el LHD, de 160
+de manga, caía dentro del casco. `UnitType.tag_offset` se **suma** a la colocación de la escena y
+sólo lo tocan las unidades grandes — el Wasp lleva `(80, 0)`, el resto cero. No se deduce del
+sprite a propósito: el dibujo dice cuánto ocupa, no por qué lado hay sitio libre.
+
+Los espacios internos se midieron sobre la **tinta**, no sobre las cajas —el padding de la fuente
+engaña al doble—: 7 px del nombre a la línea, 11 de la línea a `Status:`, 6 hasta el valor y 13
+hasta el botón.
+
 ---
 
 ### `BrevityCalls` — `ui/hud/brevity_calls/brevity_calls.gd`
@@ -2286,9 +2349,6 @@ TextureRect (SelectionPanel)      offset (438,291)-(535,377)
 ├── Thumbnail    (SubViewportContainer) offset (2,2)-(95,61)   — stretch = false
 │   └── Feed     (SubViewport)          93×59, canvas_cull_mask = 2, update = ALWAYS
 │       └── Lens (Camera2D)
-├── WeaponButton (TextureButton)        offset (-51,47)-(-15,82) — 36×35, FUERA de la caja
-│   ├── Ammo       (Label)  (2,2)-(11,12)   — M5X7 a 8
-│   └── WeaponName (Label)  (7,24)-(34,33)  — M5X7 a 8
 └── Name          (Label)   offset (4,64)-(93,84) — 89×20, m6x11plus a 16
 ```
 
@@ -2316,22 +2376,17 @@ rejilla mientras ella avanza en decimales la hace vibrar. Ver `decisions.md`.
 ni al sprite principal. Es lo que decide cuánto zoom aguanta cada unidad: con el centro corrido
 2 px el Cobra pasa de media escala a 1:1. La escala la declara `UnitType.thumb_zoom`.
 
-**Todo va en `MOUSE_FILTER_IGNORE` salvo el botón.** La caja flota sobre el mapa y sin eso se come
-los clics de sus 97×86 px — la misma trampa que costó las órdenes bajo el registro de eventos.
+**Todo va en `MOUSE_FILTER_IGNORE`.** La caja flota sobre el mapa y sin eso se come los clics de
+sus 97×86 px — la misma trampa que costó las órdenes bajo el registro de eventos.
 
 **`_fit()` aprieta el espaciado sólo del nombre que no entra.** Con m6x11plus a 16 entran los seis
 (`Su-33 Flanker-D` es el peor con 88 de 89), así que hoy la condición casi no se dispara. Se mide
 contra `_name.size.x`, no contra un número escrito aquí, para que mover el Label en el editor siga
 valiendo.
 
-**`WeaponButton` cuelga del panel con offsets negativos**, así que se muestra, se oculta y se
-mueve con la caja aunque se dibuje fuera de ella.
-
-> **Pendiente.** El nombre del arma va en M5X7 a 8 porque es lo único que cabe en su banda de
-> 27×7, pero a ese tamaño las mayúsculas miden 4 px y **no se leen**. Las salidas están medidas en
-> `decisions.md`: banda de 44×11 (botón ~53×39), designaciones de 4 caracteres, o quitar el nombre
-> del botón y dejar sólo icono y cantidad — que es lo recomendado. Los textos son de muestra: aún
-> **no están conectados al arma seleccionada**.
+**Tuvo un botón de arma colgando con offsets negativos y se quitó.** Nació antes de que la
+`WeaponBar` llevara arte, y cuando ésta pasó a botones con icono quedaron dos sitios enseñando lo
+mismo — además de solaparse geométricamente. El arma se ve en un único sitio: la barra.
 
 ---
 
@@ -2342,6 +2397,11 @@ signal action_pressed(action_name: String)
 ```
 `show_actions(PackedStringArray)` — crea un `Button` por acción dinámicamente.
 `clear()` — oculta el panel.
+
+> **Hoy no lo usa nadie.** Su único inquilino era el "Hangar" del LHD, que dejó de ser una acción
+> y pasó a ser el botón "Comandar" de `UnitTag` (ver `UnitType.has_interior`). El panel se queda
+> para las acciones que vengan: con `actions` vacío en todos los tipos, `show_actions([])` lo
+> oculta y no estorba.
 
 ---
 
@@ -2403,28 +2463,28 @@ extends Button   class_name UnitPortrait
 signal picked(unit: Unit)
 ```
 El cuadrito de una unidad, **como escena** (`unit_portrait.tscn`) y no montado en código: si no
-existe en el editor, no se puede ajustar sin arrancar el juego. Mide **24×37** y lleva cuatro
+existe en el editor, no se puede ajustar sin arrancar el juego. Mide **24×39** y lleva cuatro
 nodos con posición libre — `Frame`, `Mark`, `Health`, `Name` —, todos con `mouse_filter = IGNORE`
 para que el click lo coja el `Button` raíz, que va con `StyleBoxEmpty` en los cinco estados.
 
 | nodo | qué | dónde |
 |---|---|---|
-| `Frame` | marco dibujado, 22×22 | (1,0) |
-| `Mark` | silueta, 16×16 | (4,3) — dentro de la ventana del marco |
-| `Health` | `ProgressBar`, 22×3 | (1,24) |
-| `Name` | modelo, Public Pixel a 8 | (0,29), 24×8 |
+| `Frame` | marco dibujado, 24×24 | (0,0) |
+| `Mark` | silueta, 20×20 | (2,2) — la ventana del marco, `KEEP_CENTERED` |
+| `Health` | `ProgressBar`, 24×3 | (0,26) |
+| `Name` | modelo, Public Pixel a 8 | (0,31), 24×8 |
 
 **Marco suelto y marco seleccionado son dos texturas, no un tinte** (`_FRAME` / `_FRAME_ON`): el
 seleccionado cambia el color del borde entero y añade una marca de esquina, y eso no sale de
 ningún `modulate`.
 
-**Las tres medidas se atan entre sí, y el orden importa.** El arte original trae marco de 38 con
-ventana interior de 32, y silueta de 32 que llena la ventana al píxel. A la mitad la silueta cae
-en 16, que es exacto (2:1, moda de bloque 2×2). El marco **no** baja a 19: con 19 la ventana
-queda en 14 y la silueta ya no entra, así que habría que achicarla a 14 —que no es 2:1— y se
-ensucia. De ahí los 22: es la medida más pequeña que deja ventana de 16. Los marcos se achican
-quitando 16 filas y 16 columnas repetidas comunes a las dos variantes, sin perder un píxel de
-borde ni el triángulo de esquina del seleccionado.
+**Las siluetas de 20×20 son otro dibujo, no las de 32 reducidas.** Achicar una de 32 a 16 tira
+tres de cada cuatro píxeles, y con ellos lo que la hacía reconocible; las pequeñas están
+redibujadas simplificando la silueta a propósito y vienen ya centradas en su lienzo. El marco de
+24 deja ventana de 20 —el borde gasta 2 px por lado—, así que entran al píxel y no se escala nada.
+
+**El ancho de 24 tampoco es redondeo**: Public Pixel gasta 8 px por letra y el nombre son tres
+caracteres. Nueve desplegadas ocupan 232 px de 640.
 
 **La barra de vida es color plano, no textura**: un `ProgressBar` con dos `StyleBoxFlat` —hueco
 `#3e3546`, relleno `#91db69`—, `show_percentage = false` y `step = 0` para aceptar valores
@@ -2448,15 +2508,21 @@ con `_LOST_TINT` y va `disabled`.
 
 ### `WeaponBar` — `ui/hud/weapon_bar/weapon_bar.gd`
 ```
-extends HBoxContainer
+extends Control
 ```
-Fila de botones cuadrados (34×34, `font_size` 7) abajo al centro (`x` 160–480, `y` 344–376
-— hueco libre entre el minimapa y los paneles de la derecha). Uno por arma de la unidad
-seleccionada, para elegir con cuál ataca.
+Fila de botones abajo al centro (`x` 160–480, `y` 344–384 — hueco libre entre el minimapa y los
+paneles de la derecha). Uno por arma de la unidad seleccionada, para elegir con cuál ataca.
 
-**Sin `clip_text`:** un nombre que no cabe ensancha el botón en vez de perder letras en
-silencio. El tamaño salió de medir con `Font.get_string_size()` — el nombre más ancho
-("AGM-65") ocupa 27 px sobre 30 útiles.
+**Árbol:**
+```
+WeaponBar (Control)          — offset (160,344)-(480,384), mouse_filter=IGNORE
+├── Tray (NinePatchRect)     — la bandeja de fondo, dibujada primero: queda detrás
+└── Row  (HBoxContainer)     — los botones, separación 6, centrados
+```
+
+La raíz **no puede ser el `HBoxContainer`**: un contenedor coloca a todos sus hijos en fila y ahí
+no cabe un fondo. Fue el cambio que obligó a hacer la bandeja, y la API que usa el HUD no se
+movió.
 
 | Método / Señal | Descripción |
 |---|---|
@@ -2466,19 +2532,57 @@ silencio. El tamaño salió de medir con `Font.get_string_size()` — el nombre 
 | `clear()` | Vacía y oculta |
 | `weapon_selected(weapon)` | El jugador pulsó un arma |
 
-Tres estados, para distinguir de un vistazo "no elegida" de "no disponible": activo a
-alpha 1.0, no seleccionado a `_DIM_ALPHA` (0.45) y **agotado** a `_EMPTY_ALPHA` (0.22)
-con `disabled = true` — elegir un arma que ya no está armaría un ataque que nunca sale.
-
-Cada botón lleva la munición restante en un `Label` hijo anclado abajo a la derecha
-(`font_size` 6, `MOUSE_FILTER_IGNORE` para no comerse los clicks). Va por dentro y no en
-el texto porque el nombre ya ocupa el ancho entero. El cañón no muestra número: su
-munición es −1, ilimitada.
-
 Se entera por `Unit.ammo_changed` en vez de preguntar cada frame por algo que cambia de
 tarde en tarde. **No guarda estado de selección**: la fuente de verdad es
 `Unit.active_weapon`, porque la barra se reconstruye en cada selección. `HUD` hace de
 intermediario — recibe `weapon_selected` y llama a `Unit.set_active_weapon()`.
+
+**La bandeja se dimensiona a las armas que haya**: `n × 32 + (n−1) × 6 + 12`, centrada bajo la
+fila — 44 px con un arma, 196 con cinco. Que cambie de tamaño entre unidades no se nota porque
+desaparece al deseleccionar. Se calcula en vez de preguntárselo al `HBoxContainer`, que no sabe
+su tamaño hasta el frame siguiente: esperar dejaría un fotograma con la bandeja anterior. El
+ancho del botón se le pregunta a uno de verdad (`_row.get_child(0)`), no se escribe aquí.
+
+Es un nine-patch de `weapon_tray.png` (50×24), con cortes **17 / 15 / 17 / 0** y los dos ejes en
+mosaico. Baja hasta `y = 384`, el borde inferior de la pantalla, que es donde el dibujo se corta —
+no tiene borde de abajo porque no se le ve. El corte superior es 15 y **no 3**: el remate plano
+del centro mide 3 px, pero la curva de las esquinas baja 15 filas, y ponerlo en 3 hacía que la
+curva cayera en zona repetible y el panel se pintara dos veces, uno encima de otro.
+
+---
+
+### `WeaponButton` — `ui/hud/weapon_bar/weapon_button.gd`
+```
+extends TextureButton   class_name WeaponButton
+```
+Un arma de la barra. Escena propia (`weapon_button.tscn`, 32×32) y no un nodo fabricado en
+código: la cara es arte, el icono se sale a propósito y la cantidad asoma por la esquina.
+
+```
+WeaponButton (TextureButton)  — 32×32, texture_normal = assets/art/UI/weapon_button.png
+├── Icon  (TextureRect)       — offset (0,-1)-(32,33), KEEP_CENTERED
+└── Count (Label)             — offset (2,21)-(34,34), M5X7 @16, alineado a la derecha
+```
+
+**Enseña el dibujo del arma, no su nombre.** La designación se va al `tooltip_text`: `AGM-65`
+pedía 27 px de texto dentro de 30 útiles y había obligado a bajar la fuente a 7, que es justo
+donde las mayúsculas dejan de distinguirse. El dibujo sale de `WeaponType.ui_icon`.
+
+**El icono desborda y tiene que desbordar.** Los dibujos son verticales y llegan a 33 px; la cara
+mide 32. Van en lienzo de 32×34 y asoman 1 px por arriba y por abajo. El primer intento los
+recortó a 32×32 y el AIM-120 perdió la punta y la cola.
+
+**La cantidad va en `xN` a 16 y sobresale.** A 8 las cifras miden 4 px y no se leen. `x300` ocupa
+24 px, así que el `Label` se sale del botón por la esquina inferior derecha y lleva borde oscuro
+de 2 px: la barra queda sobre el mar y un número claro sin borde se pierde.
+
+Tres estados: activo a alpha 1.0, no elegido a `_DIM_ALPHA` (0.5) y **agotado** a `_EMPTY_ALPHA`
+(0.25) con `disabled = true` — elegir un arma que ya no está armaría un ataque que nunca sale.
+Se aplica con **`self_modulate` y `_icon.modulate`, nunca con `modulate`**: éste arrastra a la
+descendencia y dejaba la cantidad translúcida sobre el cielo. Un arma agotada se ve casi borrada
+y su `x0` se lee igual que el resto.
+
+El cañón no muestra número: su munición es −1, ilimitada.
 
 ---
 

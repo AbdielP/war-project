@@ -22,6 +22,28 @@ const THUMB_SCALES: PackedFloat32Array = [1.0, 0.5, 0.25, 0.125]
 ## designación ("AH-1W SuperCobra") sale bien solo.
 @export var short_name: String = ""
 @export var actions: PackedStringArray = []
+## Esta unidad **se puede visitar por dentro**: tiene hangar, pañol de munición,
+## tropas embarcadas. Enciende el botón "A bordo" de la etiqueta de selección.
+##
+## Va aparte de [member actions] a propósito. Una acción es una orden que se le
+## da a la unidad y se resuelve sola —"despegar", "fondear"—, y por eso viven en
+## una lista de textos que el panel de acciones convierte en botones sueltos.
+## Esto es otra cosa: es una **puerta a otra pantalla**, tiene su propio arte y
+## su propio sitio en el HUD, y sólo puede haber una. Metida en la lista, saldría
+## dibujada como un botón de texto más y volvería al panel del que la sacamos.
+@export var has_interior: bool = false
+## Cuánto se aparta la etiqueta de selección del centro de la unidad, **además**
+## de donde esté puesta en la escena de la etiqueta.
+##
+## Existe porque el tamaño de las unidades no se parece en nada: la colocación de
+## la escena está pensada contra un avión de 23×53 y sobre el LHD, que mide
+## 160×304, cae dentro del casco. No es un caso que se pueda resolver con una
+## sola medida buena para todos, y tampoco conviene deducirla del sprite: el
+## dibujo no dice por qué lado hay sitio libre ni cuánto aire pide cada unidad.
+##
+## Se **suma**, así que dejarlo en cero es lo normal y sólo lo tocan las unidades
+## grandes.
+@export var tag_offset: Vector2 = Vector2.ZERO
 ## La silueta que la representa en el panel de desplegadas. Va en el tipo y no en
 ## la instancia: dos Harrier se dibujan igual. Vacío = no sale silueta, sólo el
 ## marco — es lo que pasa con las unidades ajenas, que en ese panel no aparecen.

@@ -2,6 +2,122 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-17 — el HUD pasa a ser arte: iconos en vez de nombres, y lo que cuesta repetir mal
+
+### Los botones de arma enseñan el arma, no su nombre
+La barra fabricaba un `Button` por arma con un `StyleBoxFlat` gris y la designación escrita
+dentro a tamaño 7. Ese 7 no se eligió: se llegó a él bajando la fuente hasta que `AGM-65` cupiera
+en 30 px, y 7 es justo donde las mayúsculas dejan de distinguirse. O sea que el botón era ilegible
+por construcción.
+
+Ahora cada botón lleva **el dibujo del arma** sobre el PNG del botón, y la designación exacta se
+va al tooltip. Una silueta se reconoce sin leerla, así que el problema del ancho desaparece en
+vez de resolverse: no hay texto que quepa o deje de caber.
+
+Es el mismo movimiento que ya se anotó el día anterior —«si algo no cabe legible, no va ahí»—
+aplicado al sitio donde de verdad dolía.
+
+### Un icono puede desbordar su botón; recortarlo para que quepa lo mutila
+Los dibujos de arma son verticales y llegan a 33 px; la cara del botón mide 32. El primer intento
+los centró dentro de un lienzo de 32×32, y el AIM-120 perdió la punta y la cola — un píxel por
+lado que era justo lo que lo distinguía de los demás misiles.
+
+La regla que se aplicó mal venía de la miniatura de unidad, donde un píxel fuera del marco **sí**
+es un fallo. Pero ahí es una ventana de cámara con un borde que la enmarca; aquí es un icono
+dibujado *encima* de un botón, y que asome es normal en un HUD. **Antes de recortar hay que
+preguntarse si el borde es un marco o sólo un fondo.** Ahora los iconos van en lienzo de 32×34 y
+sobresalen 1 px por arriba y por abajo.
+
+### Apagar un botón con `modulate` apaga también lo que dice
+Las armas no elegidas se atenúan al 50 %. Hecho con `modulate` se atenuaba **el nodo y toda su
+descendencia**, así que la cantidad —`x2`, `x12`— salía translúcida sobre el cielo y no se leía.
+
+Con `self_modulate` se apaga sólo el dibujo del propio nodo y los hijos quedan intactos. La
+distinción importa siempre que un elemento apagado siga teniendo que **informar**: el arma
+agotada se ve casi borrada, pero su `x0` se lee igual que el resto.
+
+### La cantidad va en `xN` y a 16, y por eso sobresale del botón
+A 8 las cifras miden 4 px y no se leen; a 16 miden 9. Con `x300` eso son 24 px de ancho, que no
+caben en un botón de 32 con un icono dentro — así que **sobresale por la esquina inferior
+derecha**, con borde oscuro de 2 px porque el número cae sobre el cielo cuando la barra queda
+sobre mar abierto.
+
+Es la aplicación directa de la lección del día anterior: el número manda sobre el hueco, y cuando
+no cabe se saca fuera en vez de encogerlo.
+
+### Los retratos vuelven a 24 px, con siluetas redibujadas y no reducidas
+Las de 32×32 achicadas a 16 perdían tres de cada cuatro píxeles. Las nuevas son **otro dibujo**,
+con la silueta simplificada a propósito y centradas en un lienzo de 20×20, que es la ventana del
+marco de 24. El cuadrito completo mide 24×39.
+
+El ancho de 24 tampoco es redondeo: la fuente del nombre gasta 8 px por letra y el nombre son tres
+caracteres. Nueve desplegadas ocupan 232 px de 640 en vez de 376.
+
+### La línea de la etiqueta se alarga repitiendo, no estirando
+La animación de despliegue son 10 fotogramas de 36 px, y el nombre más largo pide 104. Estirar la
+textura habría engordado el trazo de 1 px a 3.
+
+No hizo falta arte nuevo: de los 36 px del último fotograma, sólo los 10 primeros son dibujo —la
+diagonal— y las 26 columnas restantes son idénticas entre sí. Un nine-patch en modo mosaico las
+repite y el trazo sale igual mida lo que mida.
+
+**La animación dibujada no se toca**: se reproduce entera y, cuando se acaba, un segundo trozo
+sigue creciendo desde ahí. El empalme no se ve porque va al mismo ritmo, y ese ritmo **se midió,
+no se eligió**: el trazo avanza 4 px por fotograma a 24 fps, o sea 96 px/s. El retraso tampoco es
+un número escrito a mano — es la duración de la propia animación, fotogramas partidos por su
+velocidad, para que retocar la tira no deje esto desincronizado.
+
+### El corte de un nine-patch lo decide la curva, no el borde que se ve
+La bandeja de la barra de armas se dibujó dos veces, una encima de otra, y el motivo fue medir el
+corte superior a ojo: el remate parecía de 3 px —borde oscuro, brillo, medio tono— y se puso 3.
+
+Pero **las esquinas redondeadas bajan 15 filas de las 24 que mide el panel**. Con el corte en 3,
+todo lo que hay entre la fila 3 y la 14 —la curva entera— caía en zona repetible y se volvía a
+pintar más abajo.
+
+La regla ya estaba escrita en `CLAUDE.md` y aun así se saltó, así que se anota el matiz que
+faltaba: **el tramo repetible se busca, no se estima**. Filas idénticas a la anterior, columnas
+idénticas a la anterior; donde empieza el tramo contiguo, ahí está el corte. Un borde plano en el
+centro no dice nada de lo que hacen las esquinas.
+
+### La etiqueta de selección se aparta según lo grande que sea la unidad
+Está colocada contra un avión de 23×53 y sobre el LHD, que mide 160 de manga, caía dentro del
+casco. Se resolvió con `UnitType.tag_offset`, un desvío que **se suma** a la colocación de la
+escena y que sólo tocan las unidades grandes — el Wasp lleva 80, el resto cero.
+
+No se dedujo del sprite a propósito: el dibujo dice cuánto ocupa, pero no por qué lado hay sitio
+libre ni cuánto aire pide cada unidad. Eso es una decisión de composición, no un dato.
+
+### Una puerta a otra pantalla no es una "acción"
+El "Hangar" del LHD vivía en `UnitType.actions`, la lista de textos que el panel de acciones
+convierte en botones sueltos. Pero una acción es una orden que se le da a la unidad y se resuelve
+sola; esto es la entrada a otra pantalla —hangar, pañol, tropas—, tiene arte propio, sitio propio
+en el HUD y sólo puede haber una.
+
+Ahora es `UnitType.has_interior`, un booleano, y el botón vive en la etiqueta de selección. Dejarlo
+en la lista lo habría devuelto a dibujarse como un botón de texto más.
+
+El botón se llama **"Comandar"**. Nombra lo que haces, no el objeto que tienes delante. Y la
+etiqueta no sabe qué hay dentro: emite `boarding_requested` y es el HUD quien decide que hoy eso
+abre la ventana de hangar.
+
+### "En espera" en verde, y en el mismo verde
+El estado usa `#91db69` de Resurrect64, que es **el verde que ya usaba la barra de vida de los
+retratos**. Reutilizarlo en vez de elegir otro parecido hace que "está bien" tenga un solo color en
+todo el HUD.
+
+### El fondo de la barra de armas se dimensiona a las armas que haya
+La bandeja mide `n × 32 + (n−1) × 6 + 12` y se centra bajo la fila, así que una unidad con un arma
+la tiene de 44 px y otra con cinco de 196. Que cambie de tamaño entre unidades no se nota porque
+**desaparece al deseleccionar**: nunca se ven dos seguidas para comparar.
+
+Se calcula en vez de preguntárselo al `HBoxContainer`, que no sabe su tamaño hasta el frame
+siguiente — esperar dejaría un fotograma con la bandeja de la unidad anterior.
+
+Obligó a **reestructurar la escena de la barra**: un `HBoxContainer` coloca a todos sus hijos en
+fila y ahí no cabe un fondo. La raíz pasó a ser un `Control` con la bandeja primero (o sea detrás)
+y la fila después. La API que usa el HUD no cambió.
+
 ## 2026-08-16 — cámara en vivo de la unidad, retratos a tamaño nativo y el coste del texto
 
 ### El texto en 640×384 cuesta 7 px de alto y 6 por letra, y ese número manda sobre el arte

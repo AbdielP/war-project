@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://diu4aupc5rkvk"
-path="res://.godot/imported/weapon_button.png-9d840689ddd2fd7da4012f64306ca7d9.ctex"
+uid="uid://bjqst4lms7mne"
+path="res://.godot/imported/weapon_tray.png-83003598e9101f2ab189ff5f056adebd.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://ui/hud/selection_panel/weapon_button.png"
-dest_files=["res://.godot/imported/weapon_button.png-9d840689ddd2fd7da4012f64306ca7d9.ctex"]
+source_file="res://ui/hud/weapon_bar/weapon_tray.png"
+dest_files=["res://.godot/imported/weapon_tray.png-83003598e9101f2ab189ff5f056adebd.ctex"]
 
 [params]
 

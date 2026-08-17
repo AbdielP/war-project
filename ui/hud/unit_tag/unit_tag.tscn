@@ -4,6 +4,9 @@
 [ext_resource type="SpriteFrames" uid="uid://085sa7csdxag" path="res://ui/hud/unit_tag/selection_line_frames.tres" id="2"]
 [ext_resource type="FontFile" uid="uid://byulypqvv336d" path="res://assets/fonts/M5X7/m5x7.ttf" id="3"]
 [ext_resource type="Texture2D" uid="uid://c4tlxqkysfxpj" path="res://assets/art/sprites/AV-8B Harrier II.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://dpmjtk38g715c" path="res://assets/art/sprites/Animations/UI_Line_Animation_36x16.png" id="5"]
+[ext_resource type="Texture2D" path="res://ui/hud/unit_tag/vessel_button.png" id="6"]
+[ext_resource type="Texture2D" path="res://ui/hud/unit_tag/vessel_button_pressed.png" id="7"]
 
 [node name="UnitTag" type="Node2D" unique_id=1412780102]
 script = ExtResource("1")
@@ -13,18 +16,27 @@ modulate = Color(1, 1, 1, 0.5)
 texture = ExtResource("4")
 
 [node name="Line" type="AnimatedSprite2D" parent="." unique_id=445159737]
-position = Vector2(25, -32)
+position = Vector2(25, -39)
 sprite_frames = ExtResource("2")
 animation = &"deploy"
 frame = 9
 frame_progress = 1.0
 centered = false
 
+[node name="Tail" type="NinePatchRect" parent="Line"]
+offset_left = 36.0
+offset_right = 36.0
+offset_bottom = 16.0
+mouse_filter = 2
+texture = ExtResource("5")
+region_rect = Rect2(350, 0, 10, 16)
+axis_stretch_horizontal = 1
+
 [node name="Name" type="Label" parent="." unique_id=1780221269]
 offset_left = 34.0
-offset_top = -43.0
+offset_top = -54.0
 offset_right = 154.0
-offset_bottom = -27.0
+offset_bottom = -38.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("3")
 theme_override_font_sizes/font_size = 16
@@ -32,20 +44,45 @@ text = "AV-8B Harrier II"
 
 [node name="Status" type="Label" parent="." unique_id=1780221270]
 offset_left = 33.0
-offset_top = -14.0
+offset_top = -18.0
 offset_right = 193.0
-offset_bottom = -1.0
+offset_bottom = -5.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("3")
 theme_override_font_sizes/font_size = 16
 text = "Status:"
 
+[node name="Boarding" type="TextureButton" parent="."]
+visible = false
+offset_left = 33.0
+offset_top = 22.0
+offset_right = 129.0
+offset_bottom = 47.0
+focus_mode = 0
+texture_normal = ExtResource("6")
+texture_pressed = ExtResource("7")
+texture_hover = ExtResource("7")
+
+[node name="Label" type="Label" parent="Boarding"]
+layout_mode = 0
+offset_left = 19.0
+offset_top = 6.0
+offset_right = 83.0
+offset_bottom = 19.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.9019608, 0.9411765, 0.9098039, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 16
+text = "Comandar"
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="Value" type="Label" parent="Status" unique_id=1780221271]
 layout_mode = 0
-offset_top = 14.0
+offset_top = 15.0
 offset_right = 160.0
-offset_bottom = 27.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
+offset_bottom = 28.0
+theme_override_colors/font_color = Color(0.5686275, 0.85882354, 0.4117647, 1)
 theme_override_fonts/font = ExtResource("3")
 theme_override_font_sizes/font_size = 16
 text = "En espera"

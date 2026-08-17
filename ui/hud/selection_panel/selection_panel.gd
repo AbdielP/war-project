@@ -1,6 +1,6 @@
 extends TextureRect
 
-## La caja de la unidad seleccionada: cámara en vivo arriba, nombre abajo.
+## La caja de la unidad seleccionada: cámara en vivo arriba y nombre abajo.
 ##
 ## El hueco de arriba **no es un retrato, es una cámara**: un [SubViewport] que
 ## comparte el `World2D` de la partida y apunta a la unidad elegida. Se la ve
@@ -28,7 +28,7 @@ extends TextureRect
 ## ven salir y desaparecen del cuadro en cuanto se independizan.
 ##
 ## `mouse_filter` en `IGNORE` en todos: la caja flota sobre el mapa y sin eso se
-## comería los clics de sus 97×68 px, tenga dibujo o no. Es la misma trampa que
+## comería los clics de sus 97×86 px, tenga dibujo o no. Es la misma trampa que
 ## costó las órdenes bajo el registro de eventos.
 
 ## Cuánto se aprieta el espaciado entre letras cuando un nombre no entra.

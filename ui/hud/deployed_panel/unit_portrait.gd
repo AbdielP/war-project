@@ -7,11 +7,14 @@ class_name UnitPortrait
 ## sobre la misma: la versión seleccionada cambia el color del borde entero y le
 ## añade una marca de esquina, y eso no sale de ningún `modulate`.
 ##
-## El marco mide 22 y su ventana interior 16, que es justo lo que miden las
-## siluetas: entran al píxel y no hay que escalar nada. Las dos medidas salen de
-## achicar el arte original a la mitad —silueta de 32 a 16, marco de 38 a 22—,
-## y el marco no baja a 19 porque entonces la ventana quedaría en 14 y habría
-## que estropear la silueta con un achicado que no es 2:1.
+## El marco mide 24 y su ventana interior 20 —el borde gasta 2 px por lado—, y
+## las siluetas vienen dibujadas ya centradas en un lienzo de 20×20: entran al
+## píxel y no se escala nada. No son las de 32 reducidas, son **otro dibujo**
+## con la silueta simplificada a propósito; achicar la de 32 tiraría tres de
+## cada cuatro píxeles y con ellos lo que la hacía reconocible.
+##
+## El ancho de 24 no es redondeo: la fuente del nombre gasta 8 px por letra y
+## el nombre son tres caracteres. 24 es exactamente lo que ocupan.
 ##
 ## La barra de vida es color plano y no textura: un rectángulo verde basta y así
 ## se estira al ancho que haga falta sin romper ningún borde.

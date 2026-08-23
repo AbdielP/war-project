@@ -25,6 +25,11 @@ const GRIP_PX := 8.0
 ## Hasta dónde puede crecer. Más allá tapa el registro de eventos y deja de ser
 ## un mapa "de un vistazo".
 const MAX_HEIGHT := 220.0
+## Cuánto tarda el panel en asentar al soltar. Sólo se usa ahí: al soltar, el
+## marco casi siempre encoge un poco —el mapa de dentro no llegó a alcanzar la
+## fracción a la que había llegado el arrastre— y de golpe se leía como que el
+## arrastre se deshacía. Animado se lee como que asienta.
+const SETTLE_TIME := 0.12
 
 @onready var _view: MapView = $MapView
 
@@ -34,6 +39,7 @@ var _bottom: float = 0.0
 var _resizing: bool = false
 var _fitting: bool = false
 var _wanted_height: float = 0.0
+var _settle_tween: Tween = null
 
 
 func _ready() -> void:
@@ -45,7 +51,16 @@ func _ready() -> void:
 ## Recorta el panel a lo que mide el dibujo. Se llama cada vez que el mapa
 ## recalcula su escala, así que estirar el panel salta de una escala entera a la
 ## siguiente en vez de dejar franjas negras por el camino.
+##
+## **Se calla mientras se arrastra.** `MapView` avisa por `refitted` en cuanto
+## su propio tamaño cambia, y durante el arrastre eso pasa cada frame — sin
+## este freno, el reencaje exacto pisaba el tamaño continuo de `_apply_height`
+## en el mismo frame en que se ponía, y el arrastre volvía a saltar por
+## escalones. Quien deja el panel exacto al soltar es `_gui_input`, llamando
+## aquí a mano.
 func _fit_to_drawing() -> void:
+	if _resizing:
+		return
 	var drawing := _view.drawn_size()
 	if drawing == Vector2.ZERO or _fitting:
 		return
@@ -73,22 +88,57 @@ func _resize_to(wanted: Vector2) -> void:
 	_fitting = false
 
 
-## Estirar no elige píxeles, elige **escala**. El alto que pide el ratón se
-## traduce a la escala entera que quepa en él, y el panel se pone del tamaño
-## exacto que ocupa el dibujo a esa escala — de ahí que salte de golpe entre 1x,
-## 2x y 3x en vez de arrastrar franjas negras. Estirar sólo a lo alto no serviría
-## de nada: el ancho también manda sobre la escala, así que crecen los dos.
+## Como `_fit_to_drawing()`, pero animado — sólo para el instante de soltar el
+## arrastre. Ahí el encaje es casi siempre un encogimiento: el marco venía
+## siguiendo al ratón en continuo y el mapa de dentro se quedó en la fracción
+## de escalón anterior, así que el tamaño real casi nunca coincide con donde
+## se soltó. De golpe eso se leía como si el arrastre se deshiciera; en 0,12 s
+## se lee como que el panel asienta.
+##
+## `_fitting` se mantiene en `true` durante todo el tween y no sólo en el
+## instante de asignar, con el mismo motivo que en `_resize_to`: cada paso del
+## tween cambia `size`, `MapView` refita y avisa por `refitted`, y sin el
+## freno `_fit_to_drawing()` pisaría el tween a mitad de camino.
+func _settle_to_drawing() -> void:
+	var drawing := _view.drawn_size()
+	if drawing == Vector2.ZERO or _fitting:
+		return
+	var target := drawing + _pad()
+	if target.is_equal_approx(size):
+		return
+	if _settle_tween != null and _settle_tween.is_valid():
+		_settle_tween.kill()
+	_fitting = true
+	_settle_tween = create_tween()
+	_settle_tween.set_ease(Tween.EASE_OUT)
+	_settle_tween.set_trans(Tween.TRANS_CUBIC)
+	_settle_tween.set_parallel(true)
+	_settle_tween.tween_property(self, "size", target, SETTLE_TIME)
+	_settle_tween.tween_property(self, "position:y", _bottom - target.y, SETTLE_TIME)
+	_settle_tween.set_parallel(false)
+	_settle_tween.tween_callback(func() -> void: _fitting = false)
+
+
+## El marco sigue al ratón en continuo; lo que se queda pegado a la rejilla es
+## el dibujo de dentro, no el panel. **El marco no es pixel art, es una caja**
+## — puede medir cualquier fracción sin que se note, porque su nine-patch es
+## liso a lo largo del eje que estira (ver `decisions.md`). El mapa sí tiene
+## que quedarse en escala entera, pero eso ya lo resuelve `MapView._refit()`
+## solo, cada vez que cambia el tamaño que se le da: mientras la fracción no
+## alcanza para un escalón más, el dibujo se queda centrado y el margen vacío
+## alrededor crece con el arrastre; en cuanto alcanza, salta a llenarlo. Nunca
+## se estira ni un píxel del mapa.
 func _apply_height(height: float) -> void:
 	var unit := _view.size_for_scale(1)
 	if unit == Vector2.ZERO or unit.y <= 0.0:
 		return
 	var pad := _pad()
-	var scale := int(floor((height - pad.y) / unit.y))
-	_resize_to(unit * clampi(scale, 1, _max_scale(unit, pad)) + pad)
+	var wanted_scale := clampf((height - pad.y) / unit.y, 1.0, _max_scale(unit, pad))
+	_resize_to(unit * wanted_scale + pad)
 
 
-func _max_scale(unit: Vector2, pad: Vector2) -> int:
-	return maxi(int(floor((MAX_HEIGHT - pad.y) / unit.y)), 1)
+func _max_scale(unit: Vector2, pad: Vector2) -> float:
+	return maxf((MAX_HEIGHT - pad.y) / unit.y, 1.0)
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -102,7 +152,14 @@ func _gui_input(event: InputEvent) -> void:
 			if not _resizing:
 				expand_requested.emit()
 		else:
+			# Al soltar, se limpia la fracción animado (`_settle_to_drawing`),
+			# sin el tirón de un salto instantáneo. `_resizing` se apaga ANTES
+			# de llamar — `_fit_to_drawing` se calla a sí misma mientras valga
+			# `true`, y aquí se usa `_settle_to_drawing` en su lugar.
+			var was_resizing := _resizing
 			_resizing = false
+			if was_resizing:
+				_settle_to_drawing()
 		accept_event()
 		return
 	var motion := event as InputEventMouseMotion

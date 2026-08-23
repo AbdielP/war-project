@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"/c/Program Files/Godot Engine/Godot_v4.7.1-stable_win64_console.exe\" --headless --path . --quit)",
+      "Bash(\"/c/Program Files/Godot Engine/Godot_v4.7.1-stable_win64_console.exe\" --headless --path . --import)",
+      "Bash(\"/c/Program Files/Godot Engine/Godot_v4.7.1-stable_win64_console.exe\" --headless --editor --import --path .)",
+      "Bash(\"/c/Program Files/Godot Engine/Godot_v4.7.1-stable_win64_console.exe\" --help)"
+    ]
+  }
+}

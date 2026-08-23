@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://f3gn8ojfhv20"
-path="res://.godot/imported/selection_box.png-333bea3c42c3d4b7d0f43f4a302d7e94.ctex"
+uid="uid://bpwj8jaoa4qn4"
+path="res://.godot/imported/panel_name.png-7ab86976317b3a6d464428d445ed860d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://ui/hud/selection_panel/selection_box.png"
-dest_files=["res://.godot/imported/selection_box.png-333bea3c42c3d4b7d0f43f4a302d7e94.ctex"]
+source_file="res://ui/hud/selection_panel/panel_name.png"
+dest_files=["res://.godot/imported/panel_name.png-7ab86976317b3a6d464428d445ed860d.ctex"]
 
 [params]
 

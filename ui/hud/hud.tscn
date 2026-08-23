@@ -47,8 +47,8 @@ anchors_preset = 0
 [node name="ActionsPanel" parent="." unique_id=1894496512 instance=ExtResource("4")]
 
 [node name="SelectionPanel" parent="." unique_id=464690185 instance=ExtResource("3")]
-offset_left = 438.0
-offset_top = 291.0
+offset_left = 425.0
+offset_top = 267.0
 offset_right = 535.0
 offset_bottom = 377.0
 pivot_offset = Vector2(33, 34)

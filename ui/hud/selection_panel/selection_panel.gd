@@ -1,4 +1,4 @@
-extends TextureRect
+extends Control
 
 ## La caja de la unidad seleccionada: cámara en vivo arriba y nombre abajo.
 ##
@@ -28,8 +28,18 @@ extends TextureRect
 ## ven salir y desaparecen del cuadro en cuanto se independizan.
 ##
 ## `mouse_filter` en `IGNORE` en todos: la caja flota sobre el mapa y sin eso se
-## comería los clics de sus 97×86 px, tenga dibujo o no. Es la misma trampa que
-## costó las órdenes bajo el registro de eventos.
+## comería los clics de sus 110×113 px, tenga dibujo o no. Es la misma trampa
+## que costó las órdenes bajo el registro de eventos.
+##
+## **El fondo son dos piezas, no una.** La cámara y el nombre no comparten
+## panel: cada uno tiene su propio [NinePatchRect] (`ThumbBg`, `NameBg`), y van
+## pegados sin hueco entre ellos.
+##
+## Las dos texturas se **recomponen** del kit de UI, donde vienen como rejilla
+## de tiles de 16×16 separados por 1 px transparente. Ese hueco es una guía para
+## distinguir las piezas, no parte del dibujo: al montarlas hay que quitarlo y
+## dejar los tiles pegados, o el panel sale con rayas por dentro. Los cortes del
+## nine-patch son por eso 16 en los cuatro lados — el tamaño del tile.
 
 ## Cuánto se aprieta el espaciado entre letras cuando un nombre no entra.
 ##

@@ -68,12 +68,29 @@ signal boarding_requested(unit: Unit)
 ## La puerta al interior del buque —hangar, pañol, tropas—. Sale **sólo en las
 ## unidades que lo tienen** ([member UnitType.has_interior]) y sólo si son del
 ## jugador: al enemigo se le mira, no se le abre la bodega.
-@onready var _boarding: TextureButton = $Boarding
+@onready var _boarding: Button = $Boarding
+@onready var _boarding_icon: TextureRect = $Boarding/Icon
+@onready var _boarding_arrow: TextureRect = $Boarding/Arrow
+@onready var _boarding_label: Label = $Boarding/Label
 ## El dibujo de la unidad, ahí sólo para poder colocar la línea y el nombre a
 ## ojo contra algo real en vez de contra el vacío. Se apaga al empezar la
 ## partida: es una regla de carpintero, no parte del HUD. Misma treta que
 ## `MuzzleFlash`, que también se coloca a mano sobre el arte.
 @onready var _editor_guide: Sprite2D = $EditorGuide
+
+## Ancla y flecha en reposo: blancas, a juego con el texto. `StyleBoxTexture`
+## ya cambia solo el fondo del botón al presionar; estos íconos y el color del
+## texto no vienen gratis con eso y hay que apagarlos a mano en
+## [method _set_boarding_pressed].
+const _ICON_ANCHOR := preload("res://ui/hud/unit_tag/board_anchor.png")
+const _ICON_ARROW := preload("res://ui/hud/unit_tag/board_arrow.png")
+## Versión apagada de ambos íconos, para cuando el botón está presionado.
+const _ICON_ANCHOR_PRESSED := preload("res://ui/hud/unit_tag/board_anchor_pressed.png")
+const _ICON_ARROW_PRESSED := preload("res://ui/hud/unit_tag/board_arrow_pressed.png")
+const _LABEL_COLOR := Color(1, 1, 1, 1)
+## El mismo tono apagado que los íconos presionados, para que el texto
+## cambie junto con ellos y no se lea como dos cosas por separado.
+const _LABEL_COLOR_PRESSED := Color(0.78039217, 0.8627451, 0.8156863, 1)
 
 var _unit: Unit = null
 var _tween: Tween = null
@@ -109,6 +126,8 @@ func _ready() -> void:
 	_boarding.pressed.connect(func() -> void:
 		if is_instance_valid(_unit):
 			boarding_requested.emit(_unit))
+	_boarding.button_down.connect(_set_boarding_pressed.bind(true))
+	_boarding.button_up.connect(_set_boarding_pressed.bind(false))
 	_map = get_node_or_null(map_path) as MapView
 	_editor_guide.hide()
 	hide()
@@ -147,6 +166,15 @@ func clear() -> void:
 		_line_tween = null
 	hide()
 	set_process(false)
+
+
+## Ancla, flecha y texto se apagan juntos al presionar, como si fueran una
+## sola pieza — no el fondo solo, que ya cambia por su cuenta vía StyleBox.
+func _set_boarding_pressed(pressed: bool) -> void:
+	_boarding_icon.texture = _ICON_ANCHOR_PRESSED if pressed else _ICON_ANCHOR
+	_boarding_arrow.texture = _ICON_ARROW_PRESSED if pressed else _ICON_ARROW
+	_boarding_label.add_theme_color_override(
+			&"font_color", _LABEL_COLOR_PRESSED if pressed else _LABEL_COLOR)
 
 
 ## Alarga la línea hasta el final del nombre, arrancando justo cuando la

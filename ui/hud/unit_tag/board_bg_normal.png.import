@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://drxmjmy6qxhvh"
-path="res://.godot/imported/vessel_button.png-f6cedfc70dbe7ef0690cccb2228f8c0d.ctex"
+uid="uid://thp2gwmeluo2"
+path="res://.godot/imported/board_bg_normal.png-dda207339fec362c202964d0c23811bd.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://ui/hud/unit_tag/vessel_button.png"
-dest_files=["res://.godot/imported/vessel_button.png-f6cedfc70dbe7ef0690cccb2228f8c0d.ctex"]
+source_file="res://ui/hud/unit_tag/board_bg_normal.png"
+dest_files=["res://.godot/imported/board_bg_normal.png-dda207339fec362c202964d0c23811bd.ctex"]
 
 [params]
 

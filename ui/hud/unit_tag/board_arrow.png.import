@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b24nnckalremr"
-path="res://.godot/imported/vessel_button_pressed.png-544a79fcce268236410f19bb689afc50.ctex"
+uid="uid://d1dxyu3n4g7lg"
+path="res://.godot/imported/board_arrow.png-896bfad95d2834ace43e03d1b9bd09b5.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://ui/hud/unit_tag/vessel_button_pressed.png"
-dest_files=["res://.godot/imported/vessel_button_pressed.png-544a79fcce268236410f19bb689afc50.ctex"]
+source_file="res://ui/hud/unit_tag/board_arrow.png"
+dest_files=["res://.godot/imported/board_arrow.png-896bfad95d2834ace43e03d1b9bd09b5.ctex"]
 
 [params]
 

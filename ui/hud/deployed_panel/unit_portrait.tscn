@@ -3,6 +3,7 @@
 [ext_resource type="Script" path="res://ui/hud/deployed_panel/unit_portrait.gd" id="1"]
 [ext_resource type="Texture2D" path="res://assets/art/UI/portrait_frame.png" id="2"]
 [ext_resource type="FontFile" uid="uid://cjs6kmcm1r6dx" path="res://assets/fonts/Public Pixel Font/PublicPixel.ttf" id="5"]
+[ext_resource type="FontFile" uid="uid://e43eukj7ara3" path="res://assets/fonts/Yellow Pixel Font/Yellow_pixel_font.ttf" id="6"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_1"]
 
@@ -60,7 +61,7 @@ offset_right = 24.0
 offset_bottom = 39.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.78039217, 0.8627451, 0.8156863, 1)
-theme_override_fonts/font = ExtResource("5")
+theme_override_fonts/font = ExtResource("6")
 theme_override_font_sizes/font_size = 8
 horizontal_alignment = 1
 clip_text = true

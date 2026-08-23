@@ -70,7 +70,6 @@ signal boarding_requested(unit: Unit)
 ## jugador: al enemigo se le mira, no se le abre la bodega.
 @onready var _boarding: Button = $Boarding
 @onready var _boarding_icon: TextureRect = $Boarding/Icon
-@onready var _boarding_arrow: TextureRect = $Boarding/Arrow
 @onready var _boarding_label: Label = $Boarding/Label
 ## El dibujo de la unidad, ahí sólo para poder colocar la línea y el nombre a
 ## ojo contra algo real en vez de contra el vacío. Se apaga al empezar la
@@ -78,18 +77,16 @@ signal boarding_requested(unit: Unit)
 ## `MuzzleFlash`, que también se coloca a mano sobre el arte.
 @onready var _editor_guide: Sprite2D = $EditorGuide
 
-## Ancla y flecha en reposo: blancas, a juego con el texto. `StyleBoxTexture`
-## ya cambia solo el fondo del botón al presionar; estos íconos y el color del
-## texto no vienen gratis con eso y hay que apagarlos a mano en
+## El ancla en reposo: blanca, a juego con el texto. `StyleBoxTexture` ya
+## cambia solo el fondo del botón al presionar; el ícono y el color del texto
+## no vienen gratis con eso y hay que apagarlos a mano en
 ## [method _set_boarding_pressed].
 const _ICON_ANCHOR := preload("res://ui/hud/unit_tag/board_anchor.png")
-const _ICON_ARROW := preload("res://ui/hud/unit_tag/board_arrow.png")
-## Versión apagada de ambos íconos, para cuando el botón está presionado.
+## Versión apagada, para cuando el botón está presionado.
 const _ICON_ANCHOR_PRESSED := preload("res://ui/hud/unit_tag/board_anchor_pressed.png")
-const _ICON_ARROW_PRESSED := preload("res://ui/hud/unit_tag/board_arrow_pressed.png")
 const _LABEL_COLOR := Color(1, 1, 1, 1)
-## El mismo tono apagado que los íconos presionados, para que el texto
-## cambie junto con ellos y no se lea como dos cosas por separado.
+## El mismo tono apagado que el ícono presionado, para que el texto cambie
+## junto con él y no se lea como dos cosas por separado.
 const _LABEL_COLOR_PRESSED := Color(0.78039217, 0.8627451, 0.8156863, 1)
 
 var _unit: Unit = null
@@ -168,11 +165,10 @@ func clear() -> void:
 	set_process(false)
 
 
-## Ancla, flecha y texto se apagan juntos al presionar, como si fueran una
-## sola pieza — no el fondo solo, que ya cambia por su cuenta vía StyleBox.
+## Ancla y texto se apagan juntos al presionar, como si fueran una sola pieza
+## — no el fondo solo, que ya cambia por su cuenta vía StyleBox.
 func _set_boarding_pressed(pressed: bool) -> void:
 	_boarding_icon.texture = _ICON_ANCHOR_PRESSED if pressed else _ICON_ANCHOR
-	_boarding_arrow.texture = _ICON_ARROW_PRESSED if pressed else _ICON_ARROW
 	_boarding_label.add_theme_color_override(
 			&"font_color", _LABEL_COLOR_PRESSED if pressed else _LABEL_COLOR)
 

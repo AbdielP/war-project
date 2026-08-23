@@ -6,12 +6,10 @@
 [ext_resource type="Texture2D" uid="uid://c4tlxqkysfxpj" path="res://assets/art/sprites/AV-8B Harrier II.png" id="4"]
 [ext_resource type="Texture2D" uid="uid://dpmjtk38g715c" path="res://assets/art/sprites/Animations/UI_Line_Animation_36x16.png" id="5"]
 [ext_resource type="Texture2D" path="res://ui/hud/unit_tag/board_anchor.png" id="8"]
-[ext_resource type="Texture2D" path="res://ui/hud/unit_tag/board_arrow.png" id="9"]
 [ext_resource type="Texture2D" path="res://ui/hud/unit_tag/board_bg_normal.png" id="10"]
 [ext_resource type="Texture2D" path="res://ui/hud/unit_tag/board_bg_pressed.png" id="11"]
 [ext_resource type="FontFile" uid="uid://e43eukj7ara3" path="res://assets/fonts/Yellow Pixel Font/Yellow_pixel_font.ttf" id="12"]
 [ext_resource type="Texture2D" path="res://ui/hud/unit_tag/board_anchor_pressed.png" id="13"]
-[ext_resource type="Texture2D" path="res://ui/hud/unit_tag/board_arrow_pressed.png" id="14"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_board_normal"]
 texture = ExtResource("10")
@@ -73,9 +71,9 @@ text = "Status:"
 
 [node name="Boarding" type="Button" parent="."]
 visible = false
-offset_left = 33.0
+offset_left = 47.0
 offset_top = 22.0
-offset_right = 148.0
+offset_right = 124.0
 offset_bottom = 47.0
 focus_mode = 0
 theme_override_styles/normal = SubResource("StyleBoxTexture_board_normal")
@@ -84,35 +82,26 @@ theme_override_styles/pressed = SubResource("StyleBoxTexture_board_pressed")
 
 [node name="Icon" type="TextureRect" parent="Boarding"]
 layout_mode = 0
-offset_left = 6.0
+offset_left = -14.0
 offset_top = 6.0
-offset_right = 16.0
+offset_right = -4.0
 offset_bottom = 19.0
 mouse_filter = 2
 texture = ExtResource("8")
 
 [node name="Label" type="Label" parent="Boarding"]
 layout_mode = 0
-offset_left = 19.0
+offset_left = 5.0
 offset_top = 3.0
-offset_right = 97.0
+offset_right = 72.0
 offset_bottom = 22.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("12")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 8
 text = "COMANDAR"
 horizontal_alignment = 1
 vertical_alignment = 1
-
-[node name="Arrow" type="TextureRect" parent="Boarding"]
-layout_mode = 0
-offset_left = 104.0
-offset_top = 7.0
-offset_right = 110.0
-offset_bottom = 18.0
-mouse_filter = 2
-texture = ExtResource("9")
 
 [node name="Value" type="Label" parent="Status" unique_id=1780221271]
 layout_mode = 0

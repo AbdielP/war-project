@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://sceaptmo4enj"
-path="res://.godot/imported/Intento de UI final.png-93f11117c207c59e4aaafd6de9b37eed.ctex"
+uid="uid://cxrx42blgfgka"
+path="res://.godot/imported/tab_top.png-c3628b3d3fa4c18f7f956cc757283a01.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/UI/Intento de UI final.png"
-dest_files=["res://.godot/imported/Intento de UI final.png-93f11117c207c59e4aaafd6de9b37eed.ctex"]
+source_file="res://ui/hud/vessel_window/tab_top.png"
+dest_files=["res://.godot/imported/tab_top.png-c3628b3d3fa4c18f7f956cc757283a01.ctex"]
 
 [params]
 

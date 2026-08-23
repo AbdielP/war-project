@@ -15,6 +15,11 @@ var _marked_target: Unit
 
 const _MoveMarker = preload("res://core/selection/move_marker.gd")
 
+## Cuánto se aparta el barco del centro al abrir su hangar, en píxeles de
+## pantalla: un cuarto de los 640 de ancho de diseño, para dejarle la mitad
+## derecha entera al panel.
+const _HANGAR_FOCUS_OFFSET := Vector2(160.0, 0.0)
+
 
 func _ready() -> void:
 	_camera = get_node(camera_path) as PanCamera
@@ -28,6 +33,8 @@ func _ready() -> void:
 	_hud.map_clicked.connect(_on_map_clicked)
 	_hud.map_context_requested.connect(_on_map_context_requested)
 	_hud.look_requested.connect(_look_at)
+	_hud.hangar_opened.connect(func(_unit: Unit) -> void: _camera.pan_focus(_HANGAR_FOCUS_OFFSET))
+	_hud.hangar_closed.connect(func() -> void: _camera.pan_focus(Vector2.ZERO))
 	_camera.zoom_changed.connect(_hud.set_zoom_state)
 	# La cámara ya fijó su nivel en su propio _ready(), antes de que hubiera
 	# nadie escuchando: hay que pedirle el estado inicial a mano o los botones

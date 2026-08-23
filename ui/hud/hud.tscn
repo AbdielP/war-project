@@ -15,6 +15,7 @@
 [ext_resource type="PackedScene" uid="uid://b5s1m0lbu5wwg" path="res://ui/hud/unit_tag/unit_tag.tscn" id="12"]
 [ext_resource type="PackedScene" uid="uid://ctkl2vdhxhu6k" path="res://ui/hud/countermeasure_bar/countermeasure_bar.tscn" id="13"]
 [ext_resource type="PackedScene" path="res://ui/hud/brevity_calls/brevity_calls.tscn" id="14"]
+[ext_resource type="PackedScene" path="res://ui/hud/vessel_window/vessel_window.tscn" id="15"]
 
 [node name="HUD" type="CanvasLayer" unique_id=1219806315]
 process_mode = 3
@@ -43,6 +44,8 @@ layout_mode = 3
 anchors_preset = 0
 
 [node name="HangarWindow" parent="." unique_id=400897078 instance=ExtResource("5")]
+
+[node name="VesselWindow" parent="." instance=ExtResource("15")]
 
 [node name="ActionsPanel" parent="." unique_id=1894496512 instance=ExtResource("4")]
 

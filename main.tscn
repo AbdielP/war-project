@@ -16,7 +16,7 @@ tile_map_data = PackedByteArray("AAAFAAUAAAAAAAAAAAAGAAUAAAABAAAAAAAHAAQAAAAAAAA
 tile_set = ExtResource("1_ig7tw")
 
 [node name="LHD_WASP" parent="." unique_id=603129705 instance=ExtResource("2_0xm2m")]
-position = Vector2(1735, 1065)
+position = Vector2(1461, 998)
 
 [node name="HUD" parent="." unique_id=1219806315 instance=ExtResource("3_h2yge")]
 

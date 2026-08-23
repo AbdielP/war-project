@@ -1,5 +1,7 @@
 extends PanelContainer
 
+signal closed
+
 const _COLOR_TEXT   := Color(0.6705882, 0.5803922, 0.4784314)
 const _COLOR_ACCENT := Color(0.56078434, 0.827451, 1.0)
 const _COLOR_MUTED  := Color(0.6705882, 0.5803922, 0.4784314, 0.4)
@@ -58,6 +60,7 @@ func open(ship: Node2D) -> void:
 
 func close() -> void:
 	hide()
+	closed.emit()
 
 
 # ── unidades ─────────────────────────────────────────────────────────────────

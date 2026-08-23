@@ -27,10 +27,16 @@ signal zoom_changed(level: int, count: int)
 
 var follow_target: Node2D = null
 
+## Cuánto se aparta el objetivo seguido del centro de la pantalla, en píxeles
+## de **pantalla** y no del mundo: así el barco se queda en el mismo sitio
+## visual aunque el jugador acerque o aleje mientras dura el desvío.
+var focus_offset: Vector2 = Vector2.ZERO
+
 var _zoom_level: int = -1
 
 var _press := LongPress.new()
 var _last_position := Vector2.ZERO
+var _focus_tween: Tween = null
 
 
 func _ready() -> void:
@@ -69,6 +75,19 @@ func set_zoom_level(level: int) -> void:
 	zoom_changed.emit(_zoom_level, zoom_levels.size())
 
 
+## Desliza el objetivo seguido a un lado de la pantalla —a la izquierda con
+## `screen_offset.x` positivo, porque eso mueve el *centro* de cámara hacia la
+## derecha— para dejar sitio a un panel en el otro lado. `Vector2.ZERO` lo
+## devuelve al centro. No hace nada sin un `follow_target`: sin objetivo no hay
+## de qué apartarse.
+func pan_focus(screen_offset: Vector2, duration: float = 0.6) -> void:
+	if _focus_tween != null:
+		_focus_tween.kill()
+	_focus_tween = create_tween()
+	_focus_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_focus_tween.tween_property(self, "focus_offset", screen_offset, duration)
+
+
 func _process(delta: float) -> void:
 	if _press.tick(delta):
 		long_pressed.emit(get_global_mouse_position())
@@ -77,7 +96,7 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(follow_target):
 		follow_target = null
 		return
-	position = follow_target.global_position
+	position = follow_target.global_position + focus_offset / zoom.x
 
 
 func _fit_limits_to_map() -> void:

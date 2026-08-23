@@ -14,11 +14,17 @@ signal map_clicked(world_position: Vector2, unit: Unit)
 signal map_context_requested(world_position: Vector2, unit: Unit)
 ## Pulsó una coordenada del registro de eventos: llevar la mirada allí.
 signal look_requested(world_position: Vector2)
+## Se abrió el hangar de una unidad: quien tenga la cámara puede apartarla
+## hacia un lado para dejarle sitio al panel.
+signal hangar_opened(unit: Unit)
+## El hangar se cerró: la cámara puede volver al centro.
+signal hangar_closed
 
 @onready var _event_log: EventLog = $EventLog
 @onready var _selection_panel: Control = $SelectionPanel
 @onready var _actions_panel: PanelContainer = $ActionsPanel
 @onready var _hangar_window: PanelContainer = $HangarWindow
+@onready var _vessel_window: VesselWindow = $VesselWindow
 @onready var _desel_btn: Button = $DeselButton
 @onready var _deployed_panel: PanelContainer = $DeployedPanel
 @onready var _weapon_bar: Control = $WeaponBar
@@ -54,10 +60,12 @@ func _ready() -> void:
 			func(step: int) -> void: zoom_change_requested.emit(step))
 	_event_log.look_requested.connect(
 			func(where: Vector2) -> void: look_requested.emit(where))
-	# "A bordo" abre, por ahora, el hangar. Cuando exista la pantalla del buque
-	# entera —hangar, pañol, tropas—, se cambia aquí y la etiqueta ni se entera:
-	# ella sólo dice que quieren entrar.
-	_unit_tag.boarding_requested.connect(func(unit: Unit) -> void: _hangar_window.open(unit))
+	# "Comandar" abre la pantalla del buque. La etiqueta no sabe cuál es: sólo
+	# dice que quieren entrar, y aquí se decide qué se abre.
+	_unit_tag.boarding_requested.connect(func(unit: Unit) -> void:
+		_vessel_window.open(unit)
+		hangar_opened.emit(unit))
+	_vessel_window.closed.connect(func() -> void: hangar_closed.emit())
 	# El minimapa se estira a mano y crece hacia arriba, justo hacia donde está
 	# el registro. Que se aparte él, que es el que no lo pidió.
 	_minimap.resized.connect(_push_event_log_above_minimap)

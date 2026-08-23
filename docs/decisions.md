@@ -2,6 +2,61 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-23 — fuente pixel propia (Yellow Pixel Font), botón "Comandar" y panel de unidad seleccionada
+
+### Un font casero puede fallar en el mapa de caracteres, no sólo en el tamaño
+La primera exportación con `ase2ttf` de la fuente hecha en LibreSprite se veía "borrosa" en el
+juego. No era blur: pedir el carácter `0` dibujaba la `Q`, pedir `6` dibujaba la `W` — cada
+carácter salía desplazado **33 posiciones** en la tabla, siempre en la misma dirección. La causa:
+`ase2ttf` numera los glifos de la grilla a partir del código Unicode que dice el nombre de la capa
+en el `.aseprite` (`U+0020-…`); la grilla del usuario empezaba directo en la `A` pero la capa seguía
+declarando el arranque en el espacio, así que todo el alfabeto quedó corrido. El tamaño nativo
+(8 px, y sus múltiplos 16/24) nunca fue el problema — eso se comprobó aparte, rasterizando, y dio
+limpio desde el primer intento.
+
+Para cualquier fuente casera nueva: además de comprobar tamaño nativo e importación (antialiasing/
+hinting/subpixel en cero), hay que **pedirle un alfabeto completo y mirar si cada letra sale donde
+corresponde** — un mapa de caracteres roto no se nota goteando, se nota como "se ve mal" y engaña
+hacia el tamaño o el import.
+
+### La fuente nueva no tiene minúsculas
+Los códigos de `a` a `o` están vacíos (el diseño los reserva para vocales acentuadas mayúsculas).
+Cualquier texto que use esta fuente va en **mayúsculas** — así quedó "COMANDAR" en el botón nuevo,
+a juego además con el resto de rótulos del kit (HANGAR, ATTACK…).
+
+### El botón "Comandar" se arma de piezas sueltas de `UI.png`, no de una textura fija
+El botón vivía como `TextureButton` con una sola imagen de 96×25 que traía el ancla y la flecha ya
+dibujadas encima, fija. Ahora el fondo es un `StyleBoxTexture` (píldora de 3 celdas, tramo del medio
+liso — se estira sin problema) sobre un `Button` normal, con el ancla como ícono aparte **fuera**
+del botón (cuelga de él con offset negativo, así se mueve gratis) y el texto en Yellow Pixel Font a
+16. Al presionar, ancla y texto cambian juntos a un tono apagado (`button_down`/`button_up` en
+`unit_tag.gd`) porque el `StyleBoxTexture` sólo cambia el fondo por su cuenta.
+
+### `UI.png` separa sus tiles con 1 px transparente — es una guía, no se conserva
+Todo el kit viene como rejillas de tiles de 16×16 con 1 px de hueco entre cada uno, para que se
+distingan a simple vista dentro del sheet. Si se recorta y monta tal cual, ese hueco queda como una
+raya rota en medio del panel. Hay que **quitar el hueco al recomponer** — los tiles pegados, sin
+separación — antes de usarlos como nine-patch. Costó dos vueltas notarlo bien; queda anotado en
+`assets/art/UI/UI.png` como advertencia para la próxima pieza que se saque de ahí.
+
+### El panel de la unidad seleccionada usa dos nine-patch nuevos, y M5X7 en vez de m6x11plus
+`selection_box.png` (una sola textura fija) se reemplazó por dos piezas de `UI.png` recompuestas sin
+el hueco de guía: `panel_thumb.png` (cámara) y `panel_name.png` (nombre), cortes de nine-patch a 16
+px — el tamaño del tile —, pegadas sin separación entre sí. La cámara pasó de 93×59 con 2 px de aire
+a 82×52 con 9 px, y el nombre gana el mismo margen.
+
+De paso se comparó la fuente del nombre contra M5X7: mismo ancho por letra que m6x11plus (ambas
+nativas a 16), pero trazo más fino — se ve mejor contra el panel nuevo y quedó como la fuente del
+`Name`.
+
+### Falta migrar el resto de `UI.png`
+Quedan sin usar: play/pausa y zoom (mismo tamaño que los iconos actuales, swap directo), marcos de
+retrato 24×24 normal/seleccionado, siluetas de unidad gris/blanco, armas del Harrier para el
+`weapon_bar`, iconos de carga, y varios juegos de panel tileable sin asignar (candidatos para
+`event_log`, `hangar_window`, `target_menu`, `actions_panel`, `countermeasure_bar` — hoy estos tres
+últimos son `StyleBoxFlat` sin arte). También hay una versión tileada del panel del minimapa, al
+lado de la del panel de unidad, por si `minimap_panel.png` da problemas al estirar.
+
 ## 2026-08-17 — el HUD pasa a ser arte: iconos en vez de nombres, y lo que cuesta repetir mal
 
 ### Los botones de arma enseñan el arma, no su nombre

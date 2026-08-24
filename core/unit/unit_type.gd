@@ -83,6 +83,18 @@ const THUMB_SCALES: PackedFloat32Array = [1.0, 0.5, 0.25, 0.125]
 ## Arma fija de la unidad: va siempre, no depende del armamento que se le
 ## cuelgue y no ocupa estación. Vacío = la unidad no tiene cañón.
 @export var cannon: WeaponType
+## Las configuraciones de armamento entre las que se elige antes de despegar.
+##
+## Van en el tipo porque **son del modelo, no del aparato**: los dos Harrier de
+## la cubierta ofrecen lo mismo. Y van aquí y no en la escena del hangar porque
+## la lista cambia con la aeronave — el que la enseña sólo sabe pintar botones,
+## no qué cuelga de cada ala.
+##
+## Vacío es un estado legítimo y no un olvido: el AH-1W todavía no tiene
+## armamento definido, y el hangar lo dice en vez de enseñar una columna vacía.
+## Por ahora son textos sueltos; cuando el armamento exista de verdad, esto pasa
+## a ser una lista de recursos y el panel no se entera.
+@export var loadouts: PackedStringArray = []
 
 @export_group("Combate")
 ## Las firmas usan `UnitType.Domain` y no `Domain` a secas: dentro del propio

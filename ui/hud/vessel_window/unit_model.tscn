@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/hud/vessel_window/unit_model.gd" id="1"]
+
+[node name="UnitModel" type="Control"]
+clip_contents = true
+mouse_filter = 2
+script = ExtResource("1")
+
+[node name="Pivot" type="Node2D" parent="."]

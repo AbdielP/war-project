@@ -12,6 +12,7 @@ short_name = "AV8"
 portrait_icon = ExtResource("3")
 hangar_icon = ExtResource("4")
 cannon = ExtResource("2")
+loadouts = PackedStringArray("AIR TO AIR", "BOMBARDMENT", "LASER GUIDED")
 domain = 0
 max_health = 60.0
 ecm_evasion = 0.2

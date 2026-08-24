@@ -14,6 +14,7 @@
 [ext_resource type="Texture2D" uid="uid://06ebmy470nrn" path="res://ui/hud/vessel_window/tab_sub_idle.png" id="12"]
 [ext_resource type="Texture2D" uid="uid://1d1e1byt3hnh" path="res://ui/hud/vessel_window/content_frame.png" id="13"]
 [ext_resource type="Script" uid="uid://ccrn54ojmp2fl" path="res://ui/hud/vessel_window/hangar_page.gd" id="14"]
+[ext_resource type="PackedScene" path="res://ui/hud/vessel_window/unit_model.tscn" id="15"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_subtab_off"]
 content_margin_left = 3.0
@@ -145,11 +146,69 @@ horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
 
-[node name="Loadout" type="NinePatchRect" parent="Frame/InnerFrame/Pages/HangarPage"]
+[node name="Detail" type="Control" parent="Frame/InnerFrame/Pages/HangarPage/Content"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 79.0
+offset_top = 3.0
+offset_right = -3.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Name" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail"]
+layout_mode = 0
+anchor_right = 1.0
+offset_bottom = 9.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "AV-8B HARRIER II"
+horizontal_alignment = 1
+clip_text = true
+
+[node name="Model" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail" instance=ExtResource("15")]
+layout_mode = 0
+anchor_right = 1.0
+offset_top = 11.0
+offset_bottom = 71.0
+
+[node name="Stats" type="VBoxContainer" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail"]
+layout_mode = 0
+anchor_right = 1.0
+offset_top = 77.0
+offset_bottom = 112.0
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="Ecm" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail/Stats"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "ECM: 20"
+clip_text = true
+
+[node name="LoadoutClip" type="Control" parent="Frame/InnerFrame/Pages/HangarPage"]
+clip_contents = true
 layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = 131.0
+offset_top = 129.0
+mouse_filter = 2
+
+[node name="Loadout" type="NinePatchRect" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip"]
+visible = false
+layout_mode = 0
+anchor_right = 1.0
+offset_top = 2.0
+offset_bottom = 83.0
 mouse_filter = 2
 texture = ExtResource("13")
 patch_margin_left = 2
@@ -157,7 +216,7 @@ patch_margin_top = 2
 patch_margin_right = 2
 patch_margin_bottom = 2
 
-[node name="Title" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Loadout"]
+[node name="Title" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout"]
 layout_mode = 0
 offset_left = 4.0
 offset_top = 3.0
@@ -168,6 +227,34 @@ theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("9")
 theme_override_font_sizes/font_size = 8
 text = "LOADOUT/WEAPONS"
+
+[node name="Options" type="VBoxContainer" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout"]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 15.0
+offset_right = 68.0
+offset_bottom = 70.0
+theme_override_constants/separation = 2
+
+[node name="Prompt" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 74.0
+offset_top = 14.0
+offset_right = -3.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "SELECT A LOADOUT TO CONTINUE"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
 
 [node name="SubTabs" type="Control" parent="Frame/InnerFrame/Pages/HangarPage" unique_id=1694746728]
 anchors_preset = 0

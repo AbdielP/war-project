@@ -35,9 +35,11 @@ const _TITLE_PADDING := 8.0
 
 @onready var _top_tab: NinePatchRect = $TopTab
 @onready var _title: Label = $TopTab/Title
+@onready var _frame: NinePatchRect = $Frame
+@onready var _inner: NinePatchRect = $Frame/InnerFrame
 @onready var _pages: Control = $Frame/InnerFrame/Pages
 @onready var _side_tabs: Control = $SideTabs
-@onready var _hangar: Control = $Frame/InnerFrame/Pages/HangarPage
+@onready var _hangar: HangarPage = $Frame/InnerFrame/Pages/HangarPage
 
 ## El buque cuyo interior se está mirando. Todavía no lo usa nadie: lo guardará
 ## el hangar cuando exista, para saber a quién le pide los aviones.
@@ -49,6 +51,13 @@ var _section: int = -1
 var _dragging := false
 var _grab := Vector2.ZERO
 
+## Lo que el marco añade por fuera del hueco donde vive una página: los bordes
+## del marco exterior más los del interior. Se mide una vez de los `offset` de la
+## escena en vez de escribirlo aquí, para que mover un borde en el editor no
+## deje la ventana midiendo de más.
+var _chrome := 0.0
+var _resize: Tween = null
+
 
 func _ready() -> void:
 	for child in _side_tabs.get_children():
@@ -58,10 +67,16 @@ func _ready() -> void:
 		var index := _tabs.size()
 		tab.pressed.connect(func() -> void: show_section(index))
 		_tabs.append(tab)
+	_chrome = (_inner.offset_top - _inner.offset_bottom) \
+			+ (_pages.offset_top - _pages.offset_bottom)
 	# Una sola vez: la medida no depende de qué sección esté puesta, sino de la
 	# lista entera de títulos.
 	_fit_top_tab()
 	show_section(0)
+	# El hangar es quien decide el alto, porque es el único que se despliega. Se
+	# le pregunta al arrancar y luego avisa él cuando cambia.
+	_hangar.height_wanted.connect(_resize_to)
+	_resize_to(_hangar.wanted_height(), 0.0)
 	hide()
 
 
@@ -131,6 +146,31 @@ func show_section(index: int) -> void:
 		var page := _pages.get_child(i) as Control
 		if page != null:
 			page.visible = i == index
+
+
+## Ajusta la ventana al alto que pide la página abierta.
+##
+## Se anima `size` y no `offset_bottom`: la ventana se arrastra, y arrastrarla
+## mueve los dos `offset` a la vez, así que un destino calculado sobre el de
+## abajo se queda viejo en cuanto el jugador la mueve a media animación.
+##
+## El alto de la raíz va detrás del marco y no suelto. La raíz es la zona de
+## agarre —todo lo que no sea un botón arrastra la ventana—, y si se queda
+## grande cuando el marco se encoge deja un trozo invisible por debajo que
+## agarra donde ya no hay ventana.
+func _resize_to(height: float, seconds: float) -> void:
+	if _resize != null and _resize.is_valid():
+		_resize.kill()
+		_resize = null
+	var frame_height := height + _chrome
+	var window_height := _frame.position.y + frame_height
+	if is_zero_approx(seconds):
+		_frame.size.y = frame_height
+		size.y = window_height
+		return
+	_resize = create_tween().set_parallel()
+	_resize.tween_property(_frame, ^"size:y", frame_height, seconds)
+	_resize.tween_property(self, ^"size:y", window_height, seconds)
 
 
 func _fit_top_tab() -> void:

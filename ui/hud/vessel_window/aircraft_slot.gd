@@ -33,7 +33,6 @@ func show_aircraft(shown: Dictionary, icon: Texture2D) -> void:
 	entry = shown
 	_icon.texture = icon
 	_center_icon()
-	tooltip_text = str(shown.get("display_name", ""))
 	set_selected(false)
 	refresh()
 

@@ -15,6 +15,11 @@ class_name VesselWindow
 ## interior de otra.
 signal closed(instant: bool)
 
+## El hangar quiere que el jugador señale a dónde va la salida antes de lanzarla.
+## Se reenvía tal cual: la ventana tampoco conoce el mapa táctico, sólo es la
+## cara pública de lo que hay dentro.
+signal target_requested
+
 ## Cómo se llama cada sección en la pestaña de arriba. El orden es el mismo que
 ## el de las solapas dentro de `SideTabs`.
 @export var section_titles: PackedStringArray = ["HANGAR", "TROPAS", "MUNICIÓN"]
@@ -89,6 +94,7 @@ func _ready() -> void:
 	# El hangar es quien decide la medida, porque es el único que se despliega. Se
 	# le pregunta al arrancar y luego avisa él cuando cambia.
 	_hangar.size_wanted.connect(_resize_to)
+	_hangar.target_requested.connect(target_requested.emit)
 	_resize_to(0.0, _hangar.wanted_height(), 0.0)
 	hide()
 
@@ -118,6 +124,13 @@ func _gui_input(event: InputEvent) -> void:
 		# decimal descuadra su contenido contra la rejilla y los bordes de 1 px
 		# de los marcos se ven a saltos mientras se arrastra.
 		global_position = (event.global_position - _grab).round()
+
+
+## Lanza la salida con el punto que el jugador acaba de señalar en el mapa. Si
+## pulsó encima de algo, la orden es atacarlo; si pulsó suelo, ir allí.
+func launch_at(where: Vector2, target: Unit) -> void:
+	var order := {"target": target} if is_instance_valid(target) else {"where": where}
+	_hangar.launch(order)
 
 
 func open(vessel: Node2D) -> void:

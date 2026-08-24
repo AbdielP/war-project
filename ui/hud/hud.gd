@@ -42,7 +42,14 @@ signal vessel_closed(instant: bool)
 ## arriba y un poco a la derecha, para no taparlo ni pisar su recuadro.
 const _IMPACT_OFFSET := Vector2(10.0, -14.0)
 
+## Lo que dice el mapa mientras se elige a dónde mandar una salida del hangar.
+const _LAUNCH_HINT := "Pulsa un blanco o un punto — la salida despegará con esa orden"
+
 var _current_unit: Unit = null
+
+## El mapa está abierto para señalar el blanco de una salida del hangar, no para
+## dar órdenes. El siguiente click significa otra cosa mientras esto esté puesto.
+var _picking_launch_target := false
 
 
 func _ready() -> void:
@@ -73,14 +80,43 @@ func _ready() -> void:
 	_minimap.resized.connect(_push_event_log_above_minimap)
 	_push_event_log_above_minimap()
 	_minimap.expand_requested.connect(_tactical_map.open)
-	_tactical_map.clicked.connect(
-			func(where: Vector2, unit: Unit) -> void: map_clicked.emit(where, unit))
+	_vessel_window.target_requested.connect(_on_launch_target_requested)
+	_tactical_map.clicked.connect(_on_tactical_map_clicked)
 	_tactical_map.context_requested.connect(
 			func(where: Vector2, unit: Unit) -> void: map_context_requested.emit(where, unit))
 	# La barra de armas es lo único que sobra con el mapa abierto: cae justo
 	# encima del terreno y ahí no se dispara nada. El resto del HUD se queda.
 	_tactical_map.opened.connect(_refresh_weapon_bar)
 	_tactical_map.closed.connect(_refresh_weapon_bar)
+	# Cerrar el mapa sin pulsar nada cancela la elección de blanco. Sin esto, el
+	# siguiente click en el mapa —hecho para otra cosa— lanzaría la salida.
+	_tactical_map.closed.connect(func() -> void:
+		_picking_launch_target = false
+		_tactical_map.set_hint_override(""))
+
+
+## El hangar pide que el jugador señale a dónde va la salida.
+##
+## El mapa sube al frente porque la ventana del buque se puso encima al abrirse,
+## y un mapa a pantalla completa por debajo de una ventana no se puede pulsar.
+func _on_launch_target_requested() -> void:
+	_picking_launch_target = true
+	_tactical_map.set_hint_override(_LAUNCH_HINT)
+	_tactical_map.open()
+	_tactical_map.move_to_front()
+
+
+## Un click en el mapa. Casi siempre es una orden para lo que esté seleccionado
+## —y de eso sabe quien lleva la selección, no el HUD—, pero mientras se está
+## eligiendo el blanco de una salida significa otra cosa y no debe salir de aquí.
+func _on_tactical_map_clicked(where: Vector2, unit: Unit) -> void:
+	if _picking_launch_target:
+		_picking_launch_target = false
+		_tactical_map.set_hint_override("")
+		_tactical_map.close()
+		_vessel_window.launch_at(where, unit)
+		return
+	map_clicked.emit(where, unit)
 
 
 ## Hasta dónde puede seguir acercándose o alejándose. Se lo dice quien tiene la

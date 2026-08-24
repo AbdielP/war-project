@@ -40,6 +40,15 @@ const _CARD := preload("res://ui/hud/vessel_window/weapon_card.tscn")
 ## contenido a media animación.
 signal size_wanted(width: float, height: float, seconds: float)
 
+## El jugador quiere elegir a dónde va la salida antes de lanzarla. La página no
+## abre el mapa: no lo conoce y no tiene por qué. Avisa, y quien lleva el HUD
+## —que sí sabe qué pantallas hay— lo abre y devuelve el punto por [method
+## launch].
+signal target_requested
+
+## Salió una aeronave. Lo escucha quien tenga que enterarse; aquí sólo se cuenta.
+signal launched(entry: Dictionary, count: int)
+
 ## Lo que tarda el bloque de armamento en desplegarse y en plegarse.
 ##
 ## Corto a propósito: no es una animación, es quitarle el golpe seco a una
@@ -110,6 +119,9 @@ const _TEXT_OFF := Color(0.60784316, 0.67058825, 0.69803923)
 @onready var _options: VBoxContainer = $LoadoutClip/Loadout/Options
 @onready var _marker: TextureRect = $LoadoutClip/Loadout/Marker
 @onready var _weapons: Control = $LoadoutClip/Loadout/Weapons
+@onready var _actions: HBoxContainer = $LoadoutClip/Loadout/Actions
+@onready var _take_off: Button = $LoadoutClip/Loadout/Actions/TakeOff
+@onready var _targeted_take_off: Button = $LoadoutClip/Loadout/Actions/TargetedTakeOff
 @onready var _cannon: WeaponCard = $LoadoutClip/Loadout/Weapons/Cannon
 @onready var _cards: HBoxContainer = $LoadoutClip/Loadout/Weapons/Cards
 @onready var _loadout_prompt: VBoxContainer = $LoadoutClip/Loadout/Weapons/Prompt
@@ -165,6 +177,8 @@ func _ready() -> void:
 	# que la partida arranque con la ventana abierta de par en par.
 	_loadout_full = _loadout.offset_bottom
 	_loadout_compact = _loadout.offset_top + _options.offset_bottom + _LOADOUT_PAD
+	_take_off.pressed.connect(launch)
+	_targeted_take_off.pressed.connect(target_requested.emit)
 	_cursor.text = _CURSOR
 	_start_blink()
 	_hide_detail()
@@ -311,6 +325,7 @@ func _set_squad(count: int) -> void:
 	# viva que la otra y el jugador la sigue pulsando.
 	_squad_less.modulate.a = 0.4 if _squad_less.disabled else 1.0
 	_squad_more.modulate.a = 0.4 if _squad_more.disabled else 1.0
+	_refresh_actions()
 
 
 func _hide_detail() -> void:
@@ -353,6 +368,7 @@ func _on_loadout_picked(loadout: WeaponLoadout, option: LoadoutOption) -> void:
 	_chosen_option = option
 	chosen_loadout = loadout
 	option.set_selected(true)
+	_refresh_actions()
 	_point_marker_at(option)
 	_show_weapons(loadout)
 
@@ -398,10 +414,54 @@ func _show_weapons(loadout: WeaponLoadout) -> void:
 	_loadout_prompt.visible = empty
 	if empty:
 		_say(_PROMPT_UNARMED)
-	# El panel sólo crece si hay algo que quepa dentro. Un armamento sin armas no
-	# necesita sitio, y abrir la ventana para enseñar un aviso corto es justo lo
-	# que se estaba arreglando.
-	_open_loadout(not empty, _ANIM_TIME)
+	# Se abre del todo aunque no haya armas que enseñar: lo que hay abajo son los
+	# botones de despegue, y un armamento sin nada colgado sigue siendo un
+	# armamento elegido con el que se puede salir. Dejarlo cerrado escondería la
+	# única forma de lanzar al Cobra.
+	_open_loadout(true, _ANIM_TIME)
+
+
+## Saca a cubierta lo elegido: tantos aparatos como diga la escuadrilla, con el
+## armamento elegido y, si se dio, con la orden ya puesta.
+##
+## `order` viaja hasta la cubierta y **no se aplica aquí**: entre pulsar y volar
+## hay ascensor, taxi y carrera, y el aparato ni siquiera existe todavía. Es la
+## cubierta la que se la da cuando el avión pasa a pilotarse solo.
+##
+## Se lanza de uno en uno y se para al primer fallo: si la cubierta no tiene
+## plaza, lo ya contado como desplegado se devuelve. Sin eso, la flota perdería
+## aparatos que nunca llegaron a salir.
+func launch(order: Dictionary = {}) -> void:
+	if _ship == null or chosen_loadout == null or not is_instance_valid(_chosen):
+		return
+	var entry := _chosen.entry
+	var deck: Node = _ship.get_node_or_null("FlightDeck")
+	if deck == null or entry.is_empty():
+		return
+	# La escuadrilla sólo existe si van varios: uno solo no forma con nadie.
+	var formation: Squad = Squad.new() if squad > 1 else null
+	var out := 0
+	for i in squad:
+		if not PlayerFleet.try_deploy(entry):
+			break
+		if not deck.request_deploy(entry["scene"], formation, chosen_loadout, order):
+			PlayerFleet.recall(entry)
+			break
+		out += 1
+	if out <= 0:
+		return
+	launched.emit(entry, out)
+	# La casilla enseña cuántos quedan, y acaban de salir varios. Se vuelve al
+	# principio —sin aeronave elegida— porque lo que había elegido ya voló.
+	_fill_slots()
+
+
+## Enciende los botones sólo cuando hay algo que lanzar. Un botón que se deja
+## pulsar y no hace nada se lee como que el juego se colgó.
+func _refresh_actions() -> void:
+	var ready := chosen_loadout != null and _squad_available > 0
+	_take_off.disabled = not ready
+	_targeted_take_off.disabled = not ready
 
 
 ## Deja el hueco del armamento vacío, con el aviso que toque.
@@ -409,6 +469,7 @@ func _clear_weapons(message: Array) -> void:
 	_clear(_cards)
 	_chosen_option = null
 	chosen_loadout = null
+	_refresh_actions()
 	_marker.hide()
 	_cannon.hide()
 	_cards.hide()
@@ -462,6 +523,10 @@ func _open_loadout(full: bool, seconds: float) -> void:
 	# — está entero desde el primer fotograma y es el recorte el que lo va dejando
 	# ver conforme la ventana crece.
 	_loadout.show()
+	# Los botones sólo con el panel abierto del todo, que es lo mismo que decir
+	# "con un armamento ya elegido": antes de eso no hay nada que lanzar, y un par
+	# de botones apagados esperando desde el principio no dicen eso.
+	_actions.visible = full
 	var bottom: float = _loadout_full if full else _loadout_compact
 	if is_zero_approx(seconds):
 		_loadout.offset_bottom = bottom
@@ -495,6 +560,7 @@ func _hide_loadout(instant: bool = false) -> void:
 ## Sin esto, un panel que se cerró estirado se encogería a la vista al reabrirse.
 func _shut_loadout() -> void:
 	_loadout.hide()
+	_actions.hide()
 	_loadout.offset_bottom = _loadout_compact
 
 

@@ -34,17 +34,47 @@ var _taxiing: Array[bool] = [false, false]
 var _launching := false
 
 
+## Órdenes dadas **antes** de que el aparato exista, por id de instancia.
+##
+## El hangar decide a dónde va antes de pulsar despegar, pero entre eso y el
+## aparato hay un ascensor, un taxi y una carrera de pista: la unidad se crea
+## mucho después. Se guardan aquí en vez de dárselas al avión al aparecer porque
+## dárselas antes de tiempo es peor que no dárselas — mientras la cubierta lo
+## lleva a su sitio, el avión no se pilota, y una orden de movimiento pelearía
+## contra el propio taxi.
+var _standing: Dictionary = {}
+
+
 ## Suelta el avión: a partir de aquí se pilota solo. La cubierta no vuelve
-## a tocarlo.
+## a tocarlo — salvo para pasarle la orden que ya traía de fábrica, que es
+## justo ahora cuando puede obedecerla.
 func _hand_over_control(unit: Node2D) -> void:
 	if not is_instance_valid(unit):
 		return
 	if unit.has_method("start_flight"):
 		unit.start_flight(get_parent())
+	_obey_standing_order(unit)
+
+
+## Le da la orden que se eligió en el hangar. Se consume: sólo vale una vez, la
+## de esta salida.
+func _obey_standing_order(unit: Node2D) -> void:
+	var id := unit.get_instance_id()
+	var order: Dictionary = _standing.get(id, {})
+	if order.is_empty():
+		return
+	_standing.erase(id)
+	var target: Unit = order.get("target")
+	if is_instance_valid(target):
+		# Atacar y no sólo ir: el jugador señaló algo, no un sitio.
+		unit.set_attack_target(target)
+	elif order.has("where"):
+		unit.receive_move_order(order["where"])
 
 
 func request_deploy(scene: PackedScene, squad: Squad = null,
-		weapon_loadout: WeaponLoadout = null) -> bool:
+		weapon_loadout: WeaponLoadout = null,
+		standing_order: Dictionary = {}) -> bool:
 	var elev_idx: int = _elevator_idx % _elevators.size()
 	var slot := _next_slot_for_elevator(elev_idx)
 	if slot == -1:
@@ -61,6 +91,7 @@ func request_deploy(scene: PackedScene, squad: Squad = null,
 		"spawn_rot": elevator.global_rotation,
 		"squad": squad,
 		"weapon_loadout": weapon_loadout,
+		"order": standing_order,
 	})
 	_process_queue(elev_idx)
 	return true
@@ -86,6 +117,9 @@ func _process_queue(elev_idx: int) -> void:
 	unit.global_rotation = job["spawn_rot"]
 	unit.scale = Vector2.ONE * spawn_scale
 	var slot: int = job["slot"]
+	var order: Dictionary = job.get("order", {})
+	if not order.is_empty():
+		_standing[unit.get_instance_id()] = order
 	var u := unit as Unit
 	if u != null:
 		u.set_weapon_loadout(job["weapon_loadout"])

@@ -22,6 +22,7 @@
 [ext_resource type="PackedScene" path="res://ui/hud/vessel_window/weapon_card.tscn" id="20"]
 [ext_resource type="Script" path="res://ui/hud/vessel_window/weapon_card.gd" id="21"]
 [ext_resource type="Texture2D" path="res://core/weapon/icons/icon_cannon.png" id="22"]
+[ext_resource type="Texture2D" path="res://ui/hud/vessel_window/action_btn.png" id="23"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_subtab_off"]
 content_margin_left = 3.0
@@ -48,6 +49,17 @@ atlas = ExtResource("16")
 region = Rect2(0, 0, 19, 5)
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_arrow"]
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_action"]
+content_margin_left = 6.0
+content_margin_top = 2.0
+content_margin_right = 6.0
+content_margin_bottom = 2.0
+texture = ExtResource("23")
+texture_margin_left = 3.0
+texture_margin_top = 3.0
+texture_margin_right = 3.0
+texture_margin_bottom = 3.0
 
 [node name="VesselWindow" type="Control" unique_id=343928609]
 layout_mode = 3
@@ -320,7 +332,7 @@ mouse_filter = 2
 layout_mode = 0
 anchor_right = 1.0
 offset_top = 2.0
-offset_bottom = 128.0
+offset_bottom = 146.0
 texture = ExtResource("13")
 patch_margin_left = 2
 patch_margin_top = 2
@@ -373,7 +385,7 @@ anchor_bottom = 1.0
 offset_left = 82.0
 offset_top = 14.0
 offset_right = -4.0
-offset_bottom = -4.0
+offset_bottom = -25.0
 mouse_filter = 2
 
 [node name="Cannon" type="Control" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Weapons"]
@@ -483,6 +495,50 @@ theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("9")
 theme_override_font_sizes/font_size = 8
 vertical_alignment = 1
+
+[node name="Actions" type="HBoxContainer" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout"]
+layout_mode = 0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = -21.0
+offset_right = -4.0
+offset_bottom = -4.0
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="TakeOff" type="Button" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Actions"]
+custom_minimum_size = Vector2(0, 17)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(0.8352941, 0.87843137, 0.29411766, 1)
+theme_override_colors/font_pressed_color = Color(0.8352941, 0.87843137, 0.29411766, 1)
+theme_override_colors/font_disabled_color = Color(0.60784316, 0.67058825, 0.69803923, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("StyleBoxTexture_action")
+theme_override_styles/hover = SubResource("StyleBoxTexture_action")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_action")
+theme_override_styles/disabled = SubResource("StyleBoxTexture_action")
+text = "TAKE OFF"
+
+[node name="TargetedTakeOff" type="Button" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Actions"]
+custom_minimum_size = Vector2(0, 17)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(0.8352941, 0.87843137, 0.29411766, 1)
+theme_override_colors/font_pressed_color = Color(0.8352941, 0.87843137, 0.29411766, 1)
+theme_override_colors/font_disabled_color = Color(0.60784316, 0.67058825, 0.69803923, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("StyleBoxTexture_action")
+theme_override_styles/hover = SubResource("StyleBoxTexture_action")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_action")
+theme_override_styles/disabled = SubResource("StyleBoxTexture_action")
+text = "SELECT TARGET AND TAKE OFF"
 
 [node name="SubTabs" type="Control" parent="Frame/InnerFrame/Pages/HangarPage" unique_id=1694746728]
 anchors_preset = 0

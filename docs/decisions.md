@@ -2,6 +2,120 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-24 — el hangar completo: ficha de aeronave, armamento y despegue con orden
+
+### Una orden dada antes de despegar se da **antes** de soltar el aparato, no después
+El botón "SELECT TARGET AND TAKE OFF" abre el mapa táctico, el jugador señala, y la salida despega
+ya con esa orden. La primera versión la aplicaba en `FlightDeck._hand_over_control` **después** de
+`start_flight()`, y el avión decía "Atacando X" en el registro mientras se iba tranquilamente al
+circuito de espera del barco. La causa: `start_flight` del Harrier sólo monta el circuito
+`elif not orbit.has_pending_order()` — mira si ya hay blanco, y en ese instante todavía no lo había.
+La orden que llegaba después iba por `set_attack_target()`, que **sólo anota a quién y avisa**; el
+que monta la maniobra es `receive_attack_order()`, y ese tren ya había pasado. Por eso el arma sí
+apuntaba —le llegó el blanco— y el vuelo no.
+
+Las dos aeronaves ya estaban escritas para recibir la orden en cubierta: el Harrier respeta un
+destino ya puesto, y `HelicopterController.set_target` contempla que llegue mientras el barco lo
+está colocando. **La regla general**: cuando dos sistemas se pasan el control (cubierta → piloto),
+el estado se entrega antes del relevo, no después — después, el que recibe ya tomó sus decisiones
+con el estado viejo y sólo se le puede cambiar el rótulo.
+
+Y se anota con `set_attack_target` y no con `receive_attack_order`: en cubierta no hay piloto con
+el que hacer la maniobra, así que se guarda a quién y el aparato la monta al arrancar.
+
+### La orden pendiente la guarda la cubierta, no el avión
+Entre pulsar "despegar" y volar hay ascensor, taxi y carrera de pista: **la unidad ni siquiera
+existe cuando se elige el blanco**. `FlightDeck` guarda la orden en un diccionario por id de
+instancia y la consume en `_hand_over_control`. Dársela al avión nada más aparecer sería peor que
+no dársela: mientras la cubierta lo lleva a su sitio no se pilota, y una orden de movimiento
+pelearía contra el propio taxi.
+
+### La ventana mide lo que mide su contenido, en los dos ejes
+`HangarPage` emite `size_wanted(width, height, seconds)` y `VesselWindow` le suma su marco. Tres
+alturas —sin aeronave, con aeronave, con armamento elegido— y dos anchuras, según quepan dos fichas
+de arma o tres. Detalles que costaron un intento cada uno:
+
+- **El alto no tiene mínimo y el ancho sí.** A lo alto la ventana se pliega hasta esconder bloques
+  enteros, así que bajar de lo dibujado es justo lo que se le pide; a lo ancho no se esconde nada
+  —la ficha del avión sigue ahí— y lo dibujado es el suelo.
+- **Crece hacia la derecha y hacia abajo**, con el borde superior izquierdo clavado: así las
+  solapas, la pestaña del título y las columnas de botones no se mueven ni un píxel. Ensanchar por
+  el centro las movería todas y el cambio se notaría mucho más de lo que cuesta.
+- **El panel y la ventana crecen a la vez y en el mismo tiempo.** El recorte (`LoadoutClip`, un
+  `Control` con `clip_contents`) va por el alto de la página: si el panel fuera más deprisa asomaría
+  por abajo, y más despacio dejaría ver el fondo de la ventana bajo él.
+- **`clip_contents` recorta el dibujo, no el ratón.** Un botón fuera del recorte se deja pulsar
+  igual, así que al plegar hay que esconderlo de verdad al terminar la animación.
+
+### Un panel que se despliega guarda **lo que hay ahora**, no el hueco de lo que podría haber
+Antes de elegir armamento, el bloque llega hasta el último botón y nada más; al elegir, se estira y
+salen el cañón, las fichas de armas y los dos botones de despegue. Reservar el hueco y esconder lo
+de dentro se lee como que algo se rompió, no como que falta elegir. Las dos medidas se sacan de los
+`offset` de la escena —la grande es la que trae puesta el nodo, la pequeña llega hasta donde acaba
+la columna de botones—, así que moverlo en el editor sigue mandando sobre el número.
+
+### El armamento sale de `WeaponLoadout`, y el duplicado que metí en `UnitType` se borró
+Llegué a añadir `loadouts: PackedStringArray` al tipo de unidad sin ver que ya existía
+`av8b_harrier_loadouts.gd` con las configuraciones de verdad: estaciones, armas y cantidades. Godot
+reescribió el `.tres` sin ese campo y pareció que "se habían borrado los loadouts". Lo correcto es
+`PlayerFleet` → `entry["weapon_loadouts"]`, que además vienen **ya filtradas por las armas que el
+jugador tiene**. Las tres del Harrier se renombraron a los nombres de la UI (`AIR TO AIR`,
+`BOMBARDMENT`, `LASER GUIDED`) en su propio archivo, para que no haya dos sitios donde mirar.
+
+Las fichas se **agrupan por arma y no por estación**: el AIM-120 va en la central y en la interna,
+dos montajes de dos, y al jugador lo que le importa es que van cuatro. La cuenta la da
+`WeaponLoadout.ammo_of()`, la misma de la que tira el avión en vuelo.
+
+### El modelo del hangar son los `Sprite2D` de la unidad, copiados
+`UnitModel` instancia la escena de la aeronave, copia sus `Sprite2D` con sus transformaciones y
+suelta el original. Nunca entra en el árbol, así que **no corre ningún `_ready`**: la unidad no se
+registra en ningún sitio ni queda nada colgando. Una aeronave nueva se ve aquí el día que exista sin
+tocar el archivo. Dos cosas que salieron de hacerlo:
+
+- **El rotor quieto no se lee.** Está dibujado como una barra recta porque en el juego gira; a 0°
+  cae encima del fuselaje y parece un mástil. Se le da una pose de 45° **sólo para el retrato** —el
+  original no se toca— y ahí se ven las dos palas.
+- **Lo que ocupa se mide por las cuatro esquinas giradas**, no por ancho × alto: con el rotor
+  ladeado la caja real es mucho mayor que la del dibujo, y midiendo de la otra forma se sale del
+  hueco. Con eso, Harrier (48×48) y Cobra (37×49) entran a 1:1 en un hueco de 92×60.
+
+### `power` es una nota, no una estadística
+Diez dibujos de barra en `UI.png`, medios pasos incluidos, y un `@export_range(0, 9)` en `UnitType`.
+**El valor es el fotograma**: no hay escala que convertir ni relleno que calcular, sólo mover la
+ventana de un `AtlasTexture`. No lo lee nada del juego — existe para comparar dos aparatos de un
+vistazo sin leerse una tabla. `cannon_rounds` va por el mismo camino pero en la aeronave y no en el
+arma: no es propiedad del cañón sino de lo que le cabe al aparato.
+
+### Lo que se llena en marcha se guarda **puesto** en la escena, y lo apaga el código
+La ficha del avión y el bloque de armamento nacían ocultos, así que en el editor eran rectángulos
+invisibles imposibles de colocar. Ahora se guardan visibles y con datos de muestra —tres botones de
+armamento, una ficha de arma, y un `@export var preview: PackedScene` con `@tool` que dibuja un
+Harrier de verdad dentro del hueco del modelo—, y es `_ready` quien decide qué se ve al arrancar.
+La casilla del inspector deja de ser la autoridad sobre la visibilidad, y a cambio el editor enseña
+lo que se está diseñando.
+
+### Comprobar la fuente **antes** de escribir el texto, no después
+Tres veces en la misma sesión: la `x` minúscula de "x300" no existe (salía "300" a secas, se pasó a
+`X300`), `%` y `<` `>` no existían hasta que se actualizó la fuente, y el guion de `AV-8B` está
+dibujado en la fila del pie —a la altura de un subrayado—, que parecía un bug del código y era el
+glifo. **Rasterizar el mapa de caracteres es más rápido que discutir la captura de pantalla.** Así
+apareció también el cursor: el cuadrado macizo de 3×5 vive en `U+00AA`, y se escribe por su código
+de escape para que no dependa de con qué se guarde el archivo.
+
+### El cursor parpadea por alfa, no escondiéndose
+Vive en un `HBoxContainer` centrado junto a "CONTINUE": ocultarlo encogería la fila y el texto se
+movería medio carácter en cada parpadeo. Medio segundo por mitad, el ritmo de un cursor de terminal.
+Y sale **sólo con el aviso que pide algo**: `NO LOADOUTS AVAILABLE` y `NO WEAPONS FITTED` van sin
+él, porque un cursor donde no hay nada que pulsar es una promesa falsa.
+
+### Reparentar un nodo en un `.tscn` a mano: hay que cambiar **su** `parent`, no el de sus hijos
+Al meter `Cards` y `Prompt` dentro del envoltorio `Weapons`, un script de reemplazo cambió las rutas
+de sus hijos y no las suyas: los hijos apuntaban a padres inexistentes y el juego reventaba en
+`@implicit_ready`. Y en el segundo intento se colaron sus `offset` absolutos viejos, que ya dentro
+del envoltorio los empujaban 82 px a la derecha. **La comprobación que lo caza**: cruzar cada `$ruta`
+de los scripts contra los `[node name=... parent=...]` del `.tscn`. Dar por buena la salida de un
+script de texto no es verificar.
+
 ## 2026-08-23 — la ventana del buque: cámara que aparta el foco y el primer marco jugable
 
 ### `Intento de UI final.png` se borró tras comprobar que nada la referenciaba

@@ -45,15 +45,21 @@ var _launching := false
 var _standing: Dictionary = {}
 
 
-## Suelta el avión: a partir de aquí se pilota solo. La cubierta no vuelve
-## a tocarlo — salvo para pasarle la orden que ya traía de fábrica, que es
-## justo ahora cuando puede obedecerla.
+## Suelta el aparato: a partir de aquí se pilota solo.
+##
+## La orden se le da **antes** de soltarlo, y ese orden es todo el asunto. Los dos
+## aparatos están escritos para recibirla en cubierta: `start_flight` del Harrier
+## mira si ya tiene blanco y sólo monta el circuito de espera cuando no lo tiene,
+## y el piloto del Cobra arranca la subida si le dieron sitio mientras el barco
+## lo colocaba. Dándosela después, `start_flight` ya lo mandó a dar vueltas y
+## apuntar el blanco a posteriori sólo cambia el rótulo: el avión se queda
+## orbitando el barco mientras el HUD dice que está atacando.
 func _hand_over_control(unit: Node2D) -> void:
 	if not is_instance_valid(unit):
 		return
+	_obey_standing_order(unit)
 	if unit.has_method("start_flight"):
 		unit.start_flight(get_parent())
-	_obey_standing_order(unit)
 
 
 ## Le da la orden que se eligió en el hangar. Se consume: sólo vale una vez, la
@@ -66,7 +72,9 @@ func _obey_standing_order(unit: Node2D) -> void:
 	_standing.erase(id)
 	var target: Unit = order.get("target")
 	if is_instance_valid(target):
-		# Atacar y no sólo ir: el jugador señaló algo, no un sitio.
+		# `set_attack_target` y no `receive_attack_order`: aquí sólo se anota a
+		# quién, porque el aparato todavía no vuela. La maniobra la monta él al
+		# arrancar, que es cuando tiene piloto con el que hacerla.
 		unit.set_attack_target(target)
 	elif order.has("where"):
 		unit.receive_move_order(order["where"])

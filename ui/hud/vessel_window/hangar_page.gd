@@ -26,14 +26,19 @@ const _SLOT := preload("res://ui/hud/vessel_window/aircraft_slot.tscn")
 const _OPTION := preload("res://ui/hud/vessel_window/loadout_option.tscn")
 const _CARD := preload("res://ui/hud/vessel_window/weapon_card.tscn")
 
-## Cuánto alto pide la página. Lo escucha la ventana, que es la única que sabe
+## Cuánto sitio pide la página. Lo escucha la ventana, que es la única que sabe
 ## cuánto marco hay que añadirle por fuera.
+##
+## `width` es lo que hace falta **de más**: 0 significa "con lo que ya mides me
+## vale". La página no conoce su propio mínimo —eso lo dice la escena de la
+## ventana— y pedirlo cada vez la obligaría a saber cuánto ocupa la ficha del
+## avión, que no es asunto suyo.
 ##
 ## Va el tiempo en la señal y no como constante de la ventana porque el que sabe
 ## cuánto dura el gesto es el que lo empieza: aquí se decide si el armamento sale
 ## despacio o de golpe, y el marco tiene que ir al mismo paso o se despega del
 ## contenido a media animación.
-signal height_wanted(height: float, seconds: float)
+signal size_wanted(width: float, height: float, seconds: float)
 
 ## Lo que tarda el bloque de armamento en desplegarse y en plegarse.
 ##
@@ -41,11 +46,6 @@ signal height_wanted(height: float, seconds: float)
 ## ventana que cambia de tamaño. Más largo y el jugador espera a la UI.
 const _ANIM_TIME := 0.12
 
-## Qué dice la columna de la derecha del armamento. Los dos casos son distintos
-## de verdad y no un mismo aviso con más o menos texto: en uno faltan datos del
-## juego —el Cobra no tiene armamento definido todavía— y en el otro falta que
-## el jugador elija. Decir "no hay" cuando lo que pasa es "elige" enseña al
-## jugador a no mirar el panel.
 ## Qué dice el hueco del armamento cuando no hay armas que enseñar. Los tres
 ## casos son distintos de verdad y no un mismo aviso con más o menos texto: falta
 ## elegir, no hay nada que elegir, o lo elegido no lleva nada colgado. Decir "no
@@ -109,13 +109,14 @@ const _TEXT_OFF := Color(0.60784316, 0.67058825, 0.69803923)
 @onready var _loadout: NinePatchRect = $LoadoutClip/Loadout
 @onready var _options: VBoxContainer = $LoadoutClip/Loadout/Options
 @onready var _marker: TextureRect = $LoadoutClip/Loadout/Marker
-@onready var _cannon: WeaponCard = $LoadoutClip/Loadout/Cannon
-@onready var _cards: HBoxContainer = $LoadoutClip/Loadout/Cards
-@onready var _loadout_prompt: VBoxContainer = $LoadoutClip/Loadout/Prompt
-@onready var _prompt_line1: Label = $LoadoutClip/Loadout/Prompt/Line1
-@onready var _prompt_line2: HBoxContainer = $LoadoutClip/Loadout/Prompt/Line2
-@onready var _prompt_text: Label = $LoadoutClip/Loadout/Prompt/Line2/Text
-@onready var _cursor: Label = $LoadoutClip/Loadout/Prompt/Line2/Cursor
+@onready var _weapons: Control = $LoadoutClip/Loadout/Weapons
+@onready var _cannon: WeaponCard = $LoadoutClip/Loadout/Weapons/Cannon
+@onready var _cards: HBoxContainer = $LoadoutClip/Loadout/Weapons/Cards
+@onready var _loadout_prompt: VBoxContainer = $LoadoutClip/Loadout/Weapons/Prompt
+@onready var _prompt_line1: Label = $LoadoutClip/Loadout/Weapons/Prompt/Line1
+@onready var _prompt_line2: HBoxContainer = $LoadoutClip/Loadout/Weapons/Prompt/Line2
+@onready var _prompt_text: Label = $LoadoutClip/Loadout/Weapons/Prompt/Line2/Text
+@onready var _cursor: Label = $LoadoutClip/Loadout/Weapons/Prompt/Line2/Cursor
 
 var _buttons: Array[Button] = []
 var _kind: int = -1
@@ -467,7 +468,7 @@ func _open_loadout(full: bool, seconds: float) -> void:
 	else:
 		_fold = create_tween()
 		_fold.tween_property(_loadout, ^"offset_bottom", bottom, seconds)
-	height_wanted.emit(_clip.offset_top + bottom, seconds)
+	size_wanted.emit(_width_wanted(), _clip.offset_top + bottom, seconds)
 
 
 ## `instant` es para cuando el panel ni siquiera estaba a la vista todavía —la
@@ -478,9 +479,9 @@ func _hide_loadout(instant: bool = false) -> void:
 	_stop_fold()
 	if instant:
 		_shut_loadout()
-		height_wanted.emit(_height_for(false), 0.0)
+		size_wanted.emit(0.0, _height_for(false), 0.0)
 		return
-	height_wanted.emit(_height_for(false), _ANIM_TIME)
+	size_wanted.emit(0.0, _height_for(false), _ANIM_TIME)
 	# Sigue visible mientras la ventana se cierra sobre él —el recorte lo va
 	# comiendo— y se apaga al final. No es cosmético: un botón fuera del recorte
 	# se deja pulsar igual, porque `clip_contents` recorta el dibujo y no el
@@ -511,6 +512,30 @@ func _height_for(expanded: bool) -> float:
 ## Lo que mide ahora mismo, para que la ventana pregunte al abrirse.
 func wanted_height() -> float:
 	return _height_for(_loadout.visible)
+
+
+## Lo ancha que tiene que ser la página para que quepan las fichas de armas.
+##
+## Es lo único que pide ancho de más: todo lo demás cabe en la ventana tal y como
+## está dibujada. Sale de contar las fichas y no de una tabla de configuraciones
+## porque el número de armas es lo que manda, y una configuración nueva con
+## cuatro se acomodaría sola.
+##
+## La medida de una ficha y la separación se le preguntan a la escena en vez de
+## escribirlas aquí: son las que hacen que la fila quepa justa, y si alguien
+## ensancha una ficha en el editor el hueco tiene que crecer con ella.
+func _width_wanted() -> float:
+	var count := _cards.get_child_count()
+	if count <= 0 or not _cards.visible:
+		return 0.0
+	var card := 0.0
+	for child in _cards.get_children():
+		card = maxf(card, (child as Control).custom_minimum_size.x)
+	var gap := float(_cards.get_theme_constant(&"separation"))
+	var row := count * card + (count - 1) * gap
+	# El hueco empieza donde empieza el envoltorio y acaba donde acaba: sus dos
+	# `offset` son el margen izquierdo y el derecho del área de armas.
+	return _weapons.offset_left - _weapons.offset_right + row
 
 
 func _stop_fold() -> void:

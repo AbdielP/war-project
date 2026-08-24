@@ -55,7 +55,16 @@ var _grab := Vector2.ZERO
 ## del marco exterior más los del interior. Se mide una vez de los `offset` de la
 ## escena en vez de escribirlo aquí, para que mover un borde en el editor no
 ## deje la ventana midiendo de más.
-var _chrome := 0.0
+var _chrome := Vector2.ZERO
+
+## Lo más estrecha que puede quedarse la ventana: **lo que mide dibujada**.
+##
+## El ancho tiene mínimo y el alto no, y no es una asimetría caprichosa. A lo
+## alto la ventana se pliega hasta esconder bloques enteros, así que quedarse por
+## debajo de lo dibujado es justo lo que se le pide. A lo ancho no se esconde
+## nada: la ficha del avión sigue ahí y necesita su sitio, de modo que lo dibujado
+## es el suelo y sólo se crece por encima.
+var _min_page_width := 0.0
 var _resize: Tween = null
 
 
@@ -67,16 +76,20 @@ func _ready() -> void:
 		var index := _tabs.size()
 		tab.pressed.connect(func() -> void: show_section(index))
 		_tabs.append(tab)
-	_chrome = (_inner.offset_top - _inner.offset_bottom) \
-			+ (_pages.offset_top - _pages.offset_bottom)
+	_chrome = Vector2(
+			(_inner.offset_left - _inner.offset_right)
+					+ (_pages.offset_left - _pages.offset_right),
+			(_inner.offset_top - _inner.offset_bottom)
+					+ (_pages.offset_top - _pages.offset_bottom))
+	_min_page_width = (_frame.offset_right - _frame.offset_left) - _chrome.x
 	# Una sola vez: la medida no depende de qué sección esté puesta, sino de la
 	# lista entera de títulos.
 	_fit_top_tab()
 	show_section(0)
-	# El hangar es quien decide el alto, porque es el único que se despliega. Se
+	# El hangar es quien decide la medida, porque es el único que se despliega. Se
 	# le pregunta al arrancar y luego avisa él cuando cambia.
-	_hangar.height_wanted.connect(_resize_to)
-	_resize_to(_hangar.wanted_height(), 0.0)
+	_hangar.size_wanted.connect(_resize_to)
+	_resize_to(0.0, _hangar.wanted_height(), 0.0)
 	hide()
 
 
@@ -158,19 +171,23 @@ func show_section(index: int) -> void:
 ## agarre —todo lo que no sea un botón arrastra la ventana—, y si se queda
 ## grande cuando el marco se encoge deja un trozo invisible por debajo que
 ## agarra donde ya no hay ventana.
-func _resize_to(height: float, seconds: float) -> void:
+func _resize_to(width: float, height: float, seconds: float) -> void:
 	if _resize != null and _resize.is_valid():
 		_resize.kill()
 		_resize = null
-	var frame_height := height + _chrome
-	var window_height := _frame.position.y + frame_height
+	var frame_size := Vector2(maxf(width, _min_page_width), height) + _chrome
+	# La ventana crece **hacia la derecha y hacia abajo**: el borde de arriba a la
+	# izquierda no se mueve, y con él se quedan quietas las solapas, la pestaña del
+	# título y la columna de aparatos. Ensanchar por el centro las movería todas a
+	# la vez y el cambio se vería mucho más de lo que cuesta.
+	var window_size := _frame.position + frame_size
 	if is_zero_approx(seconds):
-		_frame.size.y = frame_height
-		size.y = window_height
+		_frame.size = frame_size
+		size = window_size
 		return
 	_resize = create_tween().set_parallel()
-	_resize.tween_property(_frame, ^"size:y", frame_height, seconds)
-	_resize.tween_property(self, ^"size:y", window_height, seconds)
+	_resize.tween_property(_frame, ^"size", frame_size, seconds)
+	_resize.tween_property(self, ^"size", window_size, seconds)
 
 
 func _fit_top_tab() -> void:

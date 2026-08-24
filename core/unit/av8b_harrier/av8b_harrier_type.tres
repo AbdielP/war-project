@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://c1lw2d718qt22" path="res://core/unit/unit_type.gd" id="1"]
 [ext_resource type="Resource" uid="uid://dqyodhqkvrwhp" path="res://core/weapon/gau12_cannon.tres" id="2"]
 [ext_resource type="Texture2D" uid="uid://divo0r1hmojlp" path="res://assets/art/UI/icon_av8b.png" id="3"]
-[ext_resource type="Texture2D" path="res://ui/hud/vessel_window/thumb_av8b.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://0mqklr8sjlld" path="res://ui/hud/vessel_window/thumb_av8b.png" id="4"]
 
 [resource]
 script = ExtResource("1")
@@ -12,7 +12,8 @@ short_name = "AV8"
 portrait_icon = ExtResource("3")
 hangar_icon = ExtResource("4")
 cannon = ExtResource("2")
-loadouts = PackedStringArray("AIR TO AIR", "BOMBARDMENT", "LASER GUIDED")
+cannon_rounds = 300
+power = 7
 domain = 0
 max_health = 60.0
 ecm_evasion = 0.2

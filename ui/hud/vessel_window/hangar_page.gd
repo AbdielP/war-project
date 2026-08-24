@@ -24,6 +24,7 @@ class_name HangarPage
 
 const _SLOT := preload("res://ui/hud/vessel_window/aircraft_slot.tscn")
 const _OPTION := preload("res://ui/hud/vessel_window/loadout_option.tscn")
+const _CARD := preload("res://ui/hud/vessel_window/weapon_card.tscn")
 
 ## Cuánto alto pide la página. Lo escucha la ventana, que es la única que sabe
 ## cuánto marco hay que añadirle por fuera.
@@ -45,15 +46,39 @@ const _ANIM_TIME := 0.12
 ## juego —el Cobra no tiene armamento definido todavía— y en el otro falta que
 ## el jugador elija. Decir "no hay" cuando lo que pasa es "elige" enseña al
 ## jugador a no mirar el panel.
-const _PROMPT_PICK := "SELECT A LOADOUT TO CONTINUE"
-const _PROMPT_NONE := "NO LOADOUTS AVAILABLE"
+## Qué dice el hueco del armamento cuando no hay armas que enseñar. Los tres
+## casos son distintos de verdad y no un mismo aviso con más o menos texto: falta
+## elegir, no hay nada que elegir, o lo elegido no lleva nada colgado. Decir "no
+## hay" cuando lo que pasa es "elige" enseña al jugador a no mirar el panel.
+##
+## El primero va partido en dos renglones a mano, y el corte no es por el ancho:
+## la segunda línea es la que lleva el cursor, y "CONTINUE ▪" tiene que quedar
+## junto. Los otros dos no piden nada al jugador, así que van de una pieza y sin
+## cursor — un cursor donde no hay nada que pulsar es una promesa falsa.
+const _PROMPT_PICK := ["SELECT A LOADOUT TO", "CONTINUE"]
+const _PROMPT_NONE := ["NO LOADOUTS AVAILABLE", ""]
+const _PROMPT_UNARMED := ["NO WEAPONS FITTED", ""]
 
-## Dónde empieza el aviso de la derecha. Cuando hay botones, deja libre la
-## columna que ocupan; cuando no hay ninguno, se queda con el panel entero — un
-## aviso arrinconado a la derecha con medio panel vacío al lado se lee como que
-## falta algo por cargar, y lo que pasa es justo lo contrario.
-const _PROMPT_LEFT := 74.0
-const _PROMPT_LEFT_ALONE := 3.0
+## El cuadrado macizo de la fuente, en `U+00AA`. Va por el código de escape y no
+## por el carácter suelto para que no dependa de con qué se guarde el archivo:
+## un `ª` mal codificado se convierte en dos símbolos raros y no se ve venir.
+const _CURSOR := "ª"
+
+## Lo que dura cada mitad del parpadeo. Medio segundo es el ritmo de un cursor de
+## terminal: más rápido molesta al leer el aviso que hay al lado, y más lento
+## deja de leerse como "te toca a ti" y parece un adorno.
+const _BLINK := 0.5
+
+## Aire entre el último botón de armamento y el borde de abajo del panel cuando
+## todavía no hay nada elegido.
+const _LOADOUT_PAD := 6.0
+
+## La tira de la barra de potencia: diez dibujos de 5 px de alto, del vacío al
+## lleno, apilados. No es una barra que se estire ni un relleno de color — cada
+## paso está dibujado, incluidas las mitades, así que aquí sólo se elige cuál se
+## enseña.
+const _POWER_STEPS := 10
+const _POWER_BAR_HEIGHT := 5.0
 
 ## Qué solapa enseña qué. Hoy no hay dónde mirarlo: la lista de la flota no dice
 ## si una aeronave es de ataque o de transporte, y las dos que hay —Harrier y
@@ -74,17 +99,52 @@ const _TEXT_OFF := Color(0.60784316, 0.67058825, 0.69803923)
 @onready var _detail: Control = $Content/Detail
 @onready var _detail_name: Label = $Content/Detail/Name
 @onready var _model: UnitModel = $Content/Detail/Model
-@onready var _ecm: Label = $Content/Detail/Stats/Ecm
+@onready var _power: TextureRect = $Content/Detail/Stats/PowerBar
+@onready var _ecm: Label = $Content/Detail/Stats/EcmValue
+@onready var _squad_count: Label = $Content/Detail/Stats/Count
+@onready var _squad_max: Label = $Content/Detail/Stats/Max
+@onready var _squad_less: Button = $Content/Detail/Stats/Less
+@onready var _squad_more: Button = $Content/Detail/Stats/More
 @onready var _clip: Control = $LoadoutClip
 @onready var _loadout: NinePatchRect = $LoadoutClip/Loadout
 @onready var _options: VBoxContainer = $LoadoutClip/Loadout/Options
-@onready var _loadout_prompt: Label = $LoadoutClip/Loadout/Prompt
+@onready var _marker: TextureRect = $LoadoutClip/Loadout/Marker
+@onready var _cannon: WeaponCard = $LoadoutClip/Loadout/Cannon
+@onready var _cards: HBoxContainer = $LoadoutClip/Loadout/Cards
+@onready var _loadout_prompt: VBoxContainer = $LoadoutClip/Loadout/Prompt
+@onready var _prompt_line1: Label = $LoadoutClip/Loadout/Prompt/Line1
+@onready var _prompt_line2: HBoxContainer = $LoadoutClip/Loadout/Prompt/Line2
+@onready var _prompt_text: Label = $LoadoutClip/Loadout/Prompt/Line2/Text
+@onready var _cursor: Label = $LoadoutClip/Loadout/Prompt/Line2/Cursor
 
 var _buttons: Array[Button] = []
 var _kind: int = -1
 var _ship: Node2D = null
 var _chosen: AircraftSlot = null
 var _fold: Tween = null
+
+## Cuántos aparatos de los elegidos van a salir, y cuántos hay para salir. El
+## primero lo mueve el jugador con las flechas; el segundo es cuántos quedan sin
+## desplegar, que es el tope de verdad y no un número escrito en ningún sitio.
+var squad: int = 1
+var _squad_available: int = 0
+
+## Qué armamento se ha elegido, y con qué botón. El primero es lo que se llevará
+## el avión al despegar; el segundo sólo existe para poder apagarlo cuando se
+## elija otro.
+var chosen_loadout: WeaponLoadout = null
+var _chosen_option: LoadoutOption = null
+
+## El tipo de la aeronave elegida. Se guarda al enseñar su ficha porque el
+## armamento lo vuelve a necesitar —el cañón sale de aquí— y sacarlo otra vez
+## costaría abrir su escena de nuevo.
+var _chosen_type: UnitType = null
+
+## Los dos tamaños del bloque de armamento, medidos de la escena en vez de
+## escritos aquí: el grande es el que trae puesto, y el pequeño llega hasta el
+## último botón. Así mover una pieza en el editor manda sobre el número.
+var _loadout_full: float = 0.0
+var _loadout_compact: float = 0.0
 
 
 func _ready() -> void:
@@ -95,6 +155,19 @@ func _ready() -> void:
 		var index := _buttons.size()
 		tab.pressed.connect(func() -> void: show_kind(index))
 		_buttons.append(tab)
+	_squad_less.pressed.connect(func() -> void: _set_squad(squad - 1))
+	_squad_more.pressed.connect(func() -> void: _set_squad(squad + 1))
+	# La ficha y el armamento se guardan **puestos** en la escena, con datos de
+	# muestra, porque si no en el editor no hay nada que colocar: son huecos
+	# vacíos hasta que corre el juego. Quien manda sobre si se ven es esto, no la
+	# casilla del inspector — así se pueden dejar a la vista para diseñarlos sin
+	# que la partida arranque con la ventana abierta de par en par.
+	_loadout_full = _loadout.offset_bottom
+	_loadout_compact = _loadout.offset_top + _options.offset_bottom + _LOADOUT_PAD
+	_cursor.text = _CURSOR
+	_start_blink()
+	_hide_detail()
+	_hide_loadout(true)
 	show_kind(0)
 
 
@@ -133,7 +206,11 @@ func show_for(vessel: Node2D) -> void:
 
 
 func _fill_slots() -> void:
+	# Fuera del contenedor antes de encolarlos para borrar, igual que en la
+	# columna de armamento: `queue_free` sólo los quita al final del fotograma, y
+	# hasta entonces la rejilla cuenta los viejos y los nuevos a la vez.
 	for child in _slots.get_children():
+		_slots.remove_child(child)
 		child.queue_free()
 	_chosen = null
 	# Cambiar de solapa o de buque deja sin elegir lo que estuviera elegido, así
@@ -194,13 +271,25 @@ func _show_detail(entry: Dictionary) -> void:
 	if type == null:
 		_hide_detail()
 		return
+	_chosen_type = type
 	# En mayúsculas porque la fuente **no tiene minúsculas**: dejar el nombre tal
 	# cual manda a Godot a buscar los glifos que faltan en una fuente del sistema
 	# y ahí se va el alto de línea del renglón entero.
 	_detail_name.text = type.display_name.to_upper()
-	# Sin el signo de porcentaje: la fuente tampoco lo trae. El número es el dato,
-	# y un glifo prestado del sistema rompería el renglón igual que las minúsculas.
-	_ecm.text = "ECM: %d" % roundi(type.ecm_evasion * 100.0)
+	# El valor **es** el fotograma: la tira lleva un dibujo por cada nota, así que
+	# aquí no hay escala que convertir, sólo mover la ventana del atlas.
+	var frame: int = clampi(type.power, 0, _POWER_STEPS - 1)
+	var atlas := _power.texture as AtlasTexture
+	if atlas != null:
+		atlas.region = Rect2(0.0, frame * _POWER_BAR_HEIGHT,
+				atlas.region.size.x, _POWER_BAR_HEIGHT)
+	# Se enseña aunque el juego lo use por dentro y no lo explique: este número
+	# decide si un misil antiaéreo acierta o se va, así que el jugador tiene que
+	# poder compararlo entre aparatos antes de mandar uno a una zona defendida.
+	_ecm.text = "%d%%" % roundi(type.ecm_evasion * 100.0)
+	_squad_available = maxi(int(entry.get("total", 0)) - int(entry.get("deployed", 0)), 0)
+	_squad_max.text = "MAX %d" % _squad_available
+	_set_squad(1)
 	_prompt.hide()
 	_detail.show()
 	# El modelo, el último: se centra contra el tamaño del hueco, y así se mide
@@ -208,7 +297,23 @@ func _show_detail(entry: Dictionary) -> void:
 	_model.show_scene(entry.get("scene"))
 
 
+## Cuántos van a salir. Se apaga la flecha que ya no lleva a ningún sitio en vez
+## de dejarla pulsable sin efecto: una flecha que no hace nada se lee como que la
+## ventana se colgó.
+func _set_squad(count: int) -> void:
+	squad = clampi(count, 1, maxi(_squad_available, 1))
+	_squad_count.text = str(squad)
+	_squad_less.disabled = squad <= 1
+	_squad_more.disabled = squad >= _squad_available
+	# Apagada además de desactivada. El botón no tiene fondo que cambie de cara al
+	# desactivarse —es la flecha y nada más—, así que sin atenuarla se ve igual de
+	# viva que la otra y el jugador la sigue pulsando.
+	_squad_less.modulate.a = 0.4 if _squad_less.disabled else 1.0
+	_squad_more.modulate.a = 0.4 if _squad_more.disabled else 1.0
+
+
 func _hide_detail() -> void:
+	_chosen_type = null
 	_model.show_scene(null)
 	_detail.hide()
 	_prompt.show()
@@ -221,27 +326,148 @@ func _hide_detail() -> void:
 ## arriba. Lo que sí está en la escena es cómo se ve uno: `loadout_option.tscn`
 ## lleva su arte y su fuente, y este código sólo le pone el texto.
 func _show_loadout(entry: Dictionary) -> void:
-	# Se sacan del contenedor **antes** de encolarlos para borrar: `queue_free`
-	# solo los quita al final del fotograma, y hasta entonces la columna cuenta
-	# los viejos y los nuevos a la vez y se desborda justo mientras aparece.
-	for child in _options.get_children():
-		_options.remove_child(child)
-		child.queue_free()
-	var type := _type_of(entry)
-	var names: PackedStringArray = type.loadouts if type != null else PackedStringArray()
-	for label in names:
-		var option: Button = _OPTION.instantiate()
-		option.text = label
+	_clear(_options)
+	# La lista sale de `PlayerFleet` y no del tipo de unidad: ahí las
+	# configuraciones vienen **ya filtradas por las armas que el jugador tiene**,
+	# así que lo que no se puede armar no aparece. Repetir la lista en el
+	# `UnitType` daría dos sitios donde mirar y uno de los dos acabaría viejo.
+	var offered: Array = entry.get("weapon_loadouts", [])
+	for item in offered:
+		var loadout := item as WeaponLoadout
+		if loadout == null:
+			continue
+		var option: LoadoutOption = _OPTION.instantiate()
+		option.text = loadout.display_name.to_upper()
 		_options.add_child(option)
-	var has_any := not names.is_empty()
-	_loadout_prompt.text = _PROMPT_PICK if has_any else _PROMPT_NONE
-	_loadout_prompt.offset_left = _PROMPT_LEFT if has_any else _PROMPT_LEFT_ALONE
+		option.set_selected(false)
+		option.pressed.connect(_on_loadout_picked.bind(loadout, option))
+	_clear_weapons(_PROMPT_PICK if not offered.is_empty() else _PROMPT_NONE)
+	_open_loadout(false, _ANIM_TIME)
+
+
+## Se ha elegido un armamento: se enciende su botón y sale lo que lleva colgado.
+func _on_loadout_picked(loadout: WeaponLoadout, option: LoadoutOption) -> void:
+	if is_instance_valid(_chosen_option):
+		_chosen_option.set_selected(false)
+	_chosen_option = option
+	chosen_loadout = loadout
+	option.set_selected(true)
+	_point_marker_at(option)
+	_show_weapons(loadout)
+
+
+## Mueve la marca a la altura del botón elegido.
+##
+## Se lee la posición del botón en vez de contarla por su número de orden: el
+## reparto de la columna lo hace el `VBoxContainer`, y si mañana cambia la
+## separación o el alto de un botón, contar cuadraría mal. Aquí siempre se puede
+## preguntar, porque esto sólo pasa al pulsar — mucho después de que el
+## contenedor haya colocado a sus hijos.
+func _point_marker_at(option: Control) -> void:
+	_marker.show()
+	_marker.position.y = roundf(_options.position.y + option.position.y
+			+ (option.size.y - _marker.size.y) * 0.5)
+
+
+## Las armas de una configuración, una ficha por tipo.
+##
+## Se **agrupan por arma y no por estación**: el Harrier lleva AIM-120 en la
+## central y en la interna, y son dos montajes de dos, pero al jugador lo que le
+## importa es que van cuatro. Cuántas hay lo dice el propio `WeaponLoadout`, que
+## es de donde saca el avión las suyas — así el número del hangar y el del vuelo
+## no pueden discrepar.
+func _show_weapons(loadout: WeaponLoadout) -> void:
+	_clear(_cards)
+	var seen: Array[WeaponType] = []
+	for mount in loadout.mounts:
+		if mount.weapon == null or seen.has(mount.weapon):
+			continue
+		seen.append(mount.weapon)
+		var card: WeaponCard = _CARD.instantiate()
+		_cards.add_child(card)
+		card.show_weapon(mount.weapon, loadout.ammo_of(mount.weapon))
+	# El cañón va aparte y encima, no en la fila: es del aparato y no de lo
+	# elegido, así que no cambia al cambiar de armamento y no debe leerse como
+	# una opción más.
+	var cannon: WeaponType = _chosen_type.cannon if _chosen_type != null else null
+	var rounds: int = _chosen_type.cannon_rounds if _chosen_type != null else 0
+	_cannon.show_weapon(cannon, rounds)
+	var empty := seen.is_empty() and cannon == null
+	_cards.visible = not empty
+	_loadout_prompt.visible = empty
+	if empty:
+		_say(_PROMPT_UNARMED)
+	# El panel sólo crece si hay algo que quepa dentro. Un armamento sin armas no
+	# necesita sitio, y abrir la ventana para enseñar un aviso corto es justo lo
+	# que se estaba arreglando.
+	_open_loadout(not empty, _ANIM_TIME)
+
+
+## Deja el hueco del armamento vacío, con el aviso que toque.
+func _clear_weapons(message: Array) -> void:
+	_clear(_cards)
+	_chosen_option = null
+	chosen_loadout = null
+	_marker.hide()
+	_cannon.hide()
+	_cards.hide()
+	_say(message)
+	_loadout_prompt.show()
+
+
+## Pone el aviso. El segundo renglón se va entero cuando no hay nada que poner
+## en él, y con él el cursor: el `VBoxContainer` recentra lo que queda solo.
+func _say(message: Array) -> void:
+	_prompt_line1.text = message[0]
+	_prompt_text.text = message[1]
+	_prompt_line2.visible = message[1] != ""
+
+
+## El parpadeo del cursor. Va sobre el alfa y no sobre `visible` porque el cursor
+## vive dentro de un `HBoxContainer` centrado: esconderlo encogería la fila y
+## "CONTINUE" se movería medio carácter a cada parpadeo.
+func _start_blink() -> void:
+	var blink := create_tween().set_loops()
+	blink.tween_callback(func() -> void: _cursor.modulate.a = 0.0)
+	blink.tween_interval(_BLINK)
+	blink.tween_callback(func() -> void: _cursor.modulate.a = 1.0)
+	blink.tween_interval(_BLINK)
+
+
+## Vacía un contenedor **de verdad**, no al final del fotograma.
+##
+## `queue_free` sólo desengancha al terminar el fotograma, y hasta entonces el
+## contenedor cuenta a los viejos y a los nuevos a la vez: la columna se desborda
+## justo mientras aparece, que es cuando se está mirando.
+func _clear(box: Node) -> void:
+	for child in box.get_children():
+		box.remove_child(child)
+		child.queue_free()
+
+
+## Abre el bloque de armamento a uno de sus dos tamaños.
+##
+## Son dos pasos y no uno porque el panel guarda **lo que hay ahora**: antes de
+## elegir sólo están los tres botones, y reservar el hueco de las armas deja un
+## tercio de panel vacío esperando. Al elegir, el panel se estira y la ventana
+## con él — el mismo gesto que ya hacía el bloque entero al aparecer.
+##
+## Crecen a la vez y en el mismo tiempo, y eso importa: el recorte de arriba va
+## por el alto de la página, así que si el panel fuera más deprisa se saldría por
+## abajo, y si fuera más despacio se vería el fondo de la ventana bajo él.
+func _open_loadout(full: bool, seconds: float) -> void:
 	_stop_fold()
 	# Se enseña **antes** de pedir el alto: el bloque no se desvanece, se descubre
-	# — está entero desde el primer fotograma y es el recorte de arriba el que lo
-	# va dejando ver conforme la ventana crece.
+	# — está entero desde el primer fotograma y es el recorte el que lo va dejando
+	# ver conforme la ventana crece.
 	_loadout.show()
-	height_wanted.emit(_height_for(true), _ANIM_TIME)
+	var bottom: float = _loadout_full if full else _loadout_compact
+	if is_zero_approx(seconds):
+		_loadout.offset_bottom = bottom
+	else:
+		_fold = create_tween()
+		_fold.tween_property(_loadout, ^"offset_bottom", bottom, seconds)
+	height_wanted.emit(_clip.offset_top + bottom, seconds)
 
 
 ## `instant` es para cuando el panel ni siquiera estaba a la vista todavía —la
@@ -251,7 +477,7 @@ func _hide_loadout(instant: bool = false) -> void:
 		return
 	_stop_fold()
 	if instant:
-		_loadout.hide()
+		_shut_loadout()
 		height_wanted.emit(_height_for(false), 0.0)
 		return
 	height_wanted.emit(_height_for(false), _ANIM_TIME)
@@ -261,7 +487,14 @@ func _hide_loadout(instant: bool = false) -> void:
 	# ratón.
 	_fold = create_tween()
 	_fold.tween_interval(_ANIM_TIME)
-	_fold.tween_callback(_loadout.hide)
+	_fold.tween_callback(_shut_loadout)
+
+
+## Lo apaga y lo deja del tamaño pequeño, que es como tiene que volver a salir.
+## Sin esto, un panel que se cerró estirado se encogería a la vista al reabrirse.
+func _shut_loadout() -> void:
+	_loadout.hide()
+	_loadout.offset_bottom = _loadout_compact
 
 
 ## El alto que pide la página en cada uno de sus dos estados.

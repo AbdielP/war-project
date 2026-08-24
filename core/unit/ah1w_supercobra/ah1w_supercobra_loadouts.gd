@@ -9,11 +9,11 @@ extends RefCounted
 ## y las tres salen ofrecidas — que es justo lo que se quiere ahora.
 
 ## Apoyo aéreo cercano: pegado a lo que haya en tierra.
-const CAS := "CAS / Apoyo cercano"
+const CAS := "CLOSE AIR SUP"
 ## Escolta armada: acompañar a lo que se mueva y responder a lo que aparezca.
-const ESCORT := "Escolta armada"
+const ESCORT := "ESCORT"
 ## Antiblindaje: contra vehículos, que es para lo que se hizo este aparato.
-const ANTI_ARMOR := "Ataque antiblindaje"
+const ANTI_ARMOR := "ANTI ARMOR"
 
 
 ## Las configuraciones que el jugador puede armar. La firma es la misma que la

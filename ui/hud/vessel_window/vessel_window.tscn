@@ -15,6 +15,13 @@
 [ext_resource type="Texture2D" uid="uid://1d1e1byt3hnh" path="res://ui/hud/vessel_window/content_frame.png" id="13"]
 [ext_resource type="Script" uid="uid://ccrn54ojmp2fl" path="res://ui/hud/vessel_window/hangar_page.gd" id="14"]
 [ext_resource type="PackedScene" path="res://ui/hud/vessel_window/unit_model.tscn" id="15"]
+[ext_resource type="Texture2D" uid="uid://btafk6rokee4o" path="res://ui/hud/vessel_window/power_bar.png" id="16"]
+[ext_resource type="PackedScene" uid="uid://b677jbvo2q0oo" path="res://core/unit/av8b_harrier/av8b_harrier.tscn" id="17"]
+[ext_resource type="PackedScene" path="res://ui/hud/vessel_window/loadout_option.tscn" id="18"]
+[ext_resource type="Texture2D" path="res://ui/hud/vessel_window/loadout_marker.png" id="19"]
+[ext_resource type="PackedScene" path="res://ui/hud/vessel_window/weapon_card.tscn" id="20"]
+[ext_resource type="Script" path="res://ui/hud/vessel_window/weapon_card.gd" id="21"]
+[ext_resource type="Texture2D" path="res://core/weapon/icons/icon_cannon.png" id="22"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_subtab_off"]
 content_margin_left = 3.0
@@ -36,13 +43,19 @@ texture_margin_left = 3.0
 texture_margin_top = 3.0
 texture_margin_right = 3.0
 
+[sub_resource type="AtlasTexture" id="AtlasTexture_power"]
+atlas = ExtResource("16")
+region = Rect2(0, 0, 19, 5)
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_arrow"]
+
 [node name="VesselWindow" type="Control" unique_id=343928609]
 layout_mode = 3
 anchors_preset = 0
-offset_left = 373.0
-offset_top = 88.0
-offset_right = 579.0
-offset_bottom = 338.0
+offset_left = 360.0
+offset_top = 56.0
+offset_right = 628.0
+offset_bottom = 351.0
 script = ExtResource("1")
 tab_idle = ExtResource("4")
 tab_active = ExtResource("5")
@@ -51,9 +64,8 @@ tab_active = ExtResource("5")
 layout_mode = 0
 offset_left = 30.0
 offset_top = 12.0
-offset_right = 206.0
-offset_bottom = 250.0
-mouse_filter = 2
+offset_right = 268.0
+offset_bottom = 295.0
 texture = ExtResource("2")
 patch_margin_left = 3
 patch_margin_top = 3
@@ -68,7 +80,6 @@ offset_left = 7.0
 offset_top = 7.0
 offset_right = -7.0
 offset_bottom = -7.0
-mouse_filter = 2
 texture = ExtResource("10")
 patch_margin_left = 2
 patch_margin_top = 2
@@ -99,14 +110,13 @@ layout_mode = 0
 anchor_right = 1.0
 offset_top = 11.0
 offset_bottom = 129.0
-mouse_filter = 2
 texture = ExtResource("13")
 patch_margin_left = 2
 patch_margin_top = 2
 patch_margin_right = 2
 patch_margin_bottom = 2
 
-[node name="Slots" type="GridContainer" parent="Frame/InnerFrame/Pages/HangarPage/Content"]
+[node name="Slots" type="GridContainer" parent="Frame/InnerFrame/Pages/HangarPage/Content" unique_id=1970031026]
 layout_mode = 0
 offset_left = 3.0
 offset_top = 3.0
@@ -117,7 +127,7 @@ theme_override_constants/h_separation = 2
 theme_override_constants/v_separation = 2
 columns = 2
 
-[node name="Divider" type="ColorRect" parent="Frame/InnerFrame/Pages/HangarPage/Content"]
+[node name="Divider" type="ColorRect" parent="Frame/InnerFrame/Pages/HangarPage/Content" unique_id=2022567775]
 layout_mode = 0
 offset_left = 75.0
 offset_top = 3.0
@@ -137,7 +147,6 @@ offset_right = -3.0
 offset_bottom = -3.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("9")
 theme_override_font_sizes/font_size = 8
@@ -146,8 +155,7 @@ horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
 
-[node name="Detail" type="Control" parent="Frame/InnerFrame/Pages/HangarPage/Content"]
-visible = false
+[node name="Detail" type="Control" parent="Frame/InnerFrame/Pages/HangarPage/Content" unique_id=568770696]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -160,11 +168,10 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="Name" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail"]
+[node name="Name" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail" unique_id=718312678]
 layout_mode = 0
 anchor_right = 1.0
 offset_bottom = 9.0
-mouse_filter = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("9")
 theme_override_font_sizes/font_size = 8
@@ -172,63 +179,163 @@ text = "AV-8B HARRIER II"
 horizontal_alignment = 1
 clip_text = true
 
-[node name="Model" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail" instance=ExtResource("15")]
-layout_mode = 0
+[node name="Model" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail" unique_id=1718164687 instance=ExtResource("15")]
+anchors_preset = 0
 anchor_right = 1.0
 offset_top = 11.0
 offset_bottom = 71.0
+preview = ExtResource("17")
 
-[node name="Stats" type="VBoxContainer" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail"]
-layout_mode = 0
+[node name="Stats" type="Control" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail" unique_id=1468858069]
+anchors_preset = 0
 anchor_right = 1.0
-offset_top = 77.0
+offset_top = 75.0
 offset_bottom = 112.0
 mouse_filter = 2
-theme_override_constants/separation = 2
 
-[node name="Ecm" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail/Stats"]
-layout_mode = 2
-mouse_filter = 2
+[node name="PowerLabel" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail/Stats" unique_id=1352880282]
+layout_mode = 0
+offset_left = 6.0
+offset_top = -4.0
+offset_right = 30.0
+offset_bottom = 5.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("9")
 theme_override_font_sizes/font_size = 8
-text = "ECM: 20"
-clip_text = true
+text = "POWER:"
 
-[node name="LoadoutClip" type="Control" parent="Frame/InnerFrame/Pages/HangarPage"]
-clip_contents = true
+[node name="PowerBar" type="TextureRect" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail/Stats" unique_id=1514107527]
 layout_mode = 0
+offset_left = 36.0
+offset_top = -2.0
+offset_right = 55.0
+offset_bottom = 3.0
+mouse_filter = 2
+texture = SubResource("AtlasTexture_power")
+
+[node name="EcmLabel" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail/Stats" unique_id=870712679]
+layout_mode = 0
+offset_left = 6.0
+offset_top = 5.0
+offset_right = 30.0
+offset_bottom = 14.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "ECM:"
+
+[node name="EcmValue" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail/Stats" unique_id=116720632]
+layout_mode = 0
+offset_left = 37.0
+offset_top = 5.0
+offset_right = 67.0
+offset_bottom = 14.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "20%"
+
+[node name="SquadLabel" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail/Stats" unique_id=1738380375]
+layout_mode = 0
+offset_left = 6.0
+offset_top = 19.0
+offset_right = 27.0
+offset_bottom = 28.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "SQUAD"
+
+[node name="Less" type="Button" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail/Stats" unique_id=1559883265]
+layout_mode = 0
+offset_left = 31.0
+offset_top = 19.0
+offset_right = 41.0
+offset_bottom = 28.0
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.85882354, 0.87058824, 0.30980393, 1)
+theme_override_colors/font_hover_color = Color(0.85882354, 0.87058824, 0.30980393, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("StyleBoxEmpty_arrow")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_arrow")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_arrow")
+theme_override_styles/disabled = SubResource("StyleBoxEmpty_arrow")
+text = "[<]"
+
+[node name="Count" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail/Stats" unique_id=1798148337]
+layout_mode = 0
+offset_left = 41.0
+offset_top = 19.0
+offset_right = 51.0
+offset_bottom = 28.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "1"
+horizontal_alignment = 1
+
+[node name="More" type="Button" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail/Stats" unique_id=1535044289]
+layout_mode = 0
+offset_left = 51.0
+offset_top = 19.0
+offset_right = 61.0
+offset_bottom = 28.0
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.85882354, 0.87058824, 0.30980393, 1)
+theme_override_colors/font_hover_color = Color(0.85882354, 0.87058824, 0.30980393, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("StyleBoxEmpty_arrow")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_arrow")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_arrow")
+theme_override_styles/disabled = SubResource("StyleBoxEmpty_arrow")
+text = "[>]"
+
+[node name="Max" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content/Detail/Stats" unique_id=705788686]
+layout_mode = 0
+offset_left = 65.0
+offset_top = 19.0
+offset_right = 98.0
+offset_bottom = 28.0
+theme_override_colors/font_color = Color(0.60784316, 0.67058825, 0.69803923, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "MAX 2"
+
+[node name="LoadoutClip" type="Control" parent="Frame/InnerFrame/Pages/HangarPage" unique_id=1349942582]
+clip_contents = true
+anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_top = 129.0
 mouse_filter = 2
 
-[node name="Loadout" type="NinePatchRect" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip"]
-visible = false
+[node name="Loadout" type="NinePatchRect" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip" unique_id=1663939226]
 layout_mode = 0
 anchor_right = 1.0
 offset_top = 2.0
-offset_bottom = 83.0
-mouse_filter = 2
+offset_bottom = 128.0
 texture = ExtResource("13")
 patch_margin_left = 2
 patch_margin_top = 2
 patch_margin_right = 2
 patch_margin_bottom = 2
 
-[node name="Title" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout"]
+[node name="Title" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout" unique_id=742249068]
 layout_mode = 0
 offset_left = 4.0
 offset_top = 3.0
 offset_right = 69.0
 offset_bottom = 12.0
-mouse_filter = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("9")
 theme_override_font_sizes/font_size = 8
 text = "LOADOUT/WEAPONS"
 
-[node name="Options" type="VBoxContainer" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout"]
+[node name="Options" type="VBoxContainer" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout" unique_id=2129782149]
 layout_mode = 0
 offset_left = 4.0
 offset_top = 15.0
@@ -236,25 +343,135 @@ offset_right = 68.0
 offset_bottom = 70.0
 theme_override_constants/separation = 2
 
-[node name="Prompt" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 74.0
+[node name="Sample1" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Options" unique_id=1482063792 instance=ExtResource("18")]
+layout_mode = 2
+
+[node name="Sample2" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Options" unique_id=211607893 instance=ExtResource("18")]
+layout_mode = 2
+text = "BOMBARDMENT"
+
+[node name="Sample3" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Options" unique_id=1076452345 instance=ExtResource("18")]
+layout_mode = 2
+text = "LASER GUIDED"
+
+[node name="Marker" type="TextureRect" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout"]
+layout_mode = 0
+offset_left = 70.0
+offset_top = 19.0
+offset_right = 75.0
+offset_bottom = 29.0
+mouse_filter = 2
+texture = ExtResource("19")
+
+[node name="Cannon" type="Control" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout"]
+layout_mode = 0
+offset_left = 82.0
 offset_top = 14.0
-offset_right = -3.0
-offset_bottom = -3.0
-grow_horizontal = 2
-grow_vertical = 2
+offset_right = 208.0
+offset_bottom = 48.0
+mouse_filter = 2
+script = ExtResource("21")
+
+[node name="Icon" type="TextureRect" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Cannon"]
+layout_mode = 0
+offset_right = 32.0
+offset_bottom = 34.0
+mouse_filter = 2
+texture = ExtResource("22")
+stretch_mode = 3
+
+[node name="Designation" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Cannon"]
+layout_mode = 0
+offset_left = 38.0
+offset_top = 4.0
+offset_right = 126.0
+offset_bottom = 13.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("9")
 theme_override_font_sizes/font_size = 8
-text = "SELECT A LOADOUT TO CONTINUE"
+text = "25MM."
+clip_text = true
+
+[node name="Name" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Cannon"]
+layout_mode = 0
+offset_left = 38.0
+offset_top = 13.0
+offset_right = 126.0
+offset_bottom = 22.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.60784316, 0.67058825, 0.69803923, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "CANNON"
+clip_text = true
+
+[node name="Count" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Cannon"]
+layout_mode = 0
+offset_left = 38.0
+offset_top = 22.0
+offset_right = 126.0
+offset_bottom = 31.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.8352941, 0.87843137, 0.29411766, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "X300"
+
+[node name="Cards" type="HBoxContainer" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout"]
+clip_contents = true
+layout_mode = 0
+offset_left = 82.0
+offset_top = 56.0
+offset_right = 208.0
+offset_bottom = 119.0
+mouse_filter = 2
+theme_override_constants/separation = 3
+
+[node name="Sample" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Cards" instance=ExtResource("20")]
+layout_mode = 2
+
+[node name="Prompt" type="VBoxContainer" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout" unique_id=585788501]
+layout_mode = 0
+anchor_bottom = 1.0
+offset_left = 82.0
+offset_top = 14.0
+offset_right = 208.0
+offset_bottom = -4.0
+mouse_filter = 2
+theme_override_constants/separation = 0
+alignment = 1
+
+[node name="Line1" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Prompt"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "SELECT A LOADOUT TO"
 horizontal_alignment = 1
+
+[node name="Line2" type="HBoxContainer" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Prompt"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 3
+alignment = 1
+
+[node name="Text" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Prompt/Line2"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "CONTINUE"
+
+[node name="Cursor" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/LoadoutClip/Loadout/Prompt/Line2"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
 vertical_alignment = 1
-autowrap_mode = 2
 
 [node name="SubTabs" type="Control" parent="Frame/InnerFrame/Pages/HangarPage" unique_id=1694746728]
 anchors_preset = 0
@@ -334,7 +551,6 @@ offset_left = 44.0
 offset_top = 7.0
 offset_right = 88.0
 offset_bottom = 19.0
-mouse_filter = 2
 texture = ExtResource("3")
 patch_margin_left = 2
 patch_margin_top = 2

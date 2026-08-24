@@ -5,7 +5,7 @@
 
 [resource]
 script = ExtResource("1")
-display_name = "GAU-12 Equalizer"
+display_name = "25MM. Cannon"
 short_name = "CAÑÓN"
 brevity_code = "Guns"
 ui_icon = ExtResource("2")

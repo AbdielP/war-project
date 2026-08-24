@@ -1,3 +1,4 @@
+@tool
 extends Control
 class_name UnitModel
 
@@ -27,7 +28,28 @@ const _ROTOR_POSE := PI * 0.25
 ## que no quepa se sale del hueco sin avisar, y eso no se ve hasta que pasa.
 const _MIN_ZOOM := 0.125
 
+## Qué aparato enseñar **en el editor**, para poder colocar y medir el hueco
+## viendo lo que va a caer dentro.
+##
+## El nodo se llena en marcha y por eso saldría vacío mientras se diseña: un
+## rectángulo invisible no se puede encuadrar. Con esto el editor dibuja un
+## aparato de verdad —con su rotor, su escala y su centrado—, así que lo que se
+## ve al mover el hueco es lo que va a pasar en el juego.
+##
+## No hace nada al ejecutar: en cuanto se elige una aeronave, el hangar manda
+## la suya y ésta se va. Cambiarla no toca el juego, sólo lo que se ve aquí.
+@export var preview: PackedScene = null:
+	set(value):
+		preview = value
+		if Engine.is_editor_hint() and is_node_ready():
+			show_scene(preview)
+
 @onready var _pivot: Node2D = $Pivot
+
+
+func _ready() -> void:
+	if Engine.is_editor_hint():
+		show_scene(preview)
 
 
 ## Enseña el modelo de una escena de unidad. `null` la deja vacía.

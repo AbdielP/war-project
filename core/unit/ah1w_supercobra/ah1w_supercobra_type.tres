@@ -8,6 +8,7 @@ script = ExtResource("1")
 display_name = "AH-1W SuperCobra"
 short_name = "AH1"
 portrait_icon = ExtResource("2")
+power = 4
 domain = 0
 max_health = 45.0
 ecm_evasion = 0.1

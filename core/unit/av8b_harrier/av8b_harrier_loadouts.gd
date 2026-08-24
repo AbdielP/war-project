@@ -24,18 +24,18 @@ static func build(available_weapons: Array) -> Array[WeaponLoadout]:
 	var inboard := PackedStringArray(["L3", "R3"])
 
 	var catalog: Array[WeaponLoadout] = [
-		WeaponLoadout.new("CAS / Antitanque", [
-			WeaponMount.new(_AGM65, center),
-			WeaponMount.new(_GBU54, inboard),
+		WeaponLoadout.new("AIR TO AIR", [
+			WeaponMount.new(_AIM120, center),
+			WeaponMount.new(_AIM120, inboard),
 			WeaponMount.new(_AIM9, outboard),
 		]),
-		WeaponLoadout.new("Bombardeo", [
+		WeaponLoadout.new("BOMBARDMENT", [
 			WeaponMount.new(_MK82, center, 3),
 			WeaponMount.new(_AIM9, outboard),
 		]),
-		WeaponLoadout.new("Caza / Interceptor", [
-			WeaponMount.new(_AIM120, center),
-			WeaponMount.new(_AIM120, inboard),
+		WeaponLoadout.new("LASER GUIDED", [
+			WeaponMount.new(_AGM65, center),
+			WeaponMount.new(_GBU54, inboard),
 			WeaponMount.new(_AIM9, outboard),
 		]),
 	]

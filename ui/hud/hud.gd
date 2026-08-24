@@ -14,11 +14,12 @@ signal map_clicked(world_position: Vector2, unit: Unit)
 signal map_context_requested(world_position: Vector2, unit: Unit)
 ## Pulsó una coordenada del registro de eventos: llevar la mirada allí.
 signal look_requested(world_position: Vector2)
-## Se abrió el hangar de una unidad: quien tenga la cámara puede apartarla
-## hacia un lado para dejarle sitio al panel.
-signal hangar_opened(unit: Unit)
-## El hangar se cerró: la cámara puede volver al centro.
-signal hangar_closed
+## Se abrió la ventana de un buque: quien tenga la cámara puede apartarla hacia
+## un lado para dejarle sitio al panel.
+signal vessel_opened(unit: Unit)
+## Se cerró: la cámara puede volver al centro. Con `instant` no hay que animar
+## la vuelta — la vista ya está saltando a otra unidad.
+signal vessel_closed(instant: bool)
 
 @onready var _event_log: EventLog = $EventLog
 @onready var _selection_panel: Control = $SelectionPanel
@@ -64,8 +65,9 @@ func _ready() -> void:
 	# dice que quieren entrar, y aquí se decide qué se abre.
 	_unit_tag.boarding_requested.connect(func(unit: Unit) -> void:
 		_vessel_window.open(unit)
-		hangar_opened.emit(unit))
-	_vessel_window.closed.connect(func() -> void: hangar_closed.emit())
+		vessel_opened.emit(unit))
+	_vessel_window.closed.connect(
+			func(instant: bool) -> void: vessel_closed.emit(instant))
 	# El minimapa se estira a mano y crece hacia arriba, justo hacia donde está
 	# el registro. Que se aparte él, que es el que no lo pidió.
 	_minimap.resized.connect(_push_event_log_above_minimap)
@@ -130,6 +132,10 @@ func _counts_down_to_impact(target: Unit) -> bool:
 func show_selected_unit(unit: Unit) -> void:
 	_disconnect_current()
 	_current_unit = unit
+	# Cambiar de unidad se lleva por delante la ventana del buque: enseñaba el
+	# interior de la anterior. Y sin animar la vuelta al centro, porque la vista
+	# ya está saltando a otro sitio.
+	_vessel_window.close(true)
 	# La unidad entera y no sólo su nombre: la caja lleva una cámara en vivo
 	# apuntándola, así que necesita a quién mirar.
 	_selection_panel.show_unit(unit)
@@ -190,6 +196,12 @@ func clear_selected_unit() -> void:
 	_attack_label.hide()
 	_impact_timer.hide()
 	_desel_btn.hide()
+	# La ventana del buque se va con la selección: es el interior de *esa*
+	# unidad, así que sin unidad no tiene de quién hablar. Cubre las dos formas
+	# de soltarla —la tecla de escape y el botón de cerrar— porque las dos
+	# acaban aquí. Animada, al revés que al cambiar de unidad: aquí no hay salto
+	# que tape la transición, la vista se queda donde está y sólo se recentra.
+	_vessel_window.close()
 	_unit_tag.clear()
 	_tactical_map.set_selected_unit(null)
 	_deployed_panel.set_selected(null)

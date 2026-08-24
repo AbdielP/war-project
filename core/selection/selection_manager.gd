@@ -3,6 +3,18 @@ extends Node2D
 @export var camera_path: NodePath
 @export var hud_path: NodePath
 
+@export_group("Ventana del buque")
+## Cuánto se aparta el buque del centro al abrir su ventana, en píxeles de
+## pantalla: un cuarto de los 640 de ancho de diseño, para dejarle sitio al
+## panel del otro lado.
+@export var vessel_focus_offset: Vector2 = Vector2(160.0, 0.0)
+## Lo que tarda en apartarse al abrir.
+@export var vessel_focus_time: float = 0.6
+## Lo que tarda en volver al centro al cerrar. Más lento que la ida a propósito:
+## al abrir aparece el panel y se lleva la atención, así que la cámara puede ir
+## deprisa; al cerrar no hay nada nuevo que mirar y el tirón se nota.
+@export var vessel_return_time: float = 0.9
+
 var _camera: PanCamera
 var _hud: HUD
 var _selected_unit: Unit
@@ -14,11 +26,6 @@ var _move_marker: Node2D
 var _marked_target: Unit
 
 const _MoveMarker = preload("res://core/selection/move_marker.gd")
-
-## Cuánto se aparta el barco del centro al abrir su hangar, en píxeles de
-## pantalla: un cuarto de los 640 de ancho de diseño, para dejarle la mitad
-## derecha entera al panel.
-const _HANGAR_FOCUS_OFFSET := Vector2(160.0, 0.0)
 
 
 func _ready() -> void:
@@ -33,8 +40,10 @@ func _ready() -> void:
 	_hud.map_clicked.connect(_on_map_clicked)
 	_hud.map_context_requested.connect(_on_map_context_requested)
 	_hud.look_requested.connect(_look_at)
-	_hud.hangar_opened.connect(func(_unit: Unit) -> void: _camera.pan_focus(_HANGAR_FOCUS_OFFSET))
-	_hud.hangar_closed.connect(func() -> void: _camera.pan_focus(Vector2.ZERO))
+	_hud.vessel_opened.connect(func(_unit: Unit) -> void:
+			_camera.pan_focus(vessel_focus_offset, vessel_focus_time))
+	_hud.vessel_closed.connect(func(instant: bool) -> void:
+			_camera.pan_focus(Vector2.ZERO, 0.0 if instant else vessel_return_time))
 	_camera.zoom_changed.connect(_hud.set_zoom_state)
 	# La cámara ya fijó su nivel en su propio _ready(), antes de que hubiera
 	# nadie escuchando: hay que pedirle el estado inicial a mano o los botones

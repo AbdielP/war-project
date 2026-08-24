@@ -2,6 +2,62 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-23 — la ventana del buque: cámara que aparta el foco y el primer marco jugable
+
+### `Intento de UI final.png` se borró tras comprobar que nada la referenciaba
+Antes de borrarla, un `grep` de todo el proyecto por su nombre de archivo dio cero resultados
+fuera de su propio `.import`. Esa es la pregunta correcta — **"está en el sheet viejo" no es lo
+mismo que "está en uso"**: para entonces ya todo lo migrado vivía como archivos propios
+(`portrait_frame.png`, `weapon_button.png`, los iconos de arma...), extraídos una vez y sueltos del
+origen. El icono del LHD (`icon_lhd.png`) se volvió a extraer desde el `UI.png` ya actualizado,
+16×9, centrado en el mismo canvas 20×20 que ya usan AH-1W y AV-8B.
+
+### El desvío de cámara vive en `offset`, no en `position`
+Al abrir la ventana del buque, la cámara aparta el foco a un lado (`PanCamera.focus_offset`,
+animado con un `Tween`) para dejarle sitio al panel. La primera versión lo sumaba dentro de
+`position`, en el mismo `if follow_target != null` que hace el seguimiento normal. Se rompía al
+cerrar con Escape: deseleccionar suelta `follow_target` en el mismo instante que se pide la vuelta
+al centro, y sin objetivo el `_process` salía antes de tocar nada — la cámara se quedaba **congelada
+a medio camino para siempre**. La condición correcta: `offset` es independiente de a quién se siga,
+así que el desvío se deshace aunque no haya nadie que seguir.
+
+### Cerrar de golpe si se cambia de unidad; despacio si sólo se suelta
+`VesselWindow.close(instant: bool)` y `PanCamera.pan_focus(offset, duration)`: cambiar de unidad
+selecciona a otra en el mismo gesto — la vista ya está saltando a otra parte del mapa, y una
+transición larga encima del salto sólo lo emborrona, así que ahí `duration = 0`. Soltar la unidad
+(Escape, botón ×) no mueve la vista a ningún sitio nuevo, así que ahí sí conviene que se note: 0,9 s,
+más lento que los 0,6 s de la ida a propósito, porque a la ida hay un panel apareciendo que se lleva
+la atención y a la vuelta no hay nada que mirar.
+
+### La ventana se arrastra entera, sin barra de título
+En vez de un `TitleBar` dedicado con `mouse_filter = STOP` (el patrón de `HangarWindow`), todo el
+decorado de `VesselWindow` —los tres marcos nine-patch y la pestaña del título— quedó en `IGNORE`,
+y `_gui_input` vive en la raíz. El clic que ningún hijo detiene cae hasta ahí, así que se arrastra
+desde cualquier borde o desde la pestaña "HANGAR", y las solapas y casillas (que sí paran el ratón)
+siguen pulsándose normal. Costó un bug real al verificarlo: la primera versión leía
+`get_global_mouse_position()`, que consulta el singleton `Input` y no siempre va sincronizado con
+el evento que se está atendiendo — el desvío salía siempre en cero. La posición correcta es la que
+trae el propio evento (`event.global_position`).
+
+### `UnitType.hangar_icon`: otro dibujo, no el mismo achicado, con relleno automático
+La miniatura de la casilla del hangar se ve a 13 px; el `portrait_icon` del panel de desplegadas se
+ve a 20. Bajar el segundo destruiría detalle, así que es un campo nuevo y aparte. Vacío, la casilla
+cae en `portrait_icon` como relleno reconocible — es lo que pasa hoy con el AH-1W SuperCobra, que
+no tiene miniatura propia todavía — y el día que se dibuje, sólo hay que rellenar el campo.
+
+### Las casillas de aeronave salen de `PlayerFleet.get_loadout()`, no de una lista fija
+`HangarPage` construye una casilla por cada entrada de la flota del buque abierto, con su
+`total`/`deployed` real. Nada se escribe a mano: si la flota gana una tercera aeronave, aparece
+sola en la rejilla de 2 columnas.
+
+### Aparte, un aviso de método: un `SubViewport` creado por código no hereda el filtro Nearest del proyecto
+Varias capturas de verificación de esta sesión salieron con las costuras de los nine-patch algo
+blandas — colores fuera de paleta en los bordes que no estaban en el arte. La causa no era el
+arte: un `SubViewport` instanciado desde un script arranca en filtro **Lineal** aunque
+`project.godot` tenga `default_texture_filter = Nearest`, ese ajuste no se hereda. Se corrige
+poniendo `canvas_item_default_texture_filter = NEAREST` en el propio `SubViewport` de prueba. Sin
+eso, una comprobación puede darse por buena con un desenfoque que el juego real nunca tuvo.
+
 ## 2026-08-23 — fuente pixel propia (Yellow Pixel Font), botón "Comandar" y panel de unidad seleccionada
 
 ### Un font casero puede fallar en el mapa de caracteres, no sólo en el tamaño

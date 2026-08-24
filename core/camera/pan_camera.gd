@@ -27,9 +27,15 @@ signal zoom_changed(level: int, count: int)
 
 var follow_target: Node2D = null
 
-## Cuánto se aparta el objetivo seguido del centro de la pantalla, en píxeles
-## de **pantalla** y no del mundo: así el barco se queda en el mismo sitio
-## visual aunque el jugador acerque o aleje mientras dura el desvío.
+## Cuánto se aparta la vista del centro, en píxeles de **pantalla** y no del
+## mundo: así lo mirado se queda en el mismo sitio visual aunque el jugador
+## acerque o aleje mientras dura el desvío.
+##
+## Se aplica sobre `offset` y no sobre `position`. Es lo que hace que deshacer
+## el desvío siga valiendo **cuando ya no se sigue a nadie**: al deseleccionar,
+## la cámara se queda quieta donde esté y `position` deja de tocarse, pero el
+## desvío se deshace igual y lo que estaba a un lado vuelve al centro. Metido en
+## `position` se congelaba a medio camino.
 var focus_offset: Vector2 = Vector2.ZERO
 
 var _zoom_level: int = -1
@@ -75,14 +81,21 @@ func set_zoom_level(level: int) -> void:
 	zoom_changed.emit(_zoom_level, zoom_levels.size())
 
 
-## Desliza el objetivo seguido a un lado de la pantalla —a la izquierda con
-## `screen_offset.x` positivo, porque eso mueve el *centro* de cámara hacia la
-## derecha— para dejar sitio a un panel en el otro lado. `Vector2.ZERO` lo
-## devuelve al centro. No hace nada sin un `follow_target`: sin objetivo no hay
-## de qué apartarse.
+## Desliza lo mirado a un lado de la pantalla —a la izquierda con
+## `screen_offset.x` positivo, porque eso mueve el *encuadre* hacia la derecha—
+## para dejar sitio a un panel en el otro lado. `Vector2.ZERO` lo devuelve al
+## centro.
+##
+## Con `duration` en cero salta sin animar. Eso no es un atajo por vaguería: al
+## cambiar de unidad la vista ya está dando un salto a otra parte del mapa, y
+## acompañar un salto con una transición sólo lo emborrona.
 func pan_focus(screen_offset: Vector2, duration: float = 0.6) -> void:
 	if _focus_tween != null:
 		_focus_tween.kill()
+		_focus_tween = null
+	if duration <= 0.0:
+		focus_offset = screen_offset
+		return
 	_focus_tween = create_tween()
 	_focus_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_focus_tween.tween_property(self, "focus_offset", screen_offset, duration)
@@ -91,12 +104,18 @@ func pan_focus(screen_offset: Vector2, duration: float = 0.6) -> void:
 func _process(delta: float) -> void:
 	if _press.tick(delta):
 		long_pressed.emit(get_global_mouse_position())
+	# Fuera del `if` de abajo a propósito: el desvío tiene que seguir
+	# aplicándose aunque no haya a quién seguir, que es justo el caso de
+	# deseleccionar con el panel abierto. Y se recalcula cada fotograma porque
+	# está en píxeles de pantalla: si cambia el zoom a media transición, el
+	# desvío en unidades de mundo cambia con él.
+	offset = focus_offset / zoom.x
 	if follow_target == null:
 		return
 	if not is_instance_valid(follow_target):
 		follow_target = null
 		return
-	position = follow_target.global_position + focus_offset / zoom.x
+	position = follow_target.global_position
 
 
 func _fit_limits_to_map() -> void:

@@ -181,6 +181,7 @@ Resource `.tres` compartido entre todas las instancias del mismo tipo (ej. `lhd_
 | `has_interior` | bool — la unidad se visita por dentro (hangar, pañol, tropas). Enciende el botón "Comandar" de `UnitTag`. Sólo el LHD |
 | `tag_offset` | Vector2 — cuánto se aparta la etiqueta de selección, **además** de donde esté puesta en su escena. LHD `(80,0)`, el resto cero |
 | `portrait_icon` | Texture2D — la silueta del panel de desplegadas, **centrada en 20×20**. Vacío = sólo marco |
+| `hangar_icon` | Texture2D — la miniatura de la casilla del hangar, **centrada en 32×32, dibujo a 13 px**. Vacío = cae en `portrait_icon` como relleno |
 | `short_name` | String — cómo se llama en el retrato: **tres caracteres**. Vacío = se recorta `display_name` |
 | `thumb_zoom` | `ThumbZoom` (FULL / HALF / QUARTER / EIGHTH) — a qué escala se ve en la cámara de la caja de selección. Enum y no número suelto para que sólo quepan potencias de dos. Hoy todas a 1:1 salvo el LHD, a 1/4 |
 | `cannon` | WeaponType — arma fija, va siempre y no ocupa estación. Vacío = sin cañón |
@@ -198,6 +199,11 @@ unidad y se resuelve sola, y por eso cabe en una lista de textos que el panel co
 iguales. Abrir el interior del buque es otra cosa: es una puerta a otra pantalla, tiene arte
 propio, sitio propio en el HUD y sólo puede haber una. Metida en la lista volvería a dibujarse
 como un botón de texto más.
+
+**`hangar_icon` es otro dibujo, no `portrait_icon` achicado.** Se ven a tamaños distintos —13 px
+contra 20— y bajar pixel art figurativo pierde detalle. El relleno automático (cuando está vacío)
+es a propósito: mejor una silueta reconocible prestada que una casilla muda mientras no exista la
+miniatura propia.
 
 **`tag_offset` no se deduce del sprite.** El dibujo dice cuánto ocupa la unidad, pero no por qué
 lado hay sitio libre ni cuánto aire pide — eso es composición, no un dato. Se suma a la colocación
@@ -325,6 +331,16 @@ extends Camera2D   class_name PanCamera
 | Variable | Descripción |
 |----------|-------------|
 | `follow_target: Node2D` | Si no es null, `_process` copia su `global_position` |
+| `focus_offset: Vector2` | Cuánto se aparta la vista del centro, en **píxeles de pantalla** |
+
+**`pan_focus(screen_offset, duration)`** anima `focus_offset` con un `Tween` (o lo asigna directo
+si `duration <= 0`, para un salto sin transición). Lo usa `SelectionManager` para apartar el foco al
+abrir la ventana del buque, dejándole sitio a un panel al otro lado. `_process` lo aplica sobre
+`offset` (de `Camera2D`, dividido por `zoom.x` para que el desvío en pantalla no cambie si el zoom
+cambia a media transición) y **no** sobre `position` — a propósito: `offset` es independiente de a
+quién se siga, así que el desvío se deshace igual aunque `follow_target` se suelte a mitad de
+camino. Puesto en `position`, dentro del `if follow_target != null`, se congelaba a un lado para
+siempre en cuanto se deseleccionaba con el desvío activo.
 
 - Pan: click+arrastre izquierdo. Al empezar el arrastre, `follow_target = null`.
 - Límites auto-calculados en `_ready()` desde todos los `TileMapLayer` de la escena.
@@ -390,6 +406,11 @@ extends Node2D
 NodePaths exportados: `camera_path`, `hud_path` → resueltos con `get_node()` en `_ready()`.
 Coordina selección, órdenes de movimiento y de ataque, el marcador de destino y el menú
 contextual. Es el único lugar donde se decide qué significa cada gesto de entrada.
+
+**Grupo "Ventana del buque"** (exports): `vessel_focus_offset` (`Vector2(160, 0)`, un cuarto del
+ancho de diseño), `vessel_focus_time` (0,6 s) y `vessel_return_time` (0,9 s, más lento a propósito
+— ver `PanCamera`). `HUD.vessel_opened` / `vessel_closed(instant)` se conectan aquí porque es quien
+tiene la cámara delante; el HUD no la conoce.
 
 **Flujo de input — el mismo gesto en PC y táctil, sin ramas por plataforma:**
 ```
@@ -2115,10 +2136,12 @@ extends CanvasLayer   class_name HUD
 | `map_clicked(world_position: Vector2, unit: Unit)` | Pulsó el mapa táctico, con la unidad que hubiera bajo el punto o `null`. Mismo trato: reenvía |
 | `map_context_requested(world_position: Vector2, unit: Unit)` | Ídem con el botón derecho |
 | `look_requested(world_position: Vector2)` | Pulsó una coordenada del `EventLog`: llevar la mirada allí |
+| `vessel_opened(unit: Unit)` | Se abrió `VesselWindow`. Quien tenga la cámara puede apartarla |
+| `vessel_closed(instant: bool)` | Se cerró. `instant` = sin animar la vuelta al centro — la vista ya está saltando a otra unidad |
 
 API:
-- `show_selected_unit(unit: Unit)` — muestra panel + acciones (si controla) + barra de armas + botón ×; se suscribe a `attack_target_changed` de la unidad; le pasa la selección al `TacticalMap` para su rótulo y su recuadro
-- `clear_selected_unit()` — oculta todo, incluido el aviso de ataque; se desuscribe
+- `show_selected_unit(unit: Unit)` — muestra panel + acciones (si controla) + barra de armas + botón ×; cierra `VesselWindow` **de golpe** (`close(true)`) porque enseñaba el interior de la unidad anterior y la vista ya está saltando a otra parte del mapa; se suscribe a `attack_target_changed` de la unidad; le pasa la selección al `TacticalMap` para su rótulo y su recuadro
+- `clear_selected_unit()` — oculta todo, incluido el aviso de ataque; cierra `VesselWindow` **animado** (`close()`) porque aquí no hay salto que tape la transición; se desuscribe
 - `open_target_menu(target, can_attack)` / `close_target_menu()` — delegan en `TargetMenu`
 - `show_order_marker(world_position)` / `clear_order_marker()` — el destino de la orden en curso, para que se vea en los dos mapas. Se lo dice `SelectionManager`: el HUD no conoce el mundo
 - `report_move_order(unit, where)` — una orden dada, para el `EventLog`. Igual que el marcador: lo cuenta quien la da, porque nadie más se entera de que ha habido una
@@ -2157,9 +2180,10 @@ match action_name.to_lower():
     "hangar": _hangar_window.open(_current_unit)
 ```
 Agregar casos aquí al implementar nuevas acciones. Hoy ningún tipo declara acciones, así que este
-`match` no se dispara: el hangar se abre por otro camino —`UnitTag.boarding_requested`, el botón
-"Comandar"—, conectado en `_ready()`. Cuando exista la pantalla del buque entera se cambia ahí y
-la etiqueta ni se entera.
+`match` no se dispara y `_hangar_window` queda sin quien lo abra por esta vía — su lógica de
+`PlayerFleet`/`FlightDeck`/loadouts sigue entera, pendiente de portarse a la página de `VesselWindow`.
+"Comandar" abre por otro camino: `UnitTag.boarding_requested` → `_vessel_window.open(unit)`,
+conectado en `_ready()`. La etiqueta no sabe qué se abre, sólo que quieren entrar.
 
 **Árbol de `hud.tscn`:**
 ```
@@ -2168,7 +2192,8 @@ CanvasLayer (HUD)          — process_mode = Always: la interfaz sigue viva en 
 ├── EventLog         (PanelContainer) — columna izquierda, se mide y se coloca solo
 ├── Minimap          (PanelContainer) — esquina inferior izquierda, estirable
 ├── TacticalMap      (Control)        — pantalla completa, visible=false
-├── HangarWindow     (PanelContainer)
+├── HangarWindow     (PanelContainer) — sin quien lo abra hoy; lógica pendiente de portar
+├── VesselWindow     (Control)        — la ventana del buque: marco, tres solapas y (hoy) el hangar
 ├── ActionsPanel     (PanelContainer) — offset_left=544, offset_top=259. Hoy sin inquilinos
 ├── SelectionPanel   (TextureRect)    — offset (438,291)-(535,377), caja 97×86: cámara en vivo + nombre
 ├── DeployedPanel    (PanelContainer) — offset (4,4), sin fondo y sin ancho fijo: retratos de las desplegadas
@@ -2284,7 +2309,7 @@ deja media columna en la punta.
 buque. Sale sólo si la unidad es del jugador y su tipo declara `has_interior`, entra con el mismo
 fundido que el nombre y el estado, y **no sube con ellos**: un botón que se mueve mientras aparece
 se pulsa mal. Emite `boarding_requested(unit)` y nada más — es el HUD quien decide que hoy eso
-abre la `HangarWindow`.
+abre `VesselWindow`.
 
 Sus dos texturas (normal y pulsado, esta última también en `texture_hover`) llevan el ancla y la
 flecha **pegadas dentro del PNG**, no colgadas como nodos: así el botón cambia entero al pulsarse
@@ -2409,12 +2434,102 @@ signal action_pressed(action_name: String)
 ```
 extends PanelContainer
 ```
+> **Sin quien lo abra hoy.** "Comandar" abre `VesselWindow` en su lugar (ver abajo). Esta escena y
+> su lógica se quedan enteras porque es lo que hay que portar a la página de hangar de la ventana
+> nueva: selector de cantidad, loadout y despliegue ya funcionan, sólo falta el marco alrededor.
+
 Ventana arrastrable. Patrón de drag: `TitleBar.gui_input` con `mouse_filter=STOP`.
 - `open(ship: Node2D)` — recibe la unidad seleccionada (LHD Wasp)
 - Lee loadout desde `PlayerFleet.get_loadout(ship.unit_name)`
 - Selector de cantidad: 1–4, máximo disponible no desplegado
 - Misiones: SEAD / CAP / CAS (botones, sin lógica aún)
 - DESPLEGAR: `PlayerFleet.try_deploy` → `flight_deck.request_deploy(scene)`
+
+---
+
+### `VesselWindow` — `ui/hud/vessel_window/vessel_window.gd`
+```
+extends Control   class_name VesselWindow
+```
+La ventana del buque: marco exterior nine-patch, pestaña de título y tres solapas laterales
+(hangar / tropas / munición) que conmutan páginas. Sólo el hangar tiene contenido; las otras dos
+son un `Label` de relleno.
+
+| Señal | Cuándo |
+|-------|--------|
+| `closed(instant: bool)` | Se cerró — ver `HUD.vessel_closed` |
+
+API: `open(ship: Node2D)` — guarda `ship`, avisa a `HangarPage.show_for()`, se muestra en la sección
+0. `close(instant)` — no hace nada si ya está oculta (evita avisos duplicados), oculta y emite
+`closed`. `show_section(index)`.
+
+**La pestaña de título mide lo mismo en las tres secciones.** `_fit_top_tab()` mide el título **más
+largo** de `section_titles` (hoy "MUNICIÓN", 48 px) una sola vez en `_ready()`, no el de la sección
+activa — si cada una se ajustara a su propio texto, la pestaña crecería y menguaría al cambiar de
+solapa y parecería que se mueve la ventana entera.
+
+**Las dos caras de la solapa lateral se distinguen en 4 px, no en color.** La activa
+(`tab_side_active.png`, 34 de ancho) se mete 4 px por debajo del borde izquierdo del marco y, con
+el mismo relleno, las dos quedan pegadas sin línea entre medias; la inactiva (30 de ancho) se queda
+corta y se ve el borde del marco entre ella y el contenido.
+
+**Se arrastra entera, sin `TitleBar`.** A diferencia del patrón de `HangarWindow`, aquí todo el
+decorado —los tres marcos nine-patch (`Frame`, `InnerFrame`, `Content`/`Loadout` de `HangarPage`) y
+la pestaña del título— tiene el ratón en `IGNORE`, y `_gui_input` vive en la **raíz**. El clic que
+ningún hijo detiene cae hasta ahí, así que arrastra desde cualquier borde o desde la pestaña
+"HANGAR"; las solapas y las casillas (en `STOP`) siguen pulsándose normal. Ver el patrón "Ventana
+arrastrable" para la variante con `TitleBar`.
+
+La posición sale de **`event.global_position`**, no de `get_global_mouse_position()` — ese segundo
+lee del singleton `Input` y no siempre va sincronizado con el evento que se atiende. Y se recalcula
+contra la posición absoluta del ratón en cada evento, no sumando desplazamientos: sumando, el
+redondeo a píxel entero de cada paso se acumula y la ventana se queda atrás del cursor.
+
+---
+
+### `HangarPage` — `ui/hud/vessel_window/hangar_page.gd`
+```
+extends Control
+```
+La página del hangar dentro de `VesselWindow`: sub-pestañas ATTACK/TRANSPORT, rejilla de aeronaves,
+ficha de la derecha (hoy sólo el mensaje `SELECT AN AIRCRAFT`) y el bloque `LOADOUT/WEAPONS` (hoy
+vacío, pendiente de portar `HangarWindow`).
+
+**`Kind.TRANSPORT` sale vacío a propósito.** La entrada de flota no dice si una aeronave es de
+ataque o transporte, y las dos que hay (Harrier, SuperCobra) son de ataque. Repartirlas a ojo
+habría sido inventar un dato que nadie clasificó; cuando exista, se añade a la entrada de
+`PlayerFleet`.
+
+**Las sub-pestañas se distinguen en 1 px de alto, no en textura recortada.** `tab_sub_active.png`
+(12 px, con borde claro) tapa la línea superior de `Content` y se funde con él; `tab_sub_idle.png`
+(11 px, relleno puro) se queda un píxel corto y la línea le pasa por debajo. Van como `Button` +
+`StyleBoxTexture` (márgenes de textura 3/3/3/0) y no como `TextureButton`, porque éste fuerza su
+tamaño mínimo al de la textura entera (50 px) e impondría el ancho del botón; el ancho real sale de
+medir el texto (`ATTACK` 24 px, `TRANSPORT` 37, +8 de aire por lado).
+
+`_fill_slots()` construye una `AircraftSlot` por cada entrada de `PlayerFleet.get_loadout(ship.unit_name)`
+cuando la sub-pestaña activa es `ATTACK`; en `TRANSPORT` vacía la rejilla. `_icon_of(entry)`
+instancia la escena de la entrada **sin meterla en el árbol** —se lee `unit_type.hangar_icon` (o
+`portrait_icon` si está vacío) y se libera en el acto— porque la flota guarda el `PackedScene`, no
+el tipo.
+
+---
+
+### `AircraftSlot` — `ui/hud/vessel_window/aircraft_slot.gd`
+```
+extends TextureButton   class_name AircraftSlot
+```
+Una casilla del hangar: icono de la aeronave, cuenta `disponibles/total`, y dos caras
+(`slot_idle.png` / `slot_selected.png`, borde amarillo `#D5E04B`) intercambiadas por `set_selected()`.
+
+**El icono se centra a mano, redondeando.** `KEEP_CENTERED` reparte el sobrante a partes iguales; con
+un dibujo de 13 px dentro de una casilla de 32 la mitad es 9,5 — medio píxel de desvío que con
+filtro Nearest corre el dibujo entero contra la rejilla. `_center_icon()` calcula `((caja - arte) *
+0.5).floor()`, y sirve igual para el Harrier (13×13) que para la silueta prestada del Cobra (20×20).
+
+`refresh()` está separado de `show_aircraft()` porque el número cambia al desplegar y al volver, sin
+que la casilla cambie de aeronave — falta conectarlo cuando exista el botón de despegue en esta
+ventana, o se verá `6/6` con aviones en el aire.
 
 ---
 
@@ -3193,6 +3308,13 @@ func _ready() -> void:
 `PanelContainer` → `VBoxContainer` → `TitleBar (HBoxContainer, mouse_filter=STOP)` + `Content`.
 Drag en `TitleBar.gui_input`. Ver `HangarWindow` como referencia.
 
+**Variante sin barra de título:** en vez de una zona que agarra, una lista de cosas que no
+agarran. Todo el decorado de la ventana —marcos nine-patch, pestañas de texto— queda en `IGNORE`,
+y `_gui_input` vive en la raíz: el clic que ningún hijo detiene cae hasta ahí, así que se arrastra
+desde cualquier borde. Ver `VesselWindow`. La posición sale de `event.global_position`, no de
+`get_global_mouse_position()` — éste lee el singleton `Input`, que no siempre va sincronizado con
+el evento que se atiende.
+
 ### _draw() con visibilidad
 Si usas `_draw()` en un nodo que puede ocultarse/mostrarse, llamar `queue_redraw()` en `NOTIFICATION_VISIBILITY_CHANGED`.
 
@@ -3567,6 +3689,9 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Despegue vertical:** la primera orden de movimiento saca al helicóptero de cubierta y libera su plaza (`took_off`). La orden vale aunque llegue mientras el barco todavía lo está colocando
 - [x] **Retratos de unidad en el panel de desplegadas (`UnitPortrait`):** cuadrito de 24×37 con marco de 22 dibujado, silueta de 16 por `UnitType.portrait_icon`, barra de vida de color plano y modelo de tres letras debajo, todo como escena editable. El marco de seleccionada es una segunda textura y lo marca el `HUD`, así que responde a cualquier forma de elegir la unidad. Diez desplegadas ocupan 258 px de los 640
 - [x] **Barra de vida**, colgada de la señal nueva `Unit.health_changed`. Va en dos PNG separados del mismo dibujo —marco y relleno— para que el borde se vea entero a cualquier nivel
+- [x] **`VesselWindow`**: marco de la ventana del buque, pestaña de título de ancho fijo, tres solapas laterales (hangar/tropas/munición) conmutando páginas, arrastrable entera sin barra de título
+- [x] **`HangarPage`**: sub-pestañas ATTACK/TRANSPORT, rejilla de aeronaves leída de `PlayerFleet.get_loadout()` con icono, cuenta y selección; ficha de la derecha y bloque `LOADOUT/WEAPONS` aún vacíos
+- [x] **Cámara con foco desplazable** (`PanCamera.focus_offset` / `pan_focus`): al abrir la ventana del buque, la unidad se aparta a un lado con una transición y vuelve al centro —de golpe si se cambia de unidad, animado si sólo se suelta— al cerrarla
 
 ### Pendiente
 - [ ] **Sombra propia para la Mk-82.** Hoy usa la del misil, que no le corresponde: es otra silueta y otra forma de caer

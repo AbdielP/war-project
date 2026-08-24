@@ -9,6 +9,31 @@
 [ext_resource type="Texture2D" uid="uid://dk6ubyl1pcsvj" path="res://ui/hud/vessel_window/icon_tab_troops.png" id="7"]
 [ext_resource type="Texture2D" uid="uid://c6efjj0xvl3qn" path="res://ui/hud/vessel_window/icon_tab_ammo.png" id="8"]
 [ext_resource type="FontFile" uid="uid://e43eukj7ara3" path="res://assets/fonts/Yellow Pixel Font/Yellow_pixel_font.ttf" id="9"]
+[ext_resource type="Texture2D" uid="uid://6l42umkhea3y" path="res://ui/hud/vessel_window/inner_frame.png" id="10"]
+[ext_resource type="Texture2D" uid="uid://cnspqllhnh5bi" path="res://ui/hud/vessel_window/tab_sub_active.png" id="11"]
+[ext_resource type="Texture2D" uid="uid://06ebmy470nrn" path="res://ui/hud/vessel_window/tab_sub_idle.png" id="12"]
+[ext_resource type="Texture2D" uid="uid://1d1e1byt3hnh" path="res://ui/hud/vessel_window/content_frame.png" id="13"]
+[ext_resource type="Script" uid="uid://ccrn54ojmp2fl" path="res://ui/hud/vessel_window/hangar_page.gd" id="14"]
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_subtab_off"]
+content_margin_left = 3.0
+content_margin_top = 1.0
+content_margin_right = 3.0
+content_margin_bottom = 1.0
+texture = ExtResource("12")
+texture_margin_left = 3.0
+texture_margin_top = 3.0
+texture_margin_right = 3.0
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_subtab_on"]
+content_margin_left = 3.0
+content_margin_top = 1.0
+content_margin_right = 3.0
+content_margin_bottom = 2.0
+texture = ExtResource("11")
+texture_margin_left = 3.0
+texture_margin_top = 3.0
+texture_margin_right = 3.0
 
 [node name="VesselWindow" type="Control" unique_id=343928609]
 layout_mode = 3
@@ -16,7 +41,7 @@ anchors_preset = 0
 offset_left = 373.0
 offset_top = 88.0
 offset_right = 579.0
-offset_bottom = 260.0
+offset_bottom = 338.0
 script = ExtResource("1")
 tab_idle = ExtResource("4")
 tab_active = ExtResource("5")
@@ -26,49 +51,168 @@ layout_mode = 0
 offset_left = 30.0
 offset_top = 12.0
 offset_right = 206.0
-offset_bottom = 172.0
+offset_bottom = 250.0
+mouse_filter = 2
 texture = ExtResource("2")
 patch_margin_left = 3
 patch_margin_top = 3
 patch_margin_right = 4
 patch_margin_bottom = 4
 
-[node name="Pages" type="Control" parent="Frame" unique_id=1045874918]
+[node name="InnerFrame" type="NinePatchRect" parent="Frame" unique_id=608980489]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 7.0
+offset_top = 7.0
+offset_right = -7.0
+offset_bottom = -7.0
+mouse_filter = 2
+texture = ExtResource("10")
+patch_margin_left = 2
+patch_margin_top = 2
+patch_margin_right = 2
+patch_margin_bottom = 2
+
+[node name="Pages" type="Control" parent="Frame/InnerFrame" unique_id=1045874918]
 anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 4.0
-offset_top = 4.0
-offset_right = -4.0
-offset_bottom = -4.0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = -6.0
+offset_bottom = -6.0
 mouse_filter = 2
 
-[node name="HangarPage" type="Control" parent="Frame/Pages" unique_id=281097800]
+[node name="HangarPage" type="Control" parent="Frame/InnerFrame/Pages" unique_id=281097800]
 anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
+script = ExtResource("14")
+tab_idle = SubResource("StyleBoxTexture_subtab_off")
+tab_active = SubResource("StyleBoxTexture_subtab_on")
 
-[node name="Placeholder" type="Label" parent="Frame/Pages/HangarPage" unique_id=901084798]
+[node name="Content" type="NinePatchRect" parent="Frame/InnerFrame/Pages/HangarPage" unique_id=1121630099]
+layout_mode = 0
+anchor_right = 1.0
+offset_top = 11.0
+offset_bottom = 129.0
+mouse_filter = 2
+texture = ExtResource("13")
+patch_margin_left = 2
+patch_margin_top = 2
+patch_margin_right = 2
+patch_margin_bottom = 2
+
+[node name="Slots" type="GridContainer" parent="Frame/InnerFrame/Pages/HangarPage/Content"]
+layout_mode = 0
+offset_left = 3.0
+offset_top = 3.0
+offset_right = 69.0
+offset_bottom = 105.0
+mouse_filter = 2
+theme_override_constants/h_separation = 2
+theme_override_constants/v_separation = 2
+columns = 2
+
+[node name="Divider" type="ColorRect" parent="Frame/InnerFrame/Pages/HangarPage/Content"]
+layout_mode = 0
+offset_left = 75.0
+offset_top = 3.0
+offset_right = 76.0
+offset_bottom = 115.0
+mouse_filter = 2
+color = Color(0.60784316, 0.67058825, 0.69803923, 1)
+
+[node name="Prompt" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Content" unique_id=901084798]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 79.0
+offset_top = 3.0
+offset_right = -3.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "SELECT AN AIRCRAFT"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="Loadout" type="NinePatchRect" parent="Frame/InnerFrame/Pages/HangarPage"]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 131.0
+mouse_filter = 2
+texture = ExtResource("13")
+patch_margin_left = 2
+patch_margin_top = 2
+patch_margin_right = 2
+patch_margin_bottom = 2
+
+[node name="Title" type="Label" parent="Frame/InnerFrame/Pages/HangarPage/Loadout"]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 3.0
+offset_right = 69.0
+offset_bottom = 12.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+text = "LOADOUT/WEAPONS"
+
+[node name="SubTabs" type="Control" parent="Frame/InnerFrame/Pages/HangarPage" unique_id=1694746728]
+anchors_preset = 0
+anchor_right = 1.0
+offset_bottom = 12.0
+mouse_filter = 2
+
+[node name="TabAttack" type="Button" parent="Frame/InnerFrame/Pages/HangarPage/SubTabs" unique_id=2009462933]
+layout_mode = 0
+offset_left = 3.0
+offset_top = -1.0
+offset_right = 43.0
+offset_bottom = 11.0
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("9")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("StyleBoxTexture_subtab_on")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_subtab_on")
+theme_override_styles/hover = SubResource("StyleBoxTexture_subtab_on")
+text = "ATTACK"
+
+[node name="TabTransport" type="Button" parent="Frame/InnerFrame/Pages/HangarPage/SubTabs" unique_id=945214128]
+layout_mode = 0
+offset_left = 45.0
+offset_top = -1.0
+offset_right = 98.0
+offset_bottom = 10.0
+focus_mode = 0
 theme_override_colors/font_color = Color(0.60784316, 0.67058825, 0.69803923, 1)
 theme_override_fonts/font = ExtResource("9")
 theme_override_font_sizes/font_size = 8
-text = "PENDIENTE"
-horizontal_alignment = 1
-vertical_alignment = 1
+theme_override_styles/normal = SubResource("StyleBoxTexture_subtab_off")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_subtab_off")
+theme_override_styles/hover = SubResource("StyleBoxTexture_subtab_off")
+text = "TRANSPORT"
 
-[node name="TroopsPage" type="Control" parent="Frame/Pages" unique_id=1818241145]
+[node name="TroopsPage" type="Control" parent="Frame/InnerFrame/Pages" unique_id=1818241145]
 visible = false
 anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 
-[node name="Placeholder" type="Label" parent="Frame/Pages/TroopsPage" unique_id=1188433540]
+[node name="Placeholder" type="Label" parent="Frame/InnerFrame/Pages/TroopsPage" unique_id=1188433540]
 layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -79,14 +223,14 @@ text = "PENDIENTE"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="AmmoPage" type="Control" parent="Frame/Pages" unique_id=1159647197]
+[node name="AmmoPage" type="Control" parent="Frame/InnerFrame/Pages" unique_id=1159647197]
 visible = false
 anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 
-[node name="Placeholder" type="Label" parent="Frame/Pages/AmmoPage" unique_id=1234234069]
+[node name="Placeholder" type="Label" parent="Frame/InnerFrame/Pages/AmmoPage" unique_id=1234234069]
 layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -99,19 +243,24 @@ vertical_alignment = 1
 
 [node name="TopTab" type="NinePatchRect" parent="." unique_id=136805176]
 layout_mode = 0
-offset_left = 38.0
-offset_right = 82.0
-offset_bottom = 15.0
+offset_left = 44.0
+offset_top = 7.0
+offset_right = 88.0
+offset_bottom = 19.0
+mouse_filter = 2
 texture = ExtResource("3")
 patch_margin_left = 2
 patch_margin_top = 2
 patch_margin_right = 2
 
 [node name="Title" type="Label" parent="TopTab" unique_id=1143290940]
-layout_mode = 0
+layout_mode = 1
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_top = 2.0
+grow_horizontal = 2
+grow_vertical = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("9")
 theme_override_font_sizes/font_size = 8

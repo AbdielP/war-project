@@ -48,6 +48,16 @@ const THUMB_SCALES: PackedFloat32Array = [1.0, 0.5, 0.25, 0.125]
 ## la instancia: dos Harrier se dibujan igual. Vacío = no sale silueta, sólo el
 ## marco — es lo que pasa con las unidades ajenas, que en ese panel no aparecen.
 @export var portrait_icon: Texture2D
+## La miniatura que la representa en su casilla del hangar.
+##
+## Es **otro dibujo** que el de `portrait_icon`, no el mismo achicado: aquel se
+## ve a 20 px y éste a 13, y bajar pixel art figurativo tirando píxeles pierde
+## tres de cada cuatro. Cada uno está dibujado a su tamaño.
+##
+## Vacío = se recurre a `portrait_icon`. Sirve de relleno mientras la miniatura
+## de esa unidad no exista: se ve algo reconocible en vez de una casilla muda, y
+## el día que la dibujes basta con ponerla aquí.
+@export var hangar_icon: Texture2D
 ## A qué escala se ve en la cámara en vivo de la caja de unidad seleccionada.
 ##
 ## **La caja no se dimensiona al sprite: el zoom se dimensiona a la caja.** Entre

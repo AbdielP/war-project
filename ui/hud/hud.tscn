@@ -16,6 +16,7 @@
 [ext_resource type="PackedScene" uid="uid://ctkl2vdhxhu6k" path="res://ui/hud/countermeasure_bar/countermeasure_bar.tscn" id="13"]
 [ext_resource type="PackedScene" path="res://ui/hud/brevity_calls/brevity_calls.tscn" id="14"]
 [ext_resource type="PackedScene" path="res://ui/hud/vessel_window/vessel_window.tscn" id="15"]
+[ext_resource type="PackedScene" path="res://ui/hud/cursor/cursor.tscn" id="16"]
 
 [node name="HUD" type="CanvasLayer" unique_id=1219806315]
 process_mode = 3
@@ -104,3 +105,5 @@ offset_right = 542.0
 offset_bottom = 367.0
 text = "×"
 flat = true
+
+[node name="Cursor" parent="." instance=ExtResource("16")]

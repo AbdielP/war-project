@@ -31,7 +31,7 @@ texture = SubResource("Body")
 shape = SubResource("RectangleShape2D_1")
 
 [node name="SelectionIndicator" parent="." index="2"]
-size = Vector2(23, 48)
+size = Vector2(24, 48)
 
 [node name="Rotor" type="Sprite2D" parent="." index="3" unique_id=321522419]
 z_index = 4

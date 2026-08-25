@@ -1,0 +1,60 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://core/selection/move_marker.gd" id="1"]
+[ext_resource type="Texture2D" path="res://core/selection/move_flag.png" id="2"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_1"]
+atlas = ExtResource("2")
+region = Rect2(0, 0, 22, 24)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2"]
+atlas = ExtResource("2")
+region = Rect2(22, 0, 22, 24)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3"]
+atlas = ExtResource("2")
+region = Rect2(44, 0, 22, 24)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4"]
+atlas = ExtResource("2")
+region = Rect2(66, 0, 22, 24)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5"]
+atlas = ExtResource("2")
+region = Rect2(88, 0, 22, 24)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6"]
+atlas = ExtResource("2")
+region = Rect2(110, 0, 22, 24)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6")
+}],
+"loop": false,
+"name": &"default",
+"speed": 8.0
+}]
+
+[node name="MoveMarker" type="AnimatedSprite2D"]
+sprite_frames = SubResource("SpriteFrames_1")
+centered = false
+offset = Vector2(-10, -16)
+script = ExtResource("1")

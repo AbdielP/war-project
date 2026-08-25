@@ -19,4 +19,5 @@ position = Vector2(-2.5, -2)
 shape = SubResource("RectangleShape2D_1")
 
 [node name="SelectionIndicator" parent="." index="2"]
-size = Vector2(28, 36)
+size = Vector2(26, 42)
+center = Vector2(-3, 0)

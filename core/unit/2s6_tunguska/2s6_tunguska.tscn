@@ -47,7 +47,7 @@ texture = SubResource("Hull")
 shape = SubResource("RectangleShape2D_1")
 
 [node name="SelectionIndicator" parent="." index="2"]
-size = Vector2(24, 35)
+size = Vector2(24, 36)
 
 [node name="Turret" type="Sprite2D" parent="." index="3" unique_id=2087050150]
 z_index = 3

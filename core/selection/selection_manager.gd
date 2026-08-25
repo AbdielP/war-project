@@ -19,13 +19,13 @@ var _camera: PanCamera
 var _hud: HUD
 var _selected_unit: Unit
 var _order_unit: Unit
-var _move_marker: Node2D
+var _move_marker: MoveMarker
 ## A quién se le está pintando el recuadro de objetivo. Es el objetivo de la
 ## unidad seleccionada y nada más: se apaga al deseleccionar y vuelve al
 ## seleccionarla otra vez, igual que el resto de la UI.
 var _marked_target: Unit
 
-const _MoveMarker = preload("res://core/selection/move_marker.gd")
+const _MOVE_MARKER = preload("res://core/selection/move_marker.tscn")
 
 
 func _ready() -> void:
@@ -49,7 +49,7 @@ func _ready() -> void:
 	# nadie escuchando: hay que pedirle el estado inicial a mano o los botones
 	# arrancan sin saber si queda cuerda.
 	_hud.set_zoom_state(_camera.zoom_level(), _camera.zoom_level_count())
-	_move_marker = _MoveMarker.new()
+	_move_marker = _MOVE_MARKER.instantiate()
 	_move_marker.hide()
 	# Diferido: en _ready() la escena todavía se está montando y Godot
 	# rechaza el add_child (el marcador nunca llegaba a existir).
@@ -204,8 +204,7 @@ func _issue_move_order(target: Vector2) -> void:
 	_forget_order_unit()
 	_order_unit = _selected_unit
 	_selected_unit.receive_move_order(target)
-	_move_marker.global_position = target
-	_move_marker.show()
+	_move_marker.plant(target)
 	_hud.show_order_marker(target)
 	_hud.report_move_order(_selected_unit, target)
 	if _selected_unit.has_signal("order_fulfilled"):

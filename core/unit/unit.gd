@@ -57,7 +57,7 @@ var health: float = 0.0
 ## si nadie la mató o si quien lo hizo ya no existe.
 var killed_by: Unit = null
 
-@onready var _selection_indicator: Node2D = $SelectionIndicator
+@onready var _selection_indicator: SelectionIndicator = $SelectionIndicator
 
 var _selected := false
 var _targeted := false
@@ -69,7 +69,7 @@ func _ready() -> void:
 	add_to_group(GROUP)
 	health = get_max_health()
 	_selection_indicator.visible = false
-	_selection_indicator.color = Team.color(team)
+	_selection_indicator.side = team
 	# Una unidad puesta a mano en el mapa nunca pasa por set_weapon_loadout,
 	# pero si tiene cañón ya puede atacar con él.
 	if active_weapon == null:

@@ -21,7 +21,8 @@ texture = ExtResource("2")
 shape = SubResource("RectangleShape2D_1")
 
 [node name="SelectionIndicator" parent="." index="2"]
-size = Vector2(160, 304)
+size = Vector2(106, 222)
+center = Vector2(-5, 25)
 
 [node name="FlightDeck" type="Node2D" parent="." index="3" unique_id=491283156]
 script = ExtResource("5")

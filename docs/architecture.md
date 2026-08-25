@@ -996,7 +996,8 @@ cómo se dibuja.
 
 **`WeaponType`** (`weapon_type.gd`, `extends Resource`) — definición compartida de un
 arma. Existe un `.tres` por tipo (`aim9_sidewinder`, `aim120_amraam`, `agm65_maverick`,
-`mk82`, `gbu54`) y los loadouts lo referencian en vez de copiarlo, así el nombre y el
+`mk82`, `gbu54`, `agm114_hellfire`, `hydra70`, `zuni`, y los cañones `gau12_cannon` y
+`m197_cannon`) y los loadouts lo referencian en vez de copiarlo, así el nombre y el
 icono no se desincronizan entre misiones.
 
 | Grupo | Export | Uso |
@@ -1030,7 +1031,18 @@ cañón sin disparar contra tierra salvo llegando justo por detrás.
 **`ui_icon` puede repetirse entre armas.** Dice de qué **clase** es —bomba, bomba guiada, misil
 corto, misil largo, cañón—; el nombre exacto lo lleva el tooltip. Hoy: GBU-54 la bomba guiada,
 Mk-82 el par de bombas, AIM-9 el par de misiles, AIM-120 y 9M311 el misil largo, AGM-65 el corto,
-y GAU-12 y 2A38M comparten la ráfaga.
+y GAU-12, M197 y 2A38M comparten la ráfaga.
+
+**`icon` también se repite, y por el mismo motivo del mundo real:** Hydra-70 y Zuni cuelgan los dos
+`rocket_pod.tres`, porque del pilón cuelga **el contenedor**, no el cohete. Lo que cambia entre
+las dos es lo que sale de dentro. Los recortes de cohete (`hydra70.tres`, `zuni.tres`) están hechos
+y sin usar: son los proyectiles del día que el Cobra dispare.
+
+**Los recortes nuevos son ajustados al dibujo, no tiles de 16×16.** `agm114_hellfire` `(87,2)` 4×12,
+`rocket_pod` `(98,3)` 4×10, `hydra70` `(103,3)` 3×11, `zuni` `(107,1)` 3×14. El sprite se cuelga
+**centrado** en el `Marker2D`, así que un recorte ajustado cae donde se espera; uno con aire
+alrededor se descoloca por lo que el dibujo esté descentrado dentro de su tile. Los del Harrier
+siguen siendo tiles enteros y no se tocaron: ya vuelan, y moverlos les cambiaría las alas.
 
 Métodos: `in_range_against(distance, domain)`, `min_range_against(domain)`,
 `max_range_against(domain)`, `needs_rear_aspect()` y `aspect_to(shooter, target)` (estático).
@@ -1079,9 +1091,9 @@ aunque en pantalla quepa una sola. `remaining` es estado de **una salida concret
 del catálogo — por eso los loadouts se clonan antes de colgarlos de un avión.
 
 **`WeaponLoadout`** (`weapon_loadout.gd`, `extends RefCounted`) — el armamento completo
-de una salida: `display_name` + `mounts: Array[WeaponMount]` + `default_weapon`. Única
-fuente de verdad — el HUD saca de aquí el resumen y el `HardpointRack` los sprites, así
-que no hay dos cifras que puedan discrepar.
+de una salida: `display_name` + `mounts: Array[WeaponMount]` + `default_weapon` +
+`self_defense`. Única fuente de verdad — el HUD saca de aquí el resumen y el
+`HardpointRack` los sprites, así que no hay dos cifras que puedan discrepar.
 
 **El mismo objeto hace de dos cosas según quién lo tenga:** en `PlayerFleet` es un
 CATÁLOGO —qué configuraciones existen— y en un avión es su carga real con la munición
@@ -1094,6 +1106,16 @@ la principal no dependa del orden de declaración, que también manda el orden d
 botones y el de la lista del hangar. Si apunta a un arma que no está montada, cae a la
 primera. Ninguno de los tres presets del Harrier lo rellena: en los tres la principal ya
 es la primera.
+
+`self_defense` (cuarto parámetro del `_init`) → qué arma enseña el hangar **arriba, junto al
+cañón**, en vez de en la fila de armamento. Vacío = todas van en la fila, que es lo normal.
+No cambia de qué estación cuelga ni cuánta munición lleva: **es sólo dónde se dibuja**.
+
+**Va en la carga y no en el arma, y la diferencia se pagó.** El primer intento lo puso en
+`WeaponType`, y eso se lo llevó a todas partes: el Harrier dejó de enseñar su AIM-9 en la fila sin
+que nadie lo pidiera. Un arma no sabe si en *esta* configuración sobra sitio o falta. Hoy lo rellena
+una sola de las seis configuraciones que existen — el apoyo cercano del Cobra, la única con cuatro
+armas. Ver `decisions.md`.
 
 **`HardpointRack`** (`hardpoint_rack.gd`, `extends Node2D`) — lo único que sabe dibujar
 armas. No conoce misiones ni unidades: recibe un `WeaponLoadout` y lo representa
@@ -2010,14 +2032,47 @@ cualquier unidad que cumpla una orden.
 `get_takeoff_speed()` devuelve 0 en todo lo que no despega en carrera, y `FlightDeck._launch_next()`
 se lo salta. Sin listas de modelos: el día que haya otro helicóptero funciona solo.
 
-**`ah1w_supercobra_loadouts.gd`** — tres misiones **sin armamento**: CAS, Escolta armada y
-Ataque antiblindaje. Al no pedir ninguna arma, `can_arm_with` las deja pasar siempre y el hangar
-las ofrece las tres. 4 unidades en el inventario del LHD.
+**Cañón fijo:** M197 de 20 mm, 750 disparos (`m197_cannon.tres`, en `UnitType.cannon`). No ocupa
+estación y va con cualquier carga, igual que el GAU-12 del Harrier — por eso no aparece en el
+catálogo de configuraciones.
 
-> Pendiente: **el armamento**, y con él el gesto que le falta al vuelo — morro clavado en el
-> blanco mientras se desplaza de costado. El controlador ya lleva el rumbo separado de la
-> traslación, así que es apuntar `_wanted_heading` al objetivo y dejar que el destino mande sólo
-> en el movimiento.
+**`Hardpoints`** — seis `Marker2D`, tres por ala:
+
+| Estación | Posición | Qué es |
+|----------|----------|--------|
+| `L1` / `R1` | ∓12, 6 | Punta de ala. Riel de autodefensa, siempre el AIM-9 |
+| `L2` / `R2` | ∓10, 6 | Pilón externo |
+| `L3` / `R3` | ∓7, 6 | Pilón interno |
+
+Las cifras son de la escena y se ajustan arrastrando. El margen es estrecho y conviene saberlo
+antes de moverlas: el ala del sprite va de −11 a +11, el fuselaje empieza sobre ±5, y las armas
+miden 4 px de ancho — quedan ~6 px de ala expuesta por lado para tres estaciones, así que las
+contiguas se rozan. Todas a `y = 6` para que el arma quede a caballo del ala en vez de asomar por
+arriba.
+
+**`ah1w_supercobra_loadouts.gd`** — tres misiones, ya con armamento:
+
+| Misión | `L2` externo | `L3` interno | `R3` interno | `R2` externo |
+|--------|--------------|--------------|--------------|--------------|
+| `CLOSE AIR SUP` | Hellfire ×4 | contenedor, 19 Hydra-70 | contenedor, 4 Zuni-127 | vacío |
+| `ESCORT` | Hellfire ×4 | contenedor, 19 Hydra-70 | contenedor, 19 Hydra-70 | vacío |
+| `ANTI ARMOR` | Hellfire ×4 | vacío | vacío | Hellfire ×4 |
+
+Más AIM-9 ×1 en cada punta, en las tres. 4 unidades en el inventario del LHD.
+
+**De un pilón cuelga un solo dibujo, lleve la munición que lleve.** Del externo cuelga **un**
+Hellfire y se disparan cuatro; un contenedor es un dibujo y de él salen 19 cohetes. No es un apaño:
+es `HardpointRack._mount_on_station` haciendo lo suyo (`per_station` es munición, los markers son
+dibujo), y en 23 px de ala no hay otra.
+
+`CLOSE AIR SUP` es la única que rellena `WeaponLoadout.self_defense`: con cuatro armas la fila del
+hangar no cabía, y su AIM-9 sube junto al cañón.
+
+> Pendiente: **el sistema de combate**. El Cobra tiene con qué —cañón, pilones y cargas— pero
+> todavía no tiene `WeaponSystem`, `WeaponSelector` ni comportamiento de ataque, así que no
+> dispara. Con ello llega el gesto que le falta al vuelo: morro clavado en el blanco mientras se
+> desplaza de costado. El controlador ya lleva el rumbo separado de la traslación, así que es
+> apuntar `_wanted_heading` al objetivo y dejar que el destino mande sólo en el movimiento.
 
 ---
 
@@ -2492,8 +2547,30 @@ redondeo a píxel entero de cada paso se acumula y la ventana se queda atrás de
 extends Control
 ```
 La página del hangar dentro de `VesselWindow`: sub-pestañas ATTACK/TRANSPORT, rejilla de aeronaves,
-ficha de la derecha (hoy sólo el mensaje `SELECT AN AIRCRAFT`) y el bloque `LOADOUT/WEAPONS` (hoy
-vacío, pendiente de portar `HangarWindow`).
+ficha de la derecha y el bloque `LOADOUT/WEAPONS` con los botones de despegue.
+
+**El bloque de armamento tiene dos filas**, las dos dentro de `Weapons/Column` (un `VBoxContainer`,
+para que reflote solo al aparecer o irse una):
+
+- **`Fixed`** — lo que no cambia al cambiar de carga: el cañón del aparato y, si la carga lo pide,
+  su arma de autodefensa (`WeaponLoadout.self_defense`). Centrada, 10 px entre las dos, y se
+  esconde entera si no hay ninguna de las dos.
+- **`Cards`** — una `WeaponCard` por arma de la carga elegida, **agrupadas por arma y no por
+  estación**: el Harrier lleva AIM-120 en dos montajes de dos, y al jugador lo que le importa es
+  que van cuatro.
+
+**Las fichas de `Fixed` llevan el texto debajo del icono, como las de `Cards`, y no al lado.** El
+cañón solo cabía con el icono a la izquierda y tres renglones al lado (84 px), pero sumarle el
+AIM-9 en ese formato pide 63 + 75 = 138 y en esa fila hay 126 —`SIDEWINDER` gasta 39 px él solo—.
+Con el texto debajo cada una mide 40 y las dos juntas 90.
+
+**El alto del bloque se calcula, el ancho no.** `_full_height()` suma lo que piden las filas
+visibles (`_column_height()`) y lo compara con lo que necesita la columna de botones de la
+izquierda; `_width_wanted()` mira **sólo `Cards`**, porque `Fixed` está dimensionada a propósito
+para caber siempre en el ancho por defecto. Es lo que hace que una carga con un arma más crezca
+hacia abajo y no hacia los lados. Las filas se cuentan a mano y no con
+`get_combined_minimum_size()`: las fichas acaban de añadirse y el contenedor todavía contesta con
+lo que medía antes.
 
 **`Kind.TRANSPORT` sale vacío a propósito.** La entrada de flota no dice si una aeronave es de
 ataque o transporte, y las dos que hay (Harrier, SuperCobra) son de ataque. Repartirlas a ojo
@@ -2530,6 +2607,52 @@ filtro Nearest corre el dibujo entero contra la rejilla. `_center_icon()` calcul
 `refresh()` está separado de `show_aircraft()` porque el número cambia al desplegar y al volver, sin
 que la casilla cambie de aeronave — falta conectarlo cuando exista el botón de despegue en esta
 ventana, o se verá `6/6` con aviones en el aire.
+
+---
+
+### `WeaponCard` — `ui/hud/vessel_window/weapon_card.gd`
+```
+extends Control   class_name WeaponCard
+```
+Una ficha de arma del hangar: icono de 32×34, designación, nombre y cuenta, en un hueco de 40×63.
+`show_weapon(weapon, count)` la llena; `count` a 0 esconde la cuenta en vez de escribir `x0`,
+porque esta ficha sale **antes** de despegar y un cero aquí no es "se acabó".
+
+**Las dos líneas de texto salen partidas del `display_name`, no de dos campos sueltos.**
+`_split_name()` corta por el primer espacio: `"AIM-120 AMRAAM"` da `AIM-120` arriba y `AMRAAM`
+abajo. Así un arma nueva se presenta sola el día que exista, y las dos líneas no pueden discrepar
+porque son la misma cadena. Todo en mayúsculas: la fuente **no tiene minúsculas**, y un glifo que
+falta se lo pide Godot al sistema y rompe el alto del renglón entero.
+
+**Consecuencia de ese corte: el `display_name` es también una decisión de diseño de UI.** El hueco
+son 40 px y no hay apretón que lo salve —ver `decisions.md`—, así que las dos mitades tienen que
+caber ahí. Por eso el arma se llama `Zuni-127 Rockets` y no `Zuni-127mm Rockets`: `ZUNI-127MM` mide
+42. **Se mide antes de nombrar, no después.**
+
+---
+
+### `UnitModel` — `ui/hud/vessel_window/unit_model.gd`
+```
+@tool  extends Control   class_name UnitModel
+```
+El aparato quieto dentro de un hueco del HUD. **No es un dibujo aparte:** son los mismos `Sprite2D`
+de la escena de la unidad, copiados. La escena se instancia y se suelta sin llegar a entrar en el
+árbol —así no corre ningún `_ready`, no se registra en ningún sitio y no queda nada colgando— y de
+ella sólo se copia lo que dibuja. Una unidad nueva sale aquí el día que exista sin tocar el archivo.
+
+`_bounds_of()` mide **las cuatro esquinas giradas** y no el ancho por el alto: con el rotor ladeado
+la caja real es mucho mayor que la del dibujo, y midiendo de la otra forma se sale del hueco. Al
+rotor se le da una pose de 45° (`_ROTOR_POSE`) porque a 0° cae sobre el fuselaje y parece un mástil;
+es una postura para la ficha, el original ni se toca.
+
+**Se recoloca cuando su hueco cambia de tamaño, no sólo al llenarse.** `_fit()` centra contra el
+tamaño del hueco, y la ventana se ensancha **después**, con la animación de despliegue: calculado
+una sola vez, el modelo se quedaba cuadrado contra el tamaño viejo y visiblemente escorado a la
+izquierda. Ahora `_ready()` engancha `resized` a `_refit()`, que reutiliza el `_bounds` guardado —
+el modelo no cambió, sólo el sitio donde cabe.
+
+`@export var preview: PackedScene` dibuja un aparato de verdad **en el editor**, para poder encuadrar
+el hueco viendo lo que va a caer dentro; en marcha lo sustituye el que elija el jugador.
 
 ---
 
@@ -3238,17 +3361,25 @@ Lo que el jugador posee: aeronaves y armamento. **Hardcodeado** — reemplazar c
 sistema de puerto cuando exista.
 
 ```gdscript
-_available_weapons = [ aim9, aim120, agm65, mk82, gbu54 ]   # armas del jugador
+_available_weapons = [ aim9, aim120, agm65, mk82, gbu54,
+                       agm114_hellfire, hydra70, zuni ]      # armas del jugador
 
 _loadouts = {
     "LHD Wasp": [
         { "display_name": "AV-8B Harrier II",
           "scene": preload("res://core/unit/av8b_harrier/av8b_harrier.tscn"),
           "total": 6, "deployed": 0,
-          "weapon_loadouts": _HarrierLoadouts.build(_available_weapons) }
+          "weapon_loadouts": _HarrierLoadouts.build(_available_weapons) },
+        { "display_name": "AH-1W SuperCobra",
+          "scene": preload("res://core/unit/ah1w_supercobra/ah1w_supercobra.tscn"),
+          "total": 4, "deployed": 0,
+          "weapon_loadouts": _CobraLoadouts.build(_available_weapons) }
     ]
 }
 ```
+
+Los cañones (`gau12_cannon`, `m197_cannon`) **no están en la lista**: no se compran ni se
+cuelgan, van con el aparato (`UnitType.cannon`).
 
 `_available_weapons` se declara **antes** que `_loadouts`: los inicializadores de miembro
 corren en orden de declaración y `_loadouts` lee esa lista. Quitar un arma de ahí hace
@@ -3642,6 +3773,9 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Llamadas de radio** al disparar (`BrevityCalls`): `Fox Three!`, `Pickle!`, sobre cualquier avión propio, con el código sacado del arma
 - [x] Estado de la unidad en su etiqueta: en espera, moviéndose a, atacando a
 - [x] **AH-1W SuperCobra**: en el hangar con sus tres misiones, sale a cubierta y se coloca en su punto. Rotor girando (provisional) que arranca al quedarse quieto
+- [x] **Armamento del SuperCobra**: cañón M197 fijo (750), seis pilones con Hellfire, contenedores de Hydra-70 y Zuni-127, y AIM-9 en las puntas. Las tres cargas cuelgan sus sprites en el ala; falta el sistema de combate para que dispare
+- [x] Un arma puede enseñarse **junto al cañón** en vez de en la fila de armamento, y lo decide la carga (`WeaponLoadout.self_defense`) — así una carga de cuatro armas no ensancha la ventana y las demás no se enteran
+- [x] El modelo del aparato se recentra en su hueco al cambiar éste de tamaño, no sólo al elegirlo
 - [x] El contador de impacto sólo sale donde significa algo: arma guiada contra tierra
 - [x] Primer enemigo en el mapa: T-14 Armata (estático, sin IA)
 - [x] Atacar: click/tap sobre un enemigo con unidad propia seleccionada, o "Atacar" en `TargetMenu`; al morir el objetivo, el Harrier orbita donde llegó

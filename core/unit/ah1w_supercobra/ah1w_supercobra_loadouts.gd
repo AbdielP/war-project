@@ -33,21 +33,34 @@ static func build(available_weapons: Array) -> Array[WeaponLoadout]:
 	var outer := PackedStringArray(["L2", "R2"])
 	var inner := PackedStringArray(["L3", "R3"])
 	var catalog: Array[WeaponLoadout] = [
-		# La única que lleva cuatro armas, y por eso la única que sube el AIM-9
-		# junto al cañón: con las cuatro en fila la ventana tenía que ensancharse.
+		# Apoyo aéreo cercano: cuatro Hellfire en el externo izquierdo, y un
+		# contenedor de cohetes en cada interno — 19 Hydra a la izquierda, 4 Zuni
+		# a la derecha. El externo derecho va vacío.
+		#
+		# Del externo izquierdo cuelga **un** Hellfire aunque lleve cuatro: en 23
+		# px de ala no caben cuatro dibujados, y el rack ya sabe colgar sólo los
+		# que quepan (ver `HardpointRack._mount_on_station`). Lo mismo vale para
+		# los contenedores: uno cuelga y de él salen los 19.
+		#
+		# Es también la única carga con cuatro armas, y por eso la única que sube
+		# el AIM-9 junto al cañón: con las cuatro en fila la ventana se ensancha.
 		WeaponLoadout.new(CAS, [
-			WeaponMount.new(_HELLFIRE, ["L3"], 4),
-			WeaponMount.new(_HYDRA70, ["L2"], 19),
-			WeaponMount.new(_ZUNI, ["R2"], 4),
+			WeaponMount.new(_HELLFIRE, ["L2"], 4),
+			WeaponMount.new(_HYDRA70, ["L3"], 19),
+			WeaponMount.new(_ZUNI, ["R3"], 4),
 			WeaponMount.new(_AIM9, wingtips),
 		], null, _AIM9),
+		# Escolta: contenedor de Hydra en los dos internos —19 cada uno, 38— y
+		# cuatro Hellfire en el externo izquierdo. El externo derecho va vacío.
 		WeaponLoadout.new(ESCORT, [
-			WeaponMount.new(_HYDRA70, outer, 19),
-			WeaponMount.new(_HELLFIRE, ["L3"], 4),
+			WeaponMount.new(_HYDRA70, inner, 19),
+			WeaponMount.new(_HELLFIRE, ["L2"], 4),
 			WeaponMount.new(_AIM9, wingtips),
 		]),
+		# Antiblindaje: cuatro Hellfire en cada externo —ocho— y los internos
+		# vacíos. Es la carga que va a por vehículos y no lleva nada más.
 		WeaponLoadout.new(ANTI_ARMOR, [
-			WeaponMount.new(_HELLFIRE, inner, 4),
+			WeaponMount.new(_HELLFIRE, outer, 4),
 			WeaponMount.new(_AIM9, wingtips),
 		]),
 	]

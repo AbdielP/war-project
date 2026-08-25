@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://b0kbs1vy2sf1s" path="res://assets/art/sprites/aim9_sidewinder.tres" id="2"]
 [ext_resource type="PackedScene" uid="uid://dgpbq55vf6cfr" path="res://core/weapon/agm65_missile.tscn" id="3"]
-[ext_resource type="Texture2D" path="res://core/weapon/icons/icon_missile_pair.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://5nh6x24f3wcs" path="res://core/weapon/icons/icon_missile_pair.png" id="4"]
 
 [resource]
 script = ExtResource("1")

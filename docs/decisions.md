@@ -2,6 +2,85 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-24 — el armamento del SuperCobra: seis pilones, y una fuente que no se envuelve
+
+### Del pilón cuelga el contenedor, no el cohete
+El sheet trae el tubo verde y los cohetes dibujados por separado —azul el Hydra, blanco y rojo el
+Zuni— y al principio se cortó "tubo + cohete" como una sola imagen. Está mal: **el tubo es el
+lanzador**, y lo que se cuelga del ala es él. Los cohetes son lo que sale de dentro.
+
+Así que `agm114_hellfire.tres` cuelga su misil, y Hydra y Zuni cuelgan **el mismo**
+`rocket_pod.tres` — un contenedor es un contenedor mire lo que mire dentro. Los dos recortes de
+cohete (`hydra70.tres`, `zuni.tres`) quedan guardados sin usar todavía: son los proyectiles del día
+que el Cobra dispare.
+
+De paso, los tres recortes nuevos son **ajustados al dibujo** y no tiles de 16×16 como los del
+Harrier. El sprite se cuelga centrado en el `Marker2D`, así que un recorte ajustado cae donde se
+espera y uno con aire alrededor se descoloca por lo que el dibujo esté descentrado dentro del tile.
+El AIM-9 se dejó como estaba: ya vuela en el Harrier y moverlo le cambiaría las alas.
+
+### Dónde se enseña un arma lo decide la carga, no el arma
+Apoyo cercano lleva cuatro armas y con las cuatro en fila la ventana tenía que ensancharse. La
+solución es subir el AIM-9 junto al cañón — pero **sólo ahí**.
+
+El primer intento puso la marca en el arma (`WeaponType.self_defense`), y eso se la llevó a todas
+partes: el Harrier también dejó de enseñar su AIM-9 en la fila, sin que nadie lo pidiera. Un arma
+no sabe si en *esta* configuración sobra sitio o falta. Ahora es `WeaponLoadout.self_defense`, y la
+rellena una sola de las seis configuraciones que existen.
+
+**La regla general:** cuando algo se ve distinto según el contexto, el que decide es el contexto, no
+la cosa. Puesto en la cosa, viaja a todos los contextos.
+
+### Dos fichas en una fila de 126 px: el texto va debajo del icono
+El cañón se enseñaba con el icono a la izquierda y tres renglones al lado: 84 px. Sumarle el AIM-9
+en el mismo formato pide 63 + 75 = 138, y en esa fila hay 126. No caben, y no es cuestión de
+apretar: `SIDEWINDER` gasta 39 px él solo.
+
+Con el texto **debajo** del icono —el formato de las fichas de armamento de abajo— cada una mide 40
+y las dos juntas 90, con 10 px de aire entre ellas. Cabe, y además las dos filas se leen como la
+misma clase de cosa.
+
+Un intento intermedio las apiló en vertical, una debajo de otra. Funcionaba —el ancho no crecía—
+pero gastaba 34 px de alto por evitar 12 de ancho. Se descartó al ver que el formato compacto
+resolvía las dos.
+
+### Una `FontVariation` sobre un pixel font lo desdibuja
+`ZUNI-127MM` mide 42 px en una ficha de 40. Se intentó apretarle el espaciado con una
+`FontVariation` de `spacing_glyph = -1`, midiendo sólo el renglón que se salía. El texto cupo… y
+salió **borroso**: envolver la fuente en una `FontVariation` la vuelve a rasterizar sin los ajustes
+de importación del `FontFile` original —antialiasing, hinting y subpixel desactivados— y el pixel
+font deja de ser nítido.
+
+Se revirtió entero y el arma pasó a llamarse `Zuni-127`: el `127` sí cabía (30 px de 40), era el
+`MM` lo que se pasaba. **Cuando un texto no cabe se acorta el texto o se ensancha el hueco; la
+fuente no se toca.**
+
+Comprobado contando colores en el render, que es lo único que vale aquí: en toda la zona de texto
+hay exactamente tres —fondo, gris y blanco—, o sea cero tonos intermedios.
+
+### El hueco de un modelo cambia de tamaño después de colocarlo
+`UnitModel._fit()` centra el aparato contra el tamaño de su hueco, y se llamaba una sola vez, al
+elegir la aeronave. Pero la ventana se ensancha **después**, con la animación de despliegue: el
+modelo se quedaba cuadrado contra el tamaño viejo y visiblemente escorado a la izquierda.
+
+Ahora se engancha a `resized` y se recoloca guardando lo que ocupa (`_bounds`) en vez de volver a
+copiar la escena — el modelo no cambió, sólo el sitio donde cabe.
+
+### Seis pilones en 23 px de ala
+Punta, externo e interno por cada lado. El ala del sprite va de −11 a +11 y el fuselaje empieza
+sobre ±5, así que quedan unos 6 px de ala expuesta por lado para tres estaciones de 4 px de ancho:
+rozarse es inevitable. Quedaron en ±12 / ±10 / ±7, todas a y = 6 para que las armas straddleen el
+ala en vez de asomar por arriba.
+
+Las cifras son `Marker2D` de la escena, no números del código: se ajustan arrastrando.
+
+**Dos verdades que ya estaban en el rack y aquí se cobraron:** la munición de una estación
+(`per_station`) no tiene nada que ver con cuántos sprites caben —del externo cuelga **un** Hellfire
+y se disparan cuatro—, y por eso un contenedor con 19 cohetes es un solo dibujo. Y las posiciones
+sólo se pueden juzgar **mirándolas**: con el fuselaje encima, el dibujo del ala tiene detalles
+verdes y oscuros que se confunden con las propias armas, así que hubo que renderizar el aparato con
+el cuerpo oculto para ver de verdad qué colgaba de dónde.
+
 ## 2026-08-24 — el hangar completo: ficha de aeronave, armamento y despegue con orden
 
 ### Una orden dada antes de despegar se da **antes** de soltar el aparato, no después

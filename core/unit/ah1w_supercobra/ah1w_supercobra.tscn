@@ -2,10 +2,10 @@
 
 [ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
 [ext_resource type="Texture2D" uid="uid://c806n07oeku5i" path="res://assets/art/sprites/AH-1W SuperCobra.png" id="2"]
-[ext_resource type="Resource" path="res://core/unit/ah1w_supercobra/ah1w_supercobra_type.tres" id="3"]
-[ext_resource type="Script" path="res://core/unit/ah1w_supercobra/rotor.gd" id="4"]
-[ext_resource type="Script" path="res://core/unit/ah1w_supercobra/ah1w_supercobra.gd" id="5"]
-[ext_resource type="Script" path="res://core/unit/flight/helicopter_controller.gd" id="6"]
+[ext_resource type="Resource" uid="uid://c3sptrjt3dfse" path="res://core/unit/ah1w_supercobra/ah1w_supercobra_type.tres" id="3"]
+[ext_resource type="Script" uid="uid://bq4udrar1eih6" path="res://core/unit/ah1w_supercobra/rotor.gd" id="4"]
+[ext_resource type="Script" uid="uid://dw72p5ihshnch" path="res://core/unit/ah1w_supercobra/ah1w_supercobra.gd" id="5"]
+[ext_resource type="Script" uid="uid://c5ura44j8wtyt" path="res://core/unit/flight/helicopter_controller.gd" id="6"]
 [ext_resource type="Script" uid="uid://bim4jv2yqqy6a" path="res://core/weapon/hardpoint_rack.gd" id="7"]
 
 [sub_resource type="AtlasTexture" id="Body"]
@@ -39,27 +39,26 @@ position = Vector2(1, 6)
 texture = SubResource("Blades")
 script = ExtResource("4")
 
-[node name="HelicopterController" type="Node" parent="." index="4"]
+[node name="HelicopterController" type="Node" parent="." index="4" unique_id=1083713370]
 script = ExtResource("6")
 
-[node name="Hardpoints" type="Node2D" parent="." index="5"]
+[node name="Hardpoints" type="Node2D" parent="." index="5" unique_id=1833576964]
 script = ExtResource("7")
 
-[node name="L1" type="Marker2D" parent="Hardpoints"]
-position = Vector2(-12, 7)
+[node name="L1" type="Marker2D" parent="Hardpoints" index="0" unique_id=2100921229]
+position = Vector2(-12, 6)
 
-[node name="L2" type="Marker2D" parent="Hardpoints"]
+[node name="L2" type="Marker2D" parent="Hardpoints" index="1" unique_id=847193261]
 position = Vector2(-10, 6)
 
-[node name="L3" type="Marker2D" parent="Hardpoints"]
-position = Vector2(-7, 4)
+[node name="L3" type="Marker2D" parent="Hardpoints" index="2" unique_id=1337647357]
+position = Vector2(-7, 6)
 
-[node name="R3" type="Marker2D" parent="Hardpoints"]
-position = Vector2(7, 4)
+[node name="R3" type="Marker2D" parent="Hardpoints" index="3" unique_id=702457708]
+position = Vector2(7, 6)
 
-[node name="R2" type="Marker2D" parent="Hardpoints"]
+[node name="R2" type="Marker2D" parent="Hardpoints" index="4" unique_id=1161573081]
 position = Vector2(10, 6)
 
-[node name="R1" type="Marker2D" parent="Hardpoints"]
-position = Vector2(12, 7)
-
+[node name="R1" type="Marker2D" parent="Hardpoints" index="5" unique_id=153977970]
+position = Vector2(12, 6)

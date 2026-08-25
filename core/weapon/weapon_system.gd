@@ -251,7 +251,12 @@ func _hit_fraction(weapon: WeaponType, target: Unit) -> float:
 ## Segundos que falta para que llegue lo que tiene en el aire, o -1 si no hay
 ## nada volando. Con varias armas en camino manda la primera en llegar: es la
 ## que decide cuándo se sabrá el resultado.
-func time_to_impact() -> float:
+##
+## `against` acota la pregunta a lo que va contra **ese** blanco. Sin acotarla,
+## cambiar de objetivo con un misil todavía en el aire le pasaba al nuevo la
+## cuenta atrás del anterior: la marca del blanco nuevo se cerraba contra un
+## impacto que iba a ocurrir en otro sitio.
+func time_to_impact(against: Unit = null) -> float:
 	var soonest := -1.0
 	for node in _in_flight:
 		# La lista se limpia en el proceso de física, pero quien pregunta puede
@@ -261,6 +266,8 @@ func time_to_impact() -> float:
 			continue
 		var projectile := node as Projectile
 		if projectile == null:
+			continue
+		if against != null and projectile.target != against:
 			continue
 		var eta := projectile.time_to_impact()
 		if eta >= 0.0 and (soonest < 0.0 or eta < soonest):

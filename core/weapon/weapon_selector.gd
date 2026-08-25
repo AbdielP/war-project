@@ -81,18 +81,52 @@ func _rearm_for(target: Unit) -> void:
 		return
 	var pick := best_for(target)
 	if pick == null:
-		# Todavía fuera de alcance de todo: al menos, lo que el armamento tenga
-		# por principal. Es con lo que la unidad salió armada.
-		pick = _unit.get_default_weapon()
+		# Todavía fuera de alcance de todo: hace falta un arma que **guíe el
+		# vuelo** hasta ponerse a tiro, aunque desde aquí no se pueda disparar.
+		pick = _armed_fallback(target)
 	if pick != null and pick.can_engage_domain(target.get_domain()):
 		_unit.set_active_weapon(pick)
 
 
-## Se acabó lo que el jugador había elegido: vuelve a mandar el automático, o el
-## avión se quedaría con un arma vacía sin disparar.
+## Con qué se apunta cuando el blanco está fuera del alcance de todo.
+##
+## El principal del armamento, que es con lo que la unidad salió armada — **pero
+## sólo si le queda**. Sin esa comprobación el avión se acercaba guiado por un
+## arma gastada y llegaba a tiro para no disparar: la envolvente era la buena,
+## el arma no.
+##
+## Y el cañón el último, por lo mismo que en [method best_for]: mientras quede un
+## misil, el vuelo se organiza alrededor del misil.
+func _armed_fallback(target: Unit) -> WeaponType:
+	var domain := target.get_domain()
+	var main := _unit.get_default_weapon()
+	if main != null and _unit.has_ammo(main) and main.can_engage_domain(domain):
+		return main
+	var cannon: WeaponType = _unit.unit_type.cannon if _unit.unit_type != null else null
+	var last_resort: WeaponType = null
+	for weapon in _unit.get_weapons():
+		if not _unit.has_ammo(weapon) or not weapon.can_engage_domain(domain):
+			continue
+		if weapon == cannon:
+			last_resort = weapon
+			continue
+		return weapon
+	return last_resort
+
+
+## Se acabó lo que había puesto: vuelve a mandar el automático **y se replantea
+## en el acto**.
+##
+## Devolver el mando no basta, y ahí estaba el fallo: el repaso periódico sólo
+## corre contra lo que vuela, así que contra tierra nadie volvía a preguntar
+## nunca. El avión seguía dando pasadas con el lanzador vacío —con dos bombas
+## colgadas del ala— hasta que el jugador le cambiaba de blanco. Se veía como un
+## avión que enfila, no dispara, rompe y vuelve a empezar para siempre.
 func _on_ammo_changed(weapon: WeaponType, remaining: int) -> void:
-	if remaining == 0 and weapon == _unit.active_weapon:
-		automatic = true
+	if remaining > 0 or weapon != _unit.active_weapon:
+		return
+	automatic = true
+	_rearm_for(_unit.attack_target)
 
 
 func _physics_process(delta: float) -> void:

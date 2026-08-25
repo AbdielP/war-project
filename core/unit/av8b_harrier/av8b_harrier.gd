@@ -74,7 +74,7 @@ func get_takeoff_speed() -> float:
 
 
 func get_time_to_impact() -> float:
-	return weapons.time_to_impact()
+	return weapons.time_to_impact(attack_target)
 
 
 ## El portaaviones cede el control cuando el avión ya está en el aire.

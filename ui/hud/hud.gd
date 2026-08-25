@@ -31,7 +31,6 @@ signal vessel_closed(instant: bool)
 @onready var _weapon_bar: Control = $WeaponBar
 @onready var _countermeasure_bar: CountermeasureBar = $CountermeasureBar
 @onready var _target_menu: PanelContainer = $TargetMenu
-@onready var _attack_label: Label = $AttackLabel
 @onready var _impact_timer: Label = $ImpactTimer
 @onready var _zoom_controls: VBoxContainer = $ZoomControls
 @onready var _minimap: Minimap = $Minimap
@@ -178,11 +177,7 @@ func show_selected_unit(unit: Unit) -> void:
 	_selection_panel.show_unit(unit)
 	_actions_panel.show_actions(unit.get_actions() if unit.is_player_controlled() else [])
 	_refresh_weapon_bar()
-	# El objetivo puede cambiar sin tocar la selección — si muere, por ejemplo —,
-	# así que el aviso se engancha a la unidad en vez de refrescarse a mano.
-	unit.attack_target_changed.connect(_on_attack_target_changed)
 	unit.ammo_changed.connect(_on_ammo_changed)
-	_on_attack_target_changed(unit.attack_target)
 	_desel_btn.show()
 	_unit_tag.show_for(unit)
 	_tactical_map.set_selected_unit(unit)
@@ -230,7 +225,6 @@ func clear_selected_unit() -> void:
 	_actions_panel.clear()
 	_weapon_bar.clear()
 	_countermeasure_bar.clear()
-	_attack_label.hide()
 	_impact_timer.hide()
 	_desel_btn.hide()
 	# La ventana del buque se va con la selección: es el interior de *esa*
@@ -269,14 +263,6 @@ func clear_order_marker() -> void:
 	_tactical_map.clear_order_marker()
 
 
-func _on_attack_target_changed(target: Unit) -> void:
-	if is_instance_valid(target):
-		_attack_label.text = "Atacando: %s" % target.get_display_name()
-		_attack_label.show()
-	else:
-		_attack_label.hide()
-
-
 func _on_ammo_changed(_weapon: WeaponType, _remaining: int) -> void:
 	_weapon_bar.refresh_ammo()
 
@@ -284,8 +270,6 @@ func _on_ammo_changed(_weapon: WeaponType, _remaining: int) -> void:
 func _disconnect_current() -> void:
 	if not is_instance_valid(_current_unit):
 		return
-	if _current_unit.attack_target_changed.is_connected(_on_attack_target_changed):
-		_current_unit.attack_target_changed.disconnect(_on_attack_target_changed)
 	if _current_unit.ammo_changed.is_connected(_on_ammo_changed):
 		_current_unit.ammo_changed.disconnect(_on_ammo_changed)
 

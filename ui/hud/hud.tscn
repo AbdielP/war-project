@@ -67,18 +67,6 @@ offset_bottom = 4.0
 
 [node name="CountermeasureBar" parent="." unique_id=1190024034 instance=ExtResource("13")]
 
-[node name="AttackLabel" type="Label" parent="." unique_id=1557856103]
-visible = false
-offset_left = 160.0
-offset_top = 332.0
-offset_right = 480.0
-offset_bottom = 343.0
-theme_override_colors/font_color = Color(0.9098039, 0.23137255, 0.23137255, 1)
-theme_override_font_sizes/font_size = 8
-horizontal_alignment = 1
-vertical_alignment = 1
-clip_text = true
-
 [node name="ImpactTimer" type="Label" parent="." unique_id=106900932]
 visible = false
 offset_right = 24.0

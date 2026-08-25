@@ -102,23 +102,21 @@ func _process(_delta: float) -> void:
 	_hud.aim_cursor(_can_shoot_whats_under_the_mouse())
 
 
-## Tres condiciones, y ninguna se puede dar por supuesta.
+## La mira sale exactamente cuando el clic sería una orden de fuego, ni un caso
+## más: es la misma pregunta que se hace [method _handle_click], hecha antes de
+## pulsar. Si dijeran cosas distintas, el cursor estaría prometiendo algo que el
+## clic no cumple.
 ##
-## Que la unidad **tenga con qué disparar** es la que se olvida: `_can_attack`
-## sólo comprueba que sean enemigos, así que sin esto el buque —que no lleva
-## cañón ni armamento— sacaría la mira sobre cualquier hostil y prometería un
-## ataque que no puede hacer.
-##
-## Y encima del HUD no hay mira aunque debajo del panel haya un enemigo: ahí el
-## clic se lo queda la interfaz y nunca llega al mundo, así que apuntar sería
-## mentir. Se pregunta por el `Control` que hay bajo el ratón y no por una lista
+## Con una salvedad: **encima del HUD no hay mira** aunque debajo del panel haya
+## un enemigo, porque ahí el clic se lo queda la interfaz y nunca llega al
+## mundo. Se pregunta por el `Control` que hay bajo el ratón y no por una lista
 ## de paneles, que habría que mantener cada vez que se añade uno.
 func _can_shoot_whats_under_the_mouse() -> bool:
-	if not _has_own_selection() or _selected_unit.get_weapons().is_empty():
+	if not _has_own_selection():
 		return false
 	if get_viewport().gui_get_hovered_control() != null:
 		return false
-	return _selected_unit.is_hostile_to(_find_unit_at(get_global_mouse_position()))
+	return _can_shoot(_find_unit_at(get_global_mouse_position()))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -141,10 +139,11 @@ func _on_camera_clicked(world_position: Vector2) -> void:
 func _handle_click(world_position: Vector2, unit: Unit) -> void:
 	_hud.close_target_menu()
 	if unit != null:
-		# Con algo propio seleccionado, tocar a un hostil es atacarlo. Atacar
-		# es lo frecuente; para mirarlo está la pulsación larga o el click
-		# derecho.
-		if _can_attack(unit):
+		# Con algo propio y **armado** seleccionado, tocar a un hostil es
+		# atacarlo. Atacar es lo frecuente; para mirarlo está la pulsación larga
+		# o el click derecho. Sin armas no hay orden que dar y el clic vale lo
+		# que vale sobre cualquier otra unidad: seleccionarla.
+		if _can_shoot(unit):
 			_issue_attack_order(unit)
 		elif unit == _selected_unit:
 			_select(null)
@@ -173,6 +172,18 @@ func _handle_context(world_position: Vector2, unit: Unit) -> void:
 
 func _can_attack(target: Unit) -> bool:
 	return _has_own_selection() and _selected_unit.is_hostile_to(target)
+
+
+## Como [method _can_attack] pero además **con qué**.
+##
+## Son dos preguntas distintas y conviene no juntarlas: "son enemigos" no es
+## "esta unidad puede dispararle". El buque no lleva cañón ni armamento —ataca
+## con lo que despega, no por sí mismo—, así que un clic encima de un hostil no
+## puede ser una orden de fuego suya. El menú del objetivo sigue usando la otra,
+## la de sólo enemistad, porque ahí la opción de atacar se queda a la espera de
+## que exista mandar una salida contra un blanco.
+func _can_shoot(target: Unit) -> bool:
+	return _can_attack(target) and not _selected_unit.get_weapons().is_empty()
 
 
 func _find_unit_at(world_position: Vector2) -> Unit:

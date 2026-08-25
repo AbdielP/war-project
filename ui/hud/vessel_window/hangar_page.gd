@@ -122,10 +122,11 @@ const _TEXT_OFF := Color(0.60784316, 0.67058825, 0.69803923)
 @onready var _actions: HBoxContainer = $LoadoutClip/Loadout/Actions
 @onready var _take_off: Button = $LoadoutClip/Loadout/Actions/TakeOff
 @onready var _targeted_take_off: Button = $LoadoutClip/Loadout/Actions/TargetedTakeOff
-@onready var _fixed: HBoxContainer = $LoadoutClip/Loadout/Weapons/Fixed
-@onready var _cannon: WeaponCard = $LoadoutClip/Loadout/Weapons/Fixed/Cannon
-@onready var _self_defense: WeaponCard = $LoadoutClip/Loadout/Weapons/Fixed/SelfDefense
-@onready var _cards: HBoxContainer = $LoadoutClip/Loadout/Weapons/Cards
+@onready var _column: VBoxContainer = $LoadoutClip/Loadout/Weapons/Column
+@onready var _fixed: HBoxContainer = $LoadoutClip/Loadout/Weapons/Column/Fixed
+@onready var _cannon: WeaponCard = $LoadoutClip/Loadout/Weapons/Column/Fixed/Cannon
+@onready var _self_defense: WeaponCard = $LoadoutClip/Loadout/Weapons/Column/Fixed/SelfDefense
+@onready var _cards: HBoxContainer = $LoadoutClip/Loadout/Weapons/Column/Cards
 @onready var _loadout_prompt: VBoxContainer = $LoadoutClip/Loadout/Weapons/Prompt
 @onready var _prompt_line1: Label = $LoadoutClip/Loadout/Weapons/Prompt/Line1
 @onready var _prompt_line2: HBoxContainer = $LoadoutClip/Loadout/Weapons/Prompt/Line2
@@ -155,11 +156,14 @@ var _chosen_option: LoadoutOption = null
 ## costaría abrir su escena de nuevo.
 var _chosen_type: UnitType = null
 
-## Los dos tamaños del bloque de armamento, medidos de la escena en vez de
-## escritos aquí: el grande es el que trae puesto, y el pequeño llega hasta el
-## último botón. Así mover una pieza en el editor manda sobre el número.
-var _loadout_full: float = 0.0
+## Lo pequeño que se queda el bloque de armamento antes de elegir carga: llega
+## hasta el último botón. Se mide de la escena en vez de escribirlo aquí, para
+## que mover una pieza en el editor mande sobre el número. El tamaño grande no
+## es fijo — ver [method _full_height].
 var _loadout_compact: float = 0.0
+
+## Cuánto reservan los botones de despegue por debajo del área de armas.
+var _actions_room: float = 0.0
 
 
 func _ready() -> void:
@@ -177,8 +181,8 @@ func _ready() -> void:
 	# vacíos hasta que corre el juego. Quien manda sobre si se ven es esto, no la
 	# casilla del inspector — así se pueden dejar a la vista para diseñarlos sin
 	# que la partida arranque con la ventana abierta de par en par.
-	_loadout_full = _loadout.offset_bottom
 	_loadout_compact = _loadout.offset_top + _options.offset_bottom + _LOADOUT_PAD
+	_actions_room = -_actions.offset_top
 	_take_off.pressed.connect(launch)
 	_targeted_take_off.pressed.connect(target_requested.emit)
 	_cursor.text = _CURSOR
@@ -396,34 +400,40 @@ func _point_marker_at(option: Control) -> void:
 ## es de donde saca el avión las suyas — así el número del hangar y el del vuelo
 ## no pueden discrepar.
 ##
-## La de autodefensa no entra en la fila aunque venga en el mismo `WeaponLoadout`
-## — sale junto al cañón (ver `_fixed`) porque, igual que él, no cambia de una
-## configuración a otra: repetirla en las tres cargas del Cobra es lo que dejaba
-## la fila en cuatro fichas por un arma que ya se sabía que iba a estar.
+## Una carga puede sacar **una** de sus armas de la fila y subirla arriba, al
+## lado del cañón: lo pide ella por su `self_defense`, no el arma. Sólo lo usa la
+## que se queda estrecha —el Cobra en apoyo cercano, con cuatro—; en el resto el
+## AIM-9 va en la fila como una más, igual que siempre.
+##
+## Arriba caben las dos porque esas fichas llevan el texto **debajo** del icono y
+## miden 40: con el texto al lado son 63 y 75 —"SIDEWINDER" gasta 39 px él solo—
+## y las dos juntas no entran en los 126 px de la fila.
 func _show_weapons(loadout: WeaponLoadout) -> void:
 	_clear(_cards)
 	var seen: Array[WeaponType] = []
-	var self_defense: WeaponType = null
 	var ordnance := 0
 	for mount in loadout.mounts:
 		if mount.weapon == null or seen.has(mount.weapon):
 			continue
 		seen.append(mount.weapon)
-		if mount.weapon.self_defense:
-			self_defense = mount.weapon
+		if mount.weapon == loadout.self_defense:
 			continue
 		ordnance += 1
 		var card: WeaponCard = _CARD.instantiate()
 		_cards.add_child(card)
 		card.show_weapon(mount.weapon, loadout.ammo_of(mount.weapon))
-	# El cañón y la de autodefensa van aparte y encima, no en la fila: son del
-	# aparato y no de lo elegido, así que no cambian al cambiar de armamento y no
-	# deben leerse como una opción más.
+	# El cañón va aparte y encima, no en la fila: es del aparato y no de lo
+	# elegido, así que no cambia al cambiar de armamento y no debe leerse como
+	# una opción más.
 	var cannon: WeaponType = _chosen_type.cannon if _chosen_type != null else null
 	var rounds: int = _chosen_type.cannon_rounds if _chosen_type != null else 0
 	_cannon.show_weapon(cannon, rounds)
-	_self_defense.show_weapon(self_defense,
-			loadout.ammo_of(self_defense) if self_defense != null else 0)
+	var guard := loadout.self_defense
+	_self_defense.show_weapon(guard,
+			loadout.ammo_of(guard) if guard != null else 0)
+	# La fila de arriba se va entera cuando no tiene nada que enseñar: dejarla
+	# puesta reservaría su alto y el panel se abriría con un hueco vacío encima.
+	_fixed.visible = cannon != null or guard != null
 	var empty := ordnance == 0 and cannon == null
 	_cards.visible = not empty
 	_loadout_prompt.visible = empty
@@ -486,6 +496,7 @@ func _clear_weapons(message: Array) -> void:
 	chosen_loadout = null
 	_refresh_actions()
 	_marker.hide()
+	_fixed.hide()
 	_cannon.hide()
 	_self_defense.hide()
 	_cards.hide()
@@ -543,7 +554,7 @@ func _open_loadout(full: bool, seconds: float) -> void:
 	# "con un armamento ya elegido": antes de eso no hay nada que lanzar, y un par
 	# de botones apagados esperando desde el principio no dicen eso.
 	_actions.visible = full
-	var bottom: float = _loadout_full if full else _loadout_compact
+	var bottom: float = _full_height() if full else _loadout_compact
 	if is_zero_approx(seconds):
 		_loadout.offset_bottom = bottom
 	else:
@@ -580,6 +591,42 @@ func _shut_loadout() -> void:
 	_loadout.offset_bottom = _loadout_compact
 
 
+## Lo alto que se pone el bloque de armamento desplegado.
+##
+## No es un número fijo de la escena: la columna de armas cambia de alto con lo
+## que lleve la carga elegida — el Cobra en apoyo cercano enseña el AIM-9 encima
+## y pide una fila más que los demás. **Crece a lo alto y no a lo ancho** porque
+## a lo ancho la ventana tiene mínimo y a lo alto no.
+##
+## Se mide contra los dos lados del panel: la columna de armas de la derecha y la
+## de botones de la izquierda, que sigue necesitando su sitio aunque no haya
+## armas que enseñar. Todo sale de los `offset` de la escena, así que mover una
+## pieza en el editor sigue mandando sobre el número.
+func _full_height() -> float:
+	var weapons_side := _weapons.offset_top + _column_height() - _weapons.offset_bottom
+	var options_side := _options.offset_bottom + _LOADOUT_PAD + _actions_room
+	return _loadout.offset_top + maxf(weapons_side, options_side)
+
+
+## Lo que suman las filas de armas que están a la vista.
+##
+## Se cuentan a mano en vez de preguntarle al contenedor su tamaño mínimo: las
+## fichas acaban de añadirse y el reparto todavía no ha corrido, así que el
+## contenedor aún contesta con lo que medía antes.
+func _column_height() -> float:
+	var total := 0.0
+	var rows := 0
+	for child in _column.get_children():
+		var part := child as Control
+		if part == null or not part.visible:
+			continue
+		rows += 1
+		total += part.custom_minimum_size.y
+	if rows > 1:
+		total += (rows - 1) * float(_column.get_theme_constant(&"separation"))
+	return total
+
+
 ## El alto que pide la página en cada uno de sus dos estados.
 ##
 ## Sale de los `offset` de la escena y no de `size`, para que valga desde
@@ -603,36 +650,22 @@ func wanted_height() -> float:
 ## porque el número de armas es lo que manda, y una configuración nueva con
 ## cuatro se acomodaría sola.
 ##
-## Se mira **la fila más ancha de las dos**, la del armamento elegido y la fija
-## del cañón con la de autodefensa: con una sola arma en la fila de abajo, la de
-## arriba —cañón más Sidewinder— pesa más y es la que decide.
+## Sólo mira **la fila de armamento elegido**. La fija —cañón y autodefensa— va
+## a propósito del mismo tamaño que una ficha normal (ver `Fixed` en la escena)
+## para que quepa siempre dentro del ancho por defecto y nunca sea ella la que
+## decida cuánto se ensancha la ventana.
 func _width_wanted() -> float:
-	var row := maxf(_row_width(_cards), _row_width(_fixed))
-	if row <= 0.0:
+	var count := _cards.get_child_count()
+	if count <= 0 or not _cards.visible:
 		return 0.0
+	var card := 0.0
+	for child in _cards.get_children():
+		card = maxf(card, (child as Control).custom_minimum_size.x)
+	var gap := float(_cards.get_theme_constant(&"separation"))
+	var row := count * card + (count - 1) * gap
 	# El hueco empieza donde empieza el envoltorio y acaba donde acaba: sus dos
 	# `offset` son el margen izquierdo y el derecho del área de armas.
 	return _weapons.offset_left - _weapons.offset_right + row
-
-
-## Ancho de una fila de fichas: sólo las visibles, a la medida de la más ancha.
-##
-## La medida de una ficha y la separación se le preguntan a la escena en vez de
-## escribirlas aquí: son las que hacen que la fila quepa justa, y si alguien
-## ensancha una ficha en el editor el hueco tiene que crecer con ella.
-func _row_width(row: HBoxContainer) -> float:
-	var widest := 0.0
-	var count := 0
-	for child in row.get_children():
-		var control := child as Control
-		if control == null or not control.visible:
-			continue
-		count += 1
-		widest = maxf(widest, control.custom_minimum_size.x)
-	if count <= 0:
-		return 0.0
-	var gap := float(row.get_theme_constant(&"separation"))
-	return count * widest + (count - 1) * gap
 
 
 func _stop_fold() -> void:

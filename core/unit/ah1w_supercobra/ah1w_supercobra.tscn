@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://core/unit/ah1w_supercobra/rotor.gd" id="4"]
 [ext_resource type="Script" path="res://core/unit/ah1w_supercobra/ah1w_supercobra.gd" id="5"]
 [ext_resource type="Script" path="res://core/unit/flight/helicopter_controller.gd" id="6"]
+[ext_resource type="Script" uid="uid://bim4jv2yqqy6a" path="res://core/weapon/hardpoint_rack.gd" id="7"]
 
 [sub_resource type="AtlasTexture" id="Body"]
 atlas = ExtResource("2")
@@ -40,4 +41,25 @@ script = ExtResource("4")
 
 [node name="HelicopterController" type="Node" parent="." index="4"]
 script = ExtResource("6")
+
+[node name="Hardpoints" type="Node2D" parent="." index="5"]
+script = ExtResource("7")
+
+[node name="L1" type="Marker2D" parent="Hardpoints"]
+position = Vector2(-12, 7)
+
+[node name="L2" type="Marker2D" parent="Hardpoints"]
+position = Vector2(-10, 6)
+
+[node name="L3" type="Marker2D" parent="Hardpoints"]
+position = Vector2(-7, 4)
+
+[node name="R3" type="Marker2D" parent="Hardpoints"]
+position = Vector2(7, 4)
+
+[node name="R2" type="Marker2D" parent="Hardpoints"]
+position = Vector2(10, 6)
+
+[node name="R1" type="Marker2D" parent="Hardpoints"]
+position = Vector2(12, 7)
 

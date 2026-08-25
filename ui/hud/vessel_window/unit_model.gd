@@ -46,8 +46,17 @@ const _MIN_ZOOM := 0.125
 
 @onready var _pivot: Node2D = $Pivot
 
+## Lo que ocupa el modelo puesto, para poder recolocarlo sin volver a copiarlo.
+var _bounds := Rect2()
+var _has_model := false
+
 
 func _ready() -> void:
+	# El hueco **cambia de ancho mientras se mira**: la ventana se despliega con
+	# una animación y el panel crece a su alrededor. Como el centrado se calcula
+	# contra el tamaño del hueco, hacerlo una sola vez deja el modelo cuadrado
+	# contra el tamaño viejo y se queda pegado a la izquierda según crece.
+	resized.connect(_refit)
 	if Engine.is_editor_hint():
 		show_scene(preview)
 
@@ -57,6 +66,7 @@ func show_scene(scene: PackedScene) -> void:
 	for child in _pivot.get_children():
 		_pivot.remove_child(child)
 		child.queue_free()
+	_has_model = false
 	if scene == null:
 		return
 	var source := scene.instantiate()
@@ -72,7 +82,16 @@ func show_scene(scene: PackedScene) -> void:
 	source.free()
 	if not started:
 		return
+	_bounds = bounds
+	_has_model = true
 	_fit(bounds)
+
+
+## Vuelve a centrarlo en el hueco de ahora. Se guarda lo que ocupa en vez de
+## medirlo otra vez: el modelo no ha cambiado, sólo el sitio donde cabe.
+func _refit() -> void:
+	if _has_model:
+		_fit(_bounds)
 
 
 ## Recorre la unidad quedándose con lo que dibuja, arrastrando la transformación

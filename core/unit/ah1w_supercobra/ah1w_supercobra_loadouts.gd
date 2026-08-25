@@ -7,11 +7,10 @@ extends RefCounted
 ## `UnitType.cannon` en `ah1w_supercobra_type.tres`), igual que el GAU-12 del
 ## Harrier tampoco aparece en su catálogo de configuraciones.
 ##
-## Las estaciones ("H1", "H2", "R1", "R2", "W1", "W2") son provisionales: el
-## Cobra todavía no tiene `Hardpoints` ni `HardpointRack` en su escena, así que
-## hoy son sólo la cuenta de munición de cada configuración. El día que se monte
-## el armazón de vuelo del Cobra, estos ids son los que tienen que llevar los
-## `Marker2D`.
+## Estaciones reales del Cobra (ver los Marker2D de `ah1w_supercobra.tscn`):
+##   L1 / R1  punta de ala — riel de autodefensa. Siempre el AIM-9.
+##   L2 / R2  pilón exterior — carga pesada.
+##   L3 / R3  pilón interior — carga pesada.
 
 ## Apoyo aéreo cercano: pegado a lo que haya en tierra.
 const CAS := "CLOSE AIR SUP"
@@ -30,21 +29,25 @@ const _ZUNI     := preload("res://core/weapon/zuni.tres")
 ## del Harrier —recibe las armas disponibles— para que el hangar no tenga que
 ## saber de qué modelo está hablando.
 static func build(available_weapons: Array) -> Array[WeaponLoadout]:
-	var wingtips := PackedStringArray(["W1", "W2"])
+	var wingtips := PackedStringArray(["L1", "R1"])
+	var outer := PackedStringArray(["L2", "R2"])
+	var inner := PackedStringArray(["L3", "R3"])
 	var catalog: Array[WeaponLoadout] = [
+		# La única que lleva cuatro armas, y por eso la única que sube el AIM-9
+		# junto al cañón: con las cuatro en fila la ventana tenía que ensancharse.
 		WeaponLoadout.new(CAS, [
-			WeaponMount.new(_HELLFIRE, ["H1"], 4),
-			WeaponMount.new(_HYDRA70, ["R1"], 19),
+			WeaponMount.new(_HELLFIRE, ["L3"], 4),
+			WeaponMount.new(_HYDRA70, ["L2"], 19),
 			WeaponMount.new(_ZUNI, ["R2"], 4),
 			WeaponMount.new(_AIM9, wingtips),
-		]),
+		], null, _AIM9),
 		WeaponLoadout.new(ESCORT, [
-			WeaponMount.new(_HYDRA70, ["R1", "R2"], 19),
-			WeaponMount.new(_HELLFIRE, ["H1"], 4),
+			WeaponMount.new(_HYDRA70, outer, 19),
+			WeaponMount.new(_HELLFIRE, ["L3"], 4),
 			WeaponMount.new(_AIM9, wingtips),
 		]),
 		WeaponLoadout.new(ANTI_ARMOR, [
-			WeaponMount.new(_HELLFIRE, ["H1", "H2"], 4),
+			WeaponMount.new(_HELLFIRE, inner, 4),
 			WeaponMount.new(_AIM9, wingtips),
 		]),
 	]

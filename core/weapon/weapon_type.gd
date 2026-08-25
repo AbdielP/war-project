@@ -37,11 +37,6 @@ enum FireMode {
 ## nadie tiene que acordarse de añadirla a una lista aparte. Vacío = no se canta
 ## nada y el registro sólo dice el nombre.
 @export var brevity_code: String = ""
-## Va siempre, sea cual sea la carga elegida — el AIM-9 de autodefensa y no la
-## munición de la misión. En el hangar se enseña junto al cañón y no en la fila
-## de armamento: es lo que hace que esa fila no crezca con algo que no cambia
-## de una configuración a otra.
-@export var self_defense: bool = false
 ## El arma tal y como se ve **colgada del ala**: es el sprite que cuelga el
 ## `HardpointRack` en el mundo, no un icono de menú.
 @export var icon: Texture2D

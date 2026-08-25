@@ -18,13 +18,25 @@ var mounts: Array[WeaponMount] = []
 ## montada. Sirve para que la principal no dependa del orden de declaración,
 ## que también manda el orden de los botones y de la lista del hangar.
 var default_weapon: WeaponType = null
+## El arma que el hangar enseña **aparte**, junto al cañón, en vez de en la fila
+## de armamento. Vacío = todas van en la fila, que es lo normal.
+##
+## Es de la configuración y no del arma: el mismo AIM-9 va en la fila como una
+## más en casi todas, y sólo sube arriba donde la fila se queda estrecha. Puesto
+## en el arma se lo llevaba a todas partes — al Harrier también, que no lo pedía.
+##
+## Sigue montada como cualquier otra: esto sólo dice dónde se dibuja, no cambia
+## de qué estación cuelga ni cuánta munición lleva.
+var self_defense: WeaponType = null
 
 
 func _init(p_display_name: String = "", p_mounts: Array = [],
-		p_default_weapon: WeaponType = null) -> void:
+		p_default_weapon: WeaponType = null,
+		p_self_defense: WeaponType = null) -> void:
 	display_name = p_display_name
 	mounts.assign(p_mounts)
 	default_weapon = p_default_weapon
+	self_defense = p_self_defense
 
 
 ## Con qué arma sale el avión. Nunca el cañón si lleva algo colgado: quien
@@ -55,7 +67,7 @@ func can_arm_with(available_weapons: Array) -> bool:
 ## Copia propia, con la munición llena. Lo que se comparte entre aviones es el
 ## catálogo; la carga de cada uno es suya.
 func clone() -> WeaponLoadout:
-	var copy := WeaponLoadout.new(display_name, [], default_weapon)
+	var copy := WeaponLoadout.new(display_name, [], default_weapon, self_defense)
 	for mount in mounts:
 		copy.mounts.append(mount.clone())
 	return copy

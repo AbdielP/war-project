@@ -6,7 +6,7 @@
 
 [resource]
 script = ExtResource("1")
-display_name = "Zuni"
+display_name = "Zuni-127 Rockets"
 short_name = "ZUNI"
 icon = ExtResource("2")
 ui_icon = ExtResource("3")

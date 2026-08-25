@@ -6,7 +6,7 @@
 
 [resource]
 script = ExtResource("1")
-display_name = "Hydra 70"
+display_name = "Hydra-70 Rockets"
 short_name = "HYDRA"
 icon = ExtResource("2")
 ui_icon = ExtResource("3")

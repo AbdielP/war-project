@@ -2,12 +2,15 @@
 
 [ext_resource type="Script" uid="uid://c1lw2d718qt22" path="res://core/unit/unit_type.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://co8wflybipmkb" path="res://assets/art/UI/icon_ah1w.png" id="2"]
+[ext_resource type="Resource" path="res://core/weapon/m197_cannon.tres" id="3"]
 
 [resource]
 script = ExtResource("1")
 display_name = "AH-1W SuperCobra"
 short_name = "AH1"
 portrait_icon = ExtResource("2")
+cannon = ExtResource("3")
+cannon_rounds = 750
 power = 4
 domain = 0
 max_health = 45.0

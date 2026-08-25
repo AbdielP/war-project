@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="WeaponType" format=3]
+
+[ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/art/sprites/hydra70.tres" id="2"]
+[ext_resource type="Texture2D" uid="uid://c635by3f4ttm7" path="res://core/weapon/icons/icon_rocket_pod.png" id="3"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Hydra 70"
+short_name = "HYDRA"
+icon = ExtResource("2")
+ui_icon = ExtResource("3")
+targets = 2

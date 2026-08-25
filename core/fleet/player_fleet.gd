@@ -20,6 +20,9 @@ var _available_weapons: Array = [
 	preload("res://core/weapon/agm65_maverick.tres"),
 	preload("res://core/weapon/mk82.tres"),
 	preload("res://core/weapon/gbu54.tres"),
+	preload("res://core/weapon/agm114_hellfire.tres"),
+	preload("res://core/weapon/hydra70.tres"),
+	preload("res://core/weapon/zuni.tres"),
 ]
 
 # Inventario de misión: qué unidades tiene cargadas cada barco.

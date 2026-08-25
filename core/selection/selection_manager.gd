@@ -100,6 +100,11 @@ func _has_own_selection() -> bool:
 ## mueve, pero la unidad de debajo también, y la selección cambia por su cuenta.
 func _process(_delta: float) -> void:
 	_hud.aim_cursor(_can_shoot_whats_under_the_mouse())
+	# Las cuatro esquinas del blanco se cierran contra el impacto, y ese dato lo
+	# tiene el atacante, no él. Este nodo es el único sitio donde los dos están
+	# emparejados, así que el recado lo pasa de aquí.
+	if is_instance_valid(_marked_target) and is_instance_valid(_selected_unit):
+		_marked_target.set_impact_eta(_selected_unit.get_time_to_impact())
 
 
 ## La mira sale exactamente cuando el clic sería una orden de fuego, ni un caso
@@ -116,7 +121,12 @@ func _can_shoot_whats_under_the_mouse() -> bool:
 		return false
 	if get_viewport().gui_get_hovered_control() != null:
 		return false
-	return _can_shoot(_find_unit_at(get_global_mouse_position()))
+	var under := _find_unit_at(get_global_mouse_position())
+	# A ese ya se le dio la orden: lo dicen sus cuatro esquinas, y la mira encima
+	# repetiría el mismo dato tapándolas.
+	if under != null and under == _selected_unit.attack_target:
+		return false
+	return _can_shoot(under)
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://core/unit/unit.gd" id="1"]
 [ext_resource type="Script" path="res://core/unit/selection_indicator.gd" id="2"]
@@ -6,6 +6,9 @@
 [ext_resource type="Texture2D" path="res://core/unit/cursor_ally.png" id="4"]
 [ext_resource type="Texture2D" path="res://core/unit/cursor_enemy.png" id="5"]
 [ext_resource type="Texture2D" path="res://core/unit/cursor_neutral.png" id="6"]
+[ext_resource type="Script" path="res://core/unit/target_marker.gd" id="7"]
+[ext_resource type="Texture2D" path="res://core/unit/target_corners.png" id="8"]
+[ext_resource type="Texture2D" path="res://core/unit/target_corners_pressed.png" id="9"]
 
 [node name="Unit" type="Area2D"]
 script = ExtResource("1")
@@ -23,3 +26,9 @@ art_player = ExtResource("3")
 art_ally = ExtResource("4")
 art_enemy = ExtResource("5")
 art_neutral = ExtResource("6")
+
+[node name="TargetMarker" type="Node2D" parent="." groups=["sin_miniatura"]]
+z_index = 2
+script = ExtResource("7")
+art = ExtResource("8")
+art_pressed = ExtResource("9")

@@ -58,6 +58,7 @@ var health: float = 0.0
 var killed_by: Unit = null
 
 @onready var _selection_indicator: SelectionIndicator = $SelectionIndicator
+@onready var _target_marker: TargetMarker = $TargetMarker
 
 var _selected := false
 var _targeted := false
@@ -70,6 +71,7 @@ func _ready() -> void:
 	health = get_max_health()
 	_selection_indicator.visible = false
 	_selection_indicator.side = team
+	_target_marker.visible = false
 	# Una unidad puesta a mano en el mapa nunca pasa por set_weapon_loadout,
 	# pero si tiene cañón ya puede atacar con él.
 	if active_weapon == null:
@@ -90,8 +92,20 @@ func set_targeted(value: bool) -> void:
 	_refresh_indicator()
 
 
+## Cada marca dice una cosa distinta y por eso no comparten estado. La flecha
+## es "de esto estamos hablando"; las cuatro esquinas, "a esto se le ha mandado
+## atacar". Juntas en un solo `visible` —como estaban— el objetivo salía marcado
+## igual que la unidad que da la orden, y son papeles opuestos.
 func _refresh_indicator() -> void:
-	_selection_indicator.visible = _selected or _targeted
+	_selection_indicator.visible = _selected
+	_target_marker.visible = _targeted
+
+
+## Cuánto falta para que le llegue lo que le han disparado. Se lo pasa quien
+## conoce al atacante: la marca vive aquí, en el blanco, y un blanco no sabe
+## quién le apunta.
+func set_impact_eta(seconds: float) -> void:
+	_target_marker.impact_eta = seconds
 
 
 ## ¿Obedece órdenes del jugador? Las aliadas son de su bando pero las mueve la

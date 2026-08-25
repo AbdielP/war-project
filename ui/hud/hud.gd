@@ -53,6 +53,12 @@ var _picking_launch_target := false
 
 
 func _ready() -> void:
+	# Las ventanas avisan de su arrastre y el cursor cierra el puño. Se enganchan
+	# aquí, en el único sitio que las conoce a las dos: ni la ventana sabe que
+	# hay un cursor dibujado ni el cursor sabe que hay ventanas.
+	_vessel_window.dragging_changed.connect(_cursor.set_dragging)
+	_hangar_window.dragging_changed.connect(_cursor.set_dragging)
+	_minimap.dragging_changed.connect(_cursor.set_dragging)
 	_actions_panel.action_pressed.connect(_on_action_pressed)
 	_weapon_bar.weapon_selected.connect(_on_weapon_selected)
 	_target_menu.attack_requested.connect(func(t: Unit) -> void: attack_requested.emit(t))
@@ -296,4 +302,4 @@ func _on_weapon_selected(weapon: WeaponType) -> void:
 ## sabe qué hay seleccionado y qué hay debajo del ratón—; el HUD sólo le pasa el
 ## recado al cursor, que ni conoce las unidades ni tiene por qué.
 func aim_cursor(aiming: bool) -> void:
-	_cursor.set_shape(MouseCursor.Shape.AIM if aiming else MouseCursor.Shape.POINTER)
+	_cursor.set_aiming(aiming)

@@ -7,6 +7,14 @@ const _COLOR_ACCENT := Color(0.56078434, 0.827451, 1.0)
 const _COLOR_MUTED  := Color(0.6705882, 0.5803922, 0.4784314, 0.4)
 const _COLOR_BG     := Color(0.19215686, 0.21176471, 0.21960784)
 
+## Se ha empezado o terminado de arrastrar la ventana.
+##
+## Lo tiene que decir ella: desde fuera, arrastrar no se distingue de tener el
+## botón pulsado sobre cualquier otra cosa. Sale como aviso y no como una
+## propiedad que alguien consulte cada fotograma, para no obligar al HUD a
+## repasar una por una todas las ventanas que existan.
+signal dragging_changed(active: bool)
+
 var _dragging            := false
 var _drag_offset         := Vector2.ZERO
 var _ship                : Node2D        = null
@@ -183,7 +191,7 @@ func _on_deploy() -> void:
 
 func _on_title_bar_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		_dragging = event.pressed
+		_set_dragging(event.pressed)
 		if _dragging:
 			_drag_offset = get_global_mouse_position() - global_position
 	elif event is InputEventMouseMotion and _dragging:
@@ -220,3 +228,13 @@ func _style_flat(btn: Button) -> void:
 	btn.add_theme_color_override("font_hover_color", _COLOR_ACCENT)
 	btn.add_theme_color_override("font_pressed_color", _COLOR_ACCENT)
 	btn.add_theme_color_override("font_disabled_color", _COLOR_MUTED)
+
+
+## Un solo sitio donde cambia el estado, y avisa **sólo cuando cambia de verdad**.
+## Un `InputEventMouseButton` puede repetir el mismo valor, y quien escucha no
+## tiene por qué filtrar repeticiones que aquí no cuestan nada evitar.
+func _set_dragging(active: bool) -> void:
+	if _dragging == active:
+		return
+	_dragging = active
+	dragging_changed.emit(active)

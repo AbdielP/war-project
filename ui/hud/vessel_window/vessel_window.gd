@@ -20,6 +20,14 @@ signal closed(instant: bool)
 ## cara pública de lo que hay dentro.
 signal target_requested
 
+## Se ha empezado o terminado de arrastrar la ventana.
+##
+## Lo tiene que decir ella: desde fuera, arrastrar no se distingue de tener el
+## botón pulsado sobre cualquier otra cosa. Sale como aviso y no como una
+## propiedad que alguien consulte cada fotograma, para no obligar al HUD a
+## repasar una por una todas las ventanas que existan.
+signal dragging_changed(active: bool)
+
 ## Cómo se llama cada sección en la pestaña de arriba. El orden es el mismo que
 ## el de las solapas dentro de `SideTabs`.
 @export var section_titles: PackedStringArray = ["HANGAR", "TROPAS", "MUNICIÓN"]
@@ -116,7 +124,7 @@ func _ready() -> void:
 ## acumulando y la ventana se queda atrás del cursor.
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		_dragging = event.pressed
+		_set_dragging(event.pressed)
 		if _dragging:
 			_grab = event.global_position - global_position
 	elif event is InputEventMouseMotion and _dragging:
@@ -211,3 +219,25 @@ func _fit_top_tab() -> void:
 		widest = maxf(widest, font.get_string_size(
 				title, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
 	_top_tab.size.x = roundf(widest) + _TITLE_PADDING * 2.0
+
+
+## Un solo sitio donde cambia el estado, y avisa **sólo cuando cambia de verdad**.
+## Un `InputEventMouseButton` puede repetir el mismo valor, y quien escucha no
+## tiene por qué filtrar repeticiones que aquí no cuestan nada evitar.
+func _set_dragging(active: bool) -> void:
+	if _dragging == active:
+		return
+	_dragging = active
+	dragging_changed.emit(active)
+
+
+## Toda ella es zona de agarre —lo que no sea un botón arrastra la ventana—, así
+## que basta con que la pregunta llegue hasta aquí: si el ratón estuviera sobre
+## un botón, el que contestaría sería el botón.
+##
+## Es el único aviso de que se puede mover, porque el marco no lleva nada
+## dibujado que lo diga. Flojo como anuncio —hay que estar ya encima para
+## enterarse—, pero casi toda la ventana es agarre y el jugador pasa por ahí sin
+## buscarlo.
+func cursor_shape_at(_local: Vector2) -> MouseCursor.Shape:
+	return MouseCursor.Shape.PRESS

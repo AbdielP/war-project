@@ -2,6 +2,166 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-25 — señalar sin envolver: cursor propio, marcas de unidad y el arma que se quedó vacía
+
+### El recuadro de selección se sustituye por una flecha encima
+El cuadro que envolvía a la unidad seleccionada crecía con ella: alrededor del LHD envolvía media
+pantalla. Una flecha apuntando desde arriba dice lo mismo y ocupa igual sobre el Harrier que sobre
+el buque, sin tapar lo que hay alrededor.
+
+**El color de bando no se tiñe, se cambia de dibujo.** Teñir es multiplicar, y el borde casi negro
+de la flecha multiplicado por rojo se queda casi igual de negro: se pierde el filo claro que la
+despega del terreno y los tonos intermedios se van fuera de Resurrect64. Van los cuatro PNG por el
+inspector — azul jugador, verde aliado, rojo enemigo, blanco neutral.
+
+### La caja de una unidad es la tinta de su sprite, no el tamaño de su PNG
+`SelectionIndicator.size` venía del recuadro viejo y era más pequeña que el dibujo en tres de las
+seis unidades: el Harrier declaraba 28×32 con un sprite de 35×48, así que 8 px de aire por arriba
+se los comía la nariz. Y el buque declaraba 160×304 —el PNG entero— cuando su casco ocupa 106×222
+dentro, corrido 25 px hacia abajo: la flecha le salía a 66 px de la proa, flotando en el mar.
+
+De ahí sale `center`: dónde cae el centro del dibujo respecto al origen de la unidad. Vale cero en
+todas menos en el buque y el T-14. **Se mide rasterizando la tinta dentro del motor**, no leyendo
+el tamaño del archivo.
+
+### Lo que acompaña a algo que gira se mide contra la caja ya girada
+Media caja fija no vale: un helicóptero de 23×48 pasa a medir 48×23 de perfil, y la marca se queda
+flotando en el aire media vuelta de cada dos. Se calcula lo que sobresale la caja rotada
+(`|sin|·ancho + |cos|·alto`) y la marca va pegada a ella todo el rato. La marca en cambio **no
+gira**: girada dejaría de leerse como marca y pasaría a leerse como rumbo.
+
+### Con `@tool`, se coloca dibujando y no moviendo el nodo
+Colocar la flecha cambiándole la posición al nodo obligaba a escribirle encima cada fotograma, y en
+el editor eso queda **guardado dentro de las seis escenas de unidad**. Dibujándola con
+`draw_set_transform` el nodo se queda quieto en el origen y lo que se ajusta es el trazo, así que
+`size`, `center` y `gap` se pueden tocar en vivo sin que el editor ensucie nada.
+
+### El marcador de movimiento: una bandera con onda, reproducida una vez
+Seis fotogramas repartidos uno por "página" de 640 px del sheet, con el mástil siempre en la misma
+columna. Anclado en el **centro de las ondas**, no en la base del mástil: es de donde sale la onda y
+donde cayó el clic.
+
+La onda **se reproduce una vez y descansa en el primer fotograma**, que es la bandera sola. Un
+marcador que late sin parar acaba pidiendo atención cada dos segundos para no decir nada nuevo: la
+onda es el acuse de recibo y la bandera el recordatorio.
+
+### El puntero del ratón se dibuja dentro del juego
+El cursor del sistema se pinta a la resolución de la pantalla, no a la del juego: un dibujo de 13×14
+sale del tamaño de una uña al lado de unidades que la ventana agranda ×2 o ×3. Dibujado dentro va
+escalado con todo lo demás.
+
+Tres decisiones que lo sostienen:
+
+- **Capa propia (`layer = 100`), no hermano del HUD.** Media pantalla del HUD llama a
+  `move_to_front()` al abrirse —la ventana del buque, el mapa táctico— y eso reordena a los
+  hermanos: tarde o temprano uno se pondría encima. La capa no depende de quién se movió el último.
+- **Se cuadra a píxel entero del juego, no de pantalla.** Con la ventana al doble, un píxel de
+  pantalla es medio de juego y el ratón llega con decimales; sin redondear sale a media rejilla,
+  borroso y temblando. El precio —avanzar de dos en dos píxeles de pantalla— es lo que hace ya todo
+  lo demás que se ve.
+- **En móvil no se dibuja, y tampoco se esconde el del sistema.** Se pregunta por `FEATURE_MOUSE`,
+  no por el sistema operativo: un portátil táctil tiene las dos cosas.
+
+### La mira sale exactamente cuando el clic sería un disparo
+No basta con que sean enemigos. `_can_attack` sólo comprueba enemistad, y con eso el buque —que no
+lleva cañón ni armamento— sacaba la mira sobre cualquier hostil prometiendo un ataque imposible. De
+ahí `_can_shoot`, que además exige `get_weapons()` no vacío, y que usan el clic izquierdo y el
+cursor. **La mira y el clic hacen la misma pregunta**: si dijeran cosas distintas, el cursor estaría
+prometiendo algo que el clic no cumple.
+
+Dos exclusiones más: encima del HUD no hay mira aunque debajo del panel haya un enemigo —ahí el clic
+se lo queda la interfaz y nunca llega al mundo—, y tampoco sobre un blanco al que ya se le dio la
+orden, porque eso ya lo dicen sus cuatro esquinas.
+
+`_can_attack` se queda como está —sólo enemistad— alimentando el menú del objetivo: ver *pendiente*
+al final de esta entrada.
+
+### Las cuatro esquinas se componen contra la caja, no se estiran
+En el sheet la animación está dibujada sobre un cuadro de 32 que se cierra hasta 22. Eso es la
+**holgura**, no la medida: entre un tanque de 26×42 y un buque de 106×222 no hay cuadro fijo que
+sirva. Son cuatro piezas de 8×8 colocadas una a una contra las esquinas de la caja, y el fotograma
+sólo decide cuánto aire dejan (5 px a 0).
+
+Las de abajo **no son las de arriba del revés** —llevan su propio remate—, así que van las cuatro en
+un PNG de 16×16 en vez de espejar una.
+
+Dice tres cosas seguidas: destello en rojo oscuro al recibir la orden, latido lento entre las dos
+aperturas más anchas mientras se acerca, y cierre repartiendo los cuatro fotogramas restantes contra
+`get_time_to_impact()` para llegar cerrada al impacto. Sin cuenta atrás —el cañón, una bomba tonta—
+se queda latiendo.
+
+**La caja se le pide a la flecha de selección**, no se repite. Es el mismo dato ya medido en las
+seis escenas; copiado, el día que se retoque una se queda vieja la otra.
+
+**La flecha y las esquinas dejaron de compartir `visible`.** Antes un solo estado servía para
+"seleccionado" y para "es el blanco", así que el objetivo salía marcado igual que quien da la orden,
+y son papeles opuestos. Ahora `_selected` manda la flecha y `_targeted` las esquinas.
+
+Y se quitó del todo el rótulo rojo "Atacando: X": lo que dice ya lo dicen las esquinas y el registro
+de eventos.
+
+### El arma vacía que nadie volvía a cambiar
+Síntoma: el avión enfilaba el blanco, tenía permiso de tiro y estaba en alcance, y no disparaba
+nunca. Se quedaba dando pasadas eternas.
+
+Causa: `WeaponSelector` sólo se replantea el arma en dos momentos —al cambiar de blanco, y en un
+repaso periódico **acotado a blancos que vuelan**—. Al vaciarse el lanzador, `_on_ammo_changed`
+devolvía el mando al automático y ya: contra tierra no había nadie que volviera a preguntar. El
+avión seguía con el AGM-65 a cero y dos GBU-54 colgando del ala.
+
+**Devolver el mando no es replantearse.** Ahora `_on_ammo_changed` rearma en el acto. Y el repliegue
+de `_rearm_for` pedía "el arma principal" sin mirar si le quedaba algo, así que el avión se acercaba
+guiado por un arma gastada: ahora exige munición y deja el cañón para el final.
+
+Lo que despistaba: **cambiar de blanco lo curaba**, porque ese camino sí replantea. Parecía un fallo
+del cambio de blanco y era justo lo contrario.
+
+### Una cuenta atrás sin dueño se contagia
+`time_to_impact()` devolvía lo primero que fuera a llegar, apuntara a quien apuntara. Al cambiar de
+blanco con un misil todavía en el aire, el blanco nuevo heredaba la cuenta del anterior: sus
+esquinas se cerraban contra un impacto que iba a ocurrir en otro sitio. Ahora se acota al blanco que
+se pregunta. El contador del HUD tenía el mismo contagio y queda arreglado por el mismo sitio.
+
+### Las manos del cursor, y preguntar al panel en vez de a su clase
+Cinco formas: flecha, mira, mano señalando sobre algo pulsable, puño semicerrado al pulsarlo, puño
+cerrado arrastrando. Las manos son **de la interfaz y sólo de ella**: sobre el mundo ya hablan la
+mira y las marcas de las unidades.
+
+- **El cursor averigua solo tres de las cinco.** Si hay un botón debajo y si está pulsado son
+  preguntas de interfaz. Las otras dos le llegan de fuera porque no puede saberlas: si hay algo a
+  tiro (lo sabe la selección) y si se arrastra una ventana (lo sabe la ventana).
+- **Se le pregunta al panel antes de mirar de qué clase es.** Hay paneles partidos por dentro: el
+  minimapa se estira por la franja de arriba y se pulsa por abajo, y "de qué clase eres" no puede
+  contestar eso. Con un método opcional `cursor_shape_at(local)` cada panel declara sus zonas y el
+  cursor no acumula una lista de nombres que mantener.
+- **Las manos se anclan por la muñeca, no por el dedo.** Al cerrarse, un puño curva los dedos hacia
+  la palma con la muñeca quieta; ancladas por el dedo, la mano pega un salto al pulsar.
+- **Se pregunta por el botón físico del ratón, no por el estado del `BaseButton`.** Ese estado es la
+  casilla de los conmutados; hoy no hay ninguno, pero el día que lo haya el cursor se quedaría con
+  el puño puesto.
+
+El puño semicerrado es también el aviso de que una ventana se puede arrastrar. Es flojo como anuncio
+—hay que estar ya encima—, pero la ventana es casi toda zona de agarre y se aprende sin buscarlo. La
+alternativa era dibujar rayitas de agarre, y se descartó por no tocar más arte.
+
+### Pendiente: atacar con la aviación del buque
+El LHD no lleva armas propias pero **sí puede atacar: con lo que despega**. Queda abierta una
+tercera forma de mandar aeronaves desde el menú del objetivo, con el blanco ya puesto. Sin decidir:
+si se valida qué vehículo puede atacar ese blanco, si se valida qué armas son eficaces, y qué pasa
+si la salida llega y no puede hacer nada.
+
+Provisional: **no validar nada y dejar la opción "Atacar" en el menú** aunque la unidad no tenga
+armas. Por eso `_can_attack` y `_can_shoot` están separadas y **no se deben unificar** hasta que
+esto se decida.
+
+### Nota de método: una prueba puede mentir
+Persiguiendo una zona equivocada del minimapa culpé a `get_local_mouse_position()` de traer
+coordenadas del mundo y "arreglé" algo que no estaba roto. El que mentía era el test:
+`Input.warp_mouse()` mueve el ratón del sistema y la interfaz lo sigue —el control bajo el ratón
+cambia—, pero **si la ventana no tiene el foco, la posición que reporta el viewport se queda
+congelada donde esté el ratón físico**. Se estaba midiendo contra un punto que no era. Lo que sí
+sirve: probar la regla llamando directamente a la función que la contiene.
+
 ## 2026-08-24 — el armamento del SuperCobra: seis pilones, y una fuente que no se envuelve
 
 ### Del pilón cuelga el contenedor, no el cohete

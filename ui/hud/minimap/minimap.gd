@@ -18,6 +18,11 @@ class_name Minimap
 ## El jugador quiere el mapa a pantalla completa.
 signal expand_requested
 
+## Se ha empezado o terminado a estirar el panel por su agarre. Lo mismo que
+## avisan las ventanas al arrastrarse, y por lo mismo: desde fuera, estirar no se
+## distingue de tener el botón pulsado sobre cualquier otra cosa.
+signal dragging_changed(active: bool)
+
 ## Franja de arriba que sirve de agarre para estirar. Fuera de ella, pulsar abre
 ## el mapa grande. Es la barra de título del dibujo —donde están las rayitas—:
 ## más allá empieza el mapa, y agarrar ahí sería robarle el click.
@@ -145,7 +150,7 @@ func _gui_input(event: InputEvent) -> void:
 	var button := event as InputEventMouseButton
 	if button != null and button.button_index == MOUSE_BUTTON_LEFT:
 		if button.pressed:
-			_resizing = button.position.y <= GRIP_PX
+			_set_resizing(button.position.y <= GRIP_PX)
 			_wanted_height = size.y
 			# Pulsar el mapa —no el agarre— abre el grande. Se atiende al
 			# pulsar y no al soltar porque aquí no hay más gestos que competir.
@@ -157,7 +162,7 @@ func _gui_input(event: InputEvent) -> void:
 			# de llamar — `_fit_to_drawing` se calla a sí misma mientras valga
 			# `true`, y aquí se usa `_settle_to_drawing` en su lugar.
 			var was_resizing := _resizing
-			_resizing = false
+			_set_resizing(false)
 			if was_resizing:
 				_settle_to_drawing()
 		accept_event()
@@ -178,3 +183,21 @@ func set_order_marker(world_position: Vector2) -> void:
 
 func clear_order_marker() -> void:
 	_view.clear_order_marker()
+
+
+## Este panel está partido en dos y el cursor no puede adivinarlo: la franja de
+## arriba —la de las rayitas— estira el mapa arrastrando, y el resto lo abre a
+## pantalla completa al pulsar. Es el mismo reparto que hace [method _gui_input],
+## contado con la mano que toca.
+func cursor_shape_at(local: Vector2) -> MouseCursor.Shape:
+	return MouseCursor.Shape.PRESS if local.y <= GRIP_PX else MouseCursor.Shape.HOVER
+
+
+## Un solo sitio donde cambia el estado, y avisa **sólo cuando cambia de verdad**:
+## pulsar fuera del agarre lo deja en `false` estando ya en `false`, y quien
+## escucha no tiene por qué filtrar eso.
+func _set_resizing(active: bool) -> void:
+	if _resizing == active:
+		return
+	_resizing = active
+	dragging_changed.emit(active)

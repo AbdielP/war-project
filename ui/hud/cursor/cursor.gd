@@ -13,11 +13,27 @@ class_name MouseCursor
 ## táctico—, y eso reordena a los hermanos. La capa lo pone por encima de todos
 ## sin depender de quién se movió el último.
 
-## Qué píxel del dibujo es "la punta", el que va justo donde está el ratón. En
-## esta flecha es la esquina de arriba a la izquierda.
-@export var hotspot: Vector2i = Vector2i.ZERO
+## Qué está diciendo el cursor ahora mismo.
+enum Shape {
+	POINTER,  ## Señalar y nada más.
+	AIM,      ## Debajo hay algo a lo que este jugador puede disparar.
+}
+
+## Los dos dibujos y sus dos puntos activos, por el inspector. El punto activo
+## **no se deduce del dibujo**: en la flecha es la punta, arriba a la izquierda,
+## y en la mira es su centro. Cambiar de forma sin cambiarlo dejaría la mira
+## apuntando 9 px por debajo y a la derecha de donde está el ratón.
+@export_group("Flecha")
+@export var art_pointer: Texture2D
+@export var hotspot_pointer: Vector2i = Vector2i.ZERO
+@export_group("Mira")
+@export var art_aim: Texture2D
+@export var hotspot_aim: Vector2i = Vector2i(9, 9)
 
 @onready var _art: TextureRect = $Art
+
+var _shape: Shape = Shape.POINTER
+var _hotspot: Vector2i = Vector2i.ZERO
 
 
 func _ready() -> void:
@@ -34,13 +50,31 @@ func _ready() -> void:
 	var window := get_window()
 	window.mouse_entered.connect(show)
 	window.mouse_exited.connect(hide)
-	_follow()
+	_wear(Shape.POINTER)
+
+
+## Cambia de dibujo. Se sale pronto si ya lo llevaba puesto porque esto se
+## pregunta cada fotograma: reasignar la textura y el tamaño sesenta veces por
+## segundo para dejarlos igual no cuesta nada visible, pero tampoco hace nada.
+func set_shape(shape: Shape) -> void:
+	if shape != _shape:
+		_wear(shape)
 
 
 ## Se sigue el ratón cada fotograma en vez de al recibir su evento: el ratón
 ## avisa cuando se mueve él, pero el cursor también se descoloca cuando lo que se
 ## mueve es lo de debajo —la cámara, una ventana—, y de eso no avisa nadie.
 func _process(_delta: float) -> void:
+	_follow()
+
+
+func _wear(shape: Shape) -> void:
+	_shape = shape
+	var aiming := shape == Shape.AIM
+	_art.texture = art_aim if aiming else art_pointer
+	_hotspot = hotspot_aim if aiming else hotspot_pointer
+	if _art.texture != null:
+		_art.size = _art.texture.get_size()
 	_follow()
 
 
@@ -52,4 +86,4 @@ func _process(_delta: float) -> void:
 ## avanza de dos en dos píxeles de pantalla, que es exactamente lo que hace todo
 ## lo demás que se ve.
 func _follow() -> void:
-	_art.position = (get_viewport().get_mouse_position()).floor() - Vector2(hotspot)
+	_art.position = get_viewport().get_mouse_position().floor() - Vector2(_hotspot)

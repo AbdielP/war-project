@@ -94,6 +94,33 @@ func _has_own_selection() -> bool:
 	return is_instance_valid(_selected_unit) and _selected_unit.is_player_controlled()
 
 
+## La mira se decide aquí y no en el HUD porque son tres datos que sólo tiene
+## este nodo: qué hay seleccionado, con qué puede disparar y qué hay debajo del
+## ratón. Se mira cada fotograma porque nadie avisa de un cambio: el ratón se
+## mueve, pero la unidad de debajo también, y la selección cambia por su cuenta.
+func _process(_delta: float) -> void:
+	_hud.aim_cursor(_can_shoot_whats_under_the_mouse())
+
+
+## Tres condiciones, y ninguna se puede dar por supuesta.
+##
+## Que la unidad **tenga con qué disparar** es la que se olvida: `_can_attack`
+## sólo comprueba que sean enemigos, así que sin esto el buque —que no lleva
+## cañón ni armamento— sacaría la mira sobre cualquier hostil y prometería un
+## ataque que no puede hacer.
+##
+## Y encima del HUD no hay mira aunque debajo del panel haya un enemigo: ahí el
+## clic se lo queda la interfaz y nunca llega al mundo, así que apuntar sería
+## mentir. Se pregunta por el `Control` que hay bajo el ratón y no por una lista
+## de paneles, que habría que mantener cada vez que se añade uno.
+func _can_shoot_whats_under_the_mouse() -> bool:
+	if not _has_own_selection() or _selected_unit.get_weapons().is_empty():
+		return false
+	if get_viewport().gui_get_hovered_control() != null:
+		return false
+	return _selected_unit.is_hostile_to(_find_unit_at(get_global_mouse_position()))
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 		_on_context_requested(get_global_mouse_position())

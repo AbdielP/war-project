@@ -37,6 +37,7 @@ signal vessel_closed(instant: bool)
 @onready var _minimap: Minimap = $Minimap
 @onready var _tactical_map: TacticalMap = $TacticalMap
 @onready var _unit_tag: UnitTag = $UnitTag
+@onready var _cursor: MouseCursor = $Cursor
 
 ## Dónde se pone la cuenta atrás respecto al objetivo, en píxeles de pantalla:
 ## arriba y un poco a la derecha, para no taparlo ni pisar su recuadro.
@@ -307,3 +308,8 @@ func _on_weapon_selected(weapon: WeaponType) -> void:
 			selector.take_manual_control()
 	_current_unit.set_active_weapon(weapon)
 	_weapon_bar.set_active(weapon)
+## Poner o quitar la mira. Quien decide es `SelectionManager` —es el único que
+## sabe qué hay seleccionado y qué hay debajo del ratón—; el HUD sólo le pasa el
+## recado al cursor, que ni conoce las unidades ni tiene por qué.
+func aim_cursor(aiming: bool) -> void:
+	_cursor.set_shape(MouseCursor.Shape.AIM if aiming else MouseCursor.Shape.POINTER)

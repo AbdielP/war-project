@@ -2,6 +2,96 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-26 — el mapa deja de ser cuadraditos: símbolos de contacto, y arte nuevo de marcadores
+
+> **Los colores no son definitivos.** Falta trabajo, sobre todo en el aliado, y el azul del jugador
+> todavía no convence. Lo que está cerrado es la geometría y el reparto; el tono se seguirá tocando.
+
+### El lienzo es común a todas las variantes; lo que cambia es el marco dentro
+Primer error al dimensionarlos: dije "9×9" pensando en el marco y no en el hueco. Un rectángulo de
+11×7 y un rombo no caben en la misma medida si se mide cada uno por su cuenta — pero **tienen que
+caber en la misma caja**, porque si no, la marca de dominio cae en un sitio distinto según el bando
+y el icono de tipo habría que redibujarlo cuatro veces.
+
+La caja es **11×11** en el mapa táctico y **7×7** en el minimapa. Dentro: el rombo hostil la llena
+entera, el rectángulo amigo mide 11×7 y el cuadrado neutral 9×9, los tres centrados.
+
+### En una familia de formas, el tamaño lo fija la más restrictiva
+Y aquí es el rombo. Un rombo sólo deja un cuadrado útil de **2/5 de su ancho**, y en píxeles reales
+eso se ve de golpe:
+
+- rombo de 9×9 → filas de 1,3,5,7,9,7,5,3,1 → cabe un icono de **3×3**. Inservible.
+- rombo de 11×11 → 1,3,5,7,9,11,9,7,5,3,1 → cabe **5×5**.
+
+Nadie más de la familia tenía ese problema; el rectángulo aguanta cualquier medida. Se dimensiona
+contra el caso peor y los demás sobran de sitio, no al revés.
+
+### Macizo o hueco no es una decisión general: es una por mapa
+Se probaron los dos en el mapa de verdad, con cuatro tanques apiñados sobre una isla.
+
+**Macizo** gana contraste y poco más. **Hueco** gana dos cosas que se ven a la primera:
+
+- **El terreno se lee.** Con relleno, los cuatro contactos tapaban la isla entera.
+- **Los apiñados se cuentan.** Con relleno eran una mancha roja; con borde son cuatro rombos aunque
+  se toquen. Y es la única forma de que el icono de tipo tenga un dentro donde ir.
+
+Y pierde una: **la masa que despegaba el símbolo del fondo**. Por eso el reparto es hueco en el mapa
+táctico —donde hay sitio, detalle que leer y contactos que contar— y macizo en el minimapa, donde a
+5×5 un anillo de 1 px no dice nada y lo único que se pide es "hay alguien ahí".
+
+### El bando que peor se leía era el propio, y era problema de color
+El `#5184c1` del jugador y el `#4d9be6` del agua son casi el mismo azul. Con relleno se salvaba por
+los pelos; en hueco había que buscarlo, y es justo el bando que más se mira. Los otros tres —verde,
+blanco, rojo— contrastan con el mar y nunca dieron problema.
+
+Se arregló por color y no volviendo al relleno: el borde pasó a `#8fd3ff`, que es el azul que **ya
+significa "jugador"** en este HUD — el del recuadro de selección y el de las coordenadas. Sigue sin
+convencer del todo, pero el fallo ya no es de legibilidad.
+
+### Una marca que acompaña va separada, no solapada
+La barra de dominio se puso primero con 2 px de solape, para que las dos piezas se leyeran como una.
+El resultado fue que **se comía la punta del rombo**, que es justo lo que identifica al hostil. Ahora
+son 2 px de aire (`domain_gap`, en el inspector). Un rombo con la punta puesta y una barra encima se
+lee como dos datos; solapados se leen como una forma rara que no es ninguno de los dos.
+
+### El dominio se dibuja, pero el juego todavía no sabe contestarlo
+La barra vale para las dos cosas: **encima significa que vuela y debajo que navega**. La T invertida,
+sólo debajo, es bajo el agua. Puestas las tres y sólo sale la de aire, porque `UnitType.Domain`
+separa aire de superficie y nada más: un buque y un tanque son la misma cosa para el juego, y
+pintarle la barra de mar a los dos sería mentir sobre el tanque.
+
+Separar naval de terrestre no es un campo más: `targets` es hoy una máscara de dos casillas —Aire y
+Superficie— en las diez armas, y un tercer dominio las corre todas. Queda como decisión pendiente.
+
+### La onda del marcador de destino sale tres veces
+Salía una sola vez, con este razonamiento: el dato ya lo dio al aparecer y un marcador que late sin
+parar pide atención cada dos segundos para no decir nada nuevo. Sigue siendo cierto lo segundo, pero
+una sola onda **se pierde si estabas mirando a otro lado** — que es exactamente lo que la onda venía
+a evitar.
+
+Tres, con 0,2 s entre ellas: la tanda dura ~2,6 s y después se calla para siempre. Y una orden nueva
+a mitad de tanda **no encadena dos series**: la espera pendiente lleva apuntado a qué orden pertenece
+y se descarta sola si ya no es la de ahora.
+
+### Arte actualizado del sheet
+Se reextrajeron del `UI.png` nuevo, todos con la misma medida que tenían: las cuatro flechas de
+unidad `(112, 38|54|70|86, 16, 10)`, la mirilla redonda del cursor de ataque `(175, 63, 19, 20)` y
+los seis fotogramas del banderín `(150 + 640k, 35, 22, 24)`.
+
+El banderín va **alineado por el mástil, no por la caja del dibujo**: cada fotograma tiene su origen
+exactamente 640 px más allá del anterior y la onda crece hacia fuera desde ahí, así que las cajas de
+tinta no coinciden entre sí y alinearlas por ellas descolocaría el mástil.
+
+### El retrato del Harrier era el caza blanco, no el gris
+Comparando píxel a píxel, tanto `icon_av8b.png` como `thumb_av8b.png` salían **idénticos** al sheet, y
+di por hecho que no había cambiado nada. El caza blanco que había al lado lo descarté por mi cuenta:
+el buque y el helicóptero también vienen en pareja gris/blanco, así que lo leí como la variante
+resaltada de una pareja. Era el nuevo.
+
+Lo que falló no fue la medida sino haber resuelto una ambigüedad en vez de preguntarla. Y deja algo
+pendiente a la vista: el caza sale blanco con sombreado y el helicóptero y el buque siguen grises y
+planos en el mismo panel.
+
 ## 2026-08-25 — el SuperCobra dispara: postura de tiro, cohetes que no llenan la pantalla y el arma que el jugador eligió
 
 ### La maniobra de tiro de un helicóptero es un destino, no un comportamiento

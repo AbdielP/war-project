@@ -493,13 +493,31 @@ desaparece si otra orden lo sustituye.
 
 ### `MoveMarker` — `core/selection/move_marker.gd`
 ```
-extends Node2D
+extends AnimatedSprite2D   class_name MoveMarker
 ```
-Creado dinámicamente por SelectionManager en `_ready()`, añadido a `current_scene` de
-forma diferida (`.call_deferred()` — en `_ready()` la escena todavía se está montando y
-Godot rechaza el `add_child` directo). Dibuja: círculo (radio 8) + cruz, color accent con
-85% alpha. Persiste tras cumplirse la orden — no se oculta solo.
-**IMPORTANTE:** llama `queue_redraw()` en `NOTIFICATION_VISIBILITY_CHANGED` — sin esto `_draw()` no se ejecuta al hacer `show()`.
+La banderita que marca a dónde se ha mandado ir a la unidad. Creado dinámicamente por
+`SelectionManager` y añadido a `current_scene` de forma diferida (`.call_deferred()` — en
+`_ready()` la escena todavía se está montando y Godot rechaza el `add_child` directo).
+Persiste tras cumplirse la orden: no se oculta solo.
+
+**Son dos cosas en una tira de seis fotogramas** (`move_flag.png`, 132×24): la bandera sola en
+el fotograma 0 y las ondas en los cinco siguientes. La onda es el **acuse de recibo** —se ve
+dónde ha caído la orden— y la bandera es el **recordatorio**, que no parpadea ni se mueve
+porque va a estar puesta mucho rato. Al acabar se vuelve al 0, que deja el sitio marcado y la
+onda apagada.
+
+**La tanda sale tres veces y después se calla para siempre.** Una sola se pierde si estabas
+mirando a otro lado, que es justo lo que la onda venía a evitar; latir sin parar sería pedir
+atención cada dos segundos para no decir nada nuevo. `pulses` (3) y `pulse_gap` (0,2 s) en el
+inspector: la animación dura 0,75 s, así que la tanda son ~2,6 s.
+
+**Una orden nueva a mitad de tanda no encadena dos series.** Cada plantada incrementa un
+contador y la espera entre ondas lleva apuntado a cuál pertenece: si al despertar ya no es la
+de ahora, se descarta. Sin eso, dos órdenes seguidas dejaban dos cadenas corriendo a la vez.
+
+El arte se reextrae de `assets/art/UI/UI.png` en `(150 + 640k, 35, 22, 24)` — un fotograma por
+"página" de 640 px. **Alineados por el mástil, no por la caja de tinta**: la onda crece hacia
+fuera y sus cajas no coinciden entre sí, así que alinear por ellas descolocaría el mástil.
 
 ---
 
@@ -3348,11 +3366,52 @@ API además de los exportados: `set_order_marker(world)` / `clear_order_marker()
 | `grid_border` | `false` | `true` | recuadro alrededor del mapa. Sobra cuando el panel ya trae marco dibujado |
 | `zone_cells` | — | `8` | celdas por lado de zona **que se piden**. **El número a mover si las coordenadas salen gruesas o finas** |
 | `show_viewport_rect` | `true` | `true` | recuadro de lo que se está mirando |
-| `show_units` | `true` | `true` | un punto por unidad, del color de su bando |
-| `marker_px` | `2` | `4` | lado del punto **en píxeles de pantalla** |
+| `show_units` | `true` | `true` | un contacto por unidad |
+| `marker_px` | `2` | `4` | lado del punto de reserva, **en píxeles de pantalla**. Sólo se usa si no hay símbolo puesto |
+| `contact_player` / `_ally` / `_enemy` / `_neutral` | chicos | grandes | el marco de cada bando. Ver abajo |
+| `domain_bar` | — | ✓ | la barra de dominio: arriba vuela, abajo navega |
+| `domain_subsurface` | — | ✓ | la T invertida, sólo debajo: bajo el agua |
+| `domain_gap` | — | `2` | aire entre la marca y el marco, en píxeles |
 | `show_alerts` | `true` | `true` | ondas donde nos enganchan o nos disparan |
 | `alert_radius_px` | `12` | `28` | hasta dónde se abre la onda, **en píxeles de pantalla** |
 | `alert_rings` | `3` | `3` | cuántas ondas por contacto |
+
+**Los contactos son símbolos, no cuadraditos.** Un cuadrado no dice nada porque es un solo
+canal haciendo tres trabajos; la simbología militar los separa en tres independientes, y aquí
+se usan dos de ellos:
+
+- **La forma y el color dicen de quién es.** Rectángulo amigo, rombo hostil, cuadrado neutral.
+  Los cuatro colores son los mismos de `Team`, así que el bando se lee igual en el mapa que
+  sobre el terreno — y con la forma encima, aunque el color falle.
+- **Una barra pegada dice en qué medio va.** Encima vuela, debajo navega, T invertida bajo el
+  agua. No lleva color: eso ya lo dice el marco.
+- Falta el tercero, **el icono de dentro, que diría qué es**. Por eso los del mapa táctico son
+  huecos: para que ese dentro exista.
+
+**Los cuatro caben en la misma caja** —11×11 en el táctico, 7×7 en el minimapa— aunque cada uno
+tenga su forma: el rombo la llena entera, el rectángulo mide 11×7 y el cuadrado 9×9. Es lo que
+hace que la barra de dominio caiga siempre en el mismo sitio y que un icono de tipo sirva para
+los cuatro sin redibujarlo.
+
+**El tamaño lo fijó el rombo**, que es el más restrictivo: sólo deja un cuadrado útil de 2/5 de
+su ancho. Uno de 9×9 admite un icono de 3×3 y uno de 11×11 admite 5×5.
+
+**Huecos en el táctico y macizos en el minimapa**, que no es incoherencia sino dos problemas
+distintos. Hueco deja ver el terreno —con relleno, cuatro contactos apiñados tapaban una isla
+entera— y permite contar los que se solapan, pero pierde la masa que despega el símbolo del
+fondo. A 5×5 esa masa es lo único que hay, así que el minimapa se queda macizo.
+
+**Van los cuatro por `@export` y por separado, no uno teñido**: `modulate` multiplica y se
+llevaría por delante el filo oscuro. Vacíos, vuelve el cuadradito de `marker_px`, que es lo que
+mantiene el mapa funcionando si un día falta una textura.
+
+> Los colores **no son definitivos**. El azul del jugador es `#8fd3ff` porque el
+> `#5184c1` original y el `#4d9be6` del agua son casi el mismo color y el bando propio era el
+> que peor se leía; sigue sin convencer, y el aliado tampoco está cerrado.
+
+> Pendiente: **la barra de superficie y la T no salen todavía**. `UnitType.Domain` separa aire
+> de superficie y nada más, así que un buque y un tanque son la misma cosa para el juego.
+> Separar naval de terrestre corre la máscara `targets` de las diez armas, hoy de dos casillas.
 
 **La escala no se configura, se calcula:** el mayor número entero de píxeles por celda que
 quepa en el control. Si no cabe ni uno, se resume el mapa dentro de la propia imagen y se
@@ -3950,7 +4009,8 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] Cámara con pan + follow a unidad seleccionada
 - [x] Selección de unidades por click (física query manual)
 - [x] Órdenes de movimiento (click izq. vacío / click der.)
-- [x] Marcador de destino (se queda donde se ordenó, como referencia para ajustar el vuelo)
+- [x] Marcador de destino (se queda donde se ordenó, como referencia para ajustar el vuelo), con la onda saliendo **tres veces** y sin encadenar tandas al dar otra orden
+- [x] **Símbolos de contacto en el mapa táctico y el minimapa**: forma y color por bando, barra de dominio para lo que vuela. Huecos arriba, macizos abajo. Colores **no definitivos**
 - [x] Deselección: Escape + botón × en HUD
 - [x] AV-8B Harrier: vuelo al punto → órbita CCW
 - [x] LHD Wasp: despliegue completo (elevador → taxi → despegue → circuito de espera)
@@ -4082,7 +4142,15 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [ ] Cadena de repliegue de arma: usar la siguiente cuando se acaba una, cañón como último recurso
 - [ ] **Proyectil propio de los misiles aire-aire.** El AIM-120 y el AIM-9 usan prestado el del Maverick, igual que el 9M311: vuelan y guían, pero sale un AGM-65 con sombra de altitud
 - [ ] **Comportamiento del Su-33.** Hoy sólo orbita: no responde, no dispara, no huye. Va con las misiones
-- [ ] **El selector de armas contra blancos aéreos.** Todo lo probado del Cobra fue contra tierra. Cuando `best_for` no encuentra arma válida, el selector **deja puesta la que hubiera**: con el Hellfire activo y orden de atacar un Su-33 puede quedarse con él, y como el Hellfire no engancha nada que vuele, `_firing_distance` además le dice que se quede quieto. El síntoma —una unidad congelada— es más aparatoso que la causa. Falta encontrar dónde falla contra aire
+- [ ] **El símbolo no dice QUÉ es la unidad.** Bando y dominio sí; tipo no. Los marcos huecos ya dejan el hueco de 5×5 dentro, falta dibujar los iconos y decidir cuántos tipos se distinguen
+- [ ] **Rumbo de los contactos.** Una línea saliendo del símbolo hacia donde va, de largo proporcional a la velocidad. Todo lo que hace falta —`get_facing()` y `get_velocity()`— ya lo contesta cada unidad
+- [ ] **Feedback de ataque en el mapa.** `ThreatPulses` ya dibuja ondas cuando nos enganchan o nos disparan; falta la línea entre quien tira y su blanco
+- [ ] **Contactos apiñados.** Cuatro unidades juntas se solapan; con símbolos huecos se pueden contar, pero a partir de unas cuantas hace falta agruparlas en una con contador
+- [ ] **La columna derecha del mapa táctico está vacía**: 144×258 px libres, que es donde iría la lista de contactos o la ficha del seleccionado
+- [ ] **Separar naval de terrestre en `UnitType.Domain`.** Sin eso la barra de superficie y la T de submarino no pueden salir. Corre la máscara `targets` de las diez armas
+- [ ] **El panel de desplegadas mezcla estilos**: el caza sale blanco y sombreado, el helicóptero y el buque grises y planos. Sus variantes blancas están en el sheet
+- [ ] **El selector de armas contra blancos aéreos.**
+ Todo lo probado del Cobra fue contra tierra. Cuando `best_for` no encuentra arma válida, el selector **deja puesta la que hubiera**: con el Hellfire activo y orden de atacar un Su-33 puede quedarse con él, y como el Hellfire no engancha nada que vuele, `_firing_distance` además le dice que se quede quieto. El síntoma —una unidad congelada— es más aparatoso que la causa. Falta encontrar dónde falla contra aire
 - [ ] **El cañón mejorado que gira sobre su eje.** Depende del sistema de mejoras de unidad, que no existe, y además necesita arte nuevo: el sheet del Cobra sólo trae fuselaje y palas
 - [ ] **La munición del cañón no se gasta.** `Unit.get_ammo()` devuelve −1 para cualquier cañón, así que los 750 proyectiles que el hangar enseña son decorativos. Vale para todas las unidades, no sólo el Cobra
 - [ ] **La cuenta atrás de impacto no baja lineal.** `Projectile.time_to_impact()` usa la velocidad instantánea y los misiles aceleran, así que el número sube al separarse del ala y se desploma al llegar a crucero. Compartido con el Maverick y el AMRAAM; arreglarlo cambia la cuenta de todas las armas

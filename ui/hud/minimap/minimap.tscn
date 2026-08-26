@@ -1,8 +1,12 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://ui/hud/minimap/minimap.gd" id="1"]
 [ext_resource type="Script" path="res://ui/hud/minimap/map_view.gd" id="2"]
 [ext_resource type="Texture2D" path="res://ui/hud/minimap/minimap_panel.png" id="3"]
+[ext_resource type="Texture2D" path="res://ui/hud/minimap/contact_player_small.png" id="4"]
+[ext_resource type="Texture2D" path="res://ui/hud/minimap/contact_ally_small.png" id="5"]
+[ext_resource type="Texture2D" path="res://ui/hud/minimap/contact_enemy_small.png" id="6"]
+[ext_resource type="Texture2D" path="res://ui/hud/minimap/contact_neutral_small.png" id="7"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_1"]
 content_margin_left = 4.0
@@ -32,3 +36,7 @@ grid_border = false
 show_viewport_rect = true
 show_units = true
 marker_px = 2
+contact_player = ExtResource("4")
+contact_ally = ExtResource("5")
+contact_enemy = ExtResource("6")
+contact_neutral = ExtResource("7")

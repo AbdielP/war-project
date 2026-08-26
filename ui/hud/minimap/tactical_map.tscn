@@ -1,7 +1,13 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://ui/hud/minimap/tactical_map.gd" id="1"]
 [ext_resource type="Script" path="res://ui/hud/minimap/map_view.gd" id="2"]
+[ext_resource type="Texture2D" path="res://ui/hud/minimap/contact_player.png" id="3"]
+[ext_resource type="Texture2D" path="res://ui/hud/minimap/contact_ally.png" id="4"]
+[ext_resource type="Texture2D" path="res://ui/hud/minimap/contact_enemy.png" id="5"]
+[ext_resource type="Texture2D" path="res://ui/hud/minimap/contact_neutral.png" id="6"]
+[ext_resource type="Texture2D" path="res://ui/hud/minimap/domain_bar.png" id="7"]
+[ext_resource type="Texture2D" path="res://ui/hud/minimap/domain_subsurface.png" id="8"]
 
 [node name="TacticalMap" type="Control"]
 visible = false
@@ -29,6 +35,12 @@ show_viewport_rect = true
 show_units = true
 marker_px = 4
 alert_radius_px = 28.0
+contact_player = ExtResource("3")
+contact_ally = ExtResource("4")
+contact_enemy = ExtResource("5")
+contact_neutral = ExtResource("6")
+domain_bar = ExtResource("7")
+domain_subsurface = ExtResource("8")
 
 [node name="Hint" type="Label" parent="."]
 offset_left = 492.0

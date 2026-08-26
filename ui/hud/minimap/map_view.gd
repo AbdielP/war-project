@@ -58,7 +58,42 @@ signal refitted
 ## Lado del punto de una unidad, en píxeles de pantalla. **No escala con el
 ## mapa**: es un icono, no terreno — a 1 px por celda un punto a escala sería
 ## invisible, y en el mapa grande sería una mancha.
+##
+## Sólo se usa cuando no hay símbolo puesto: es el cuadradito de siempre, que
+## queda de reserva para que un mapa sin arte asignado siga diciendo dónde hay
+## alguien en vez de salir vacío.
 @export var marker_px: int = 2
+
+@export_group("Símbolos de contacto")
+## El marco de cada bando. **Van los cuatro por separado y no uno teñido**:
+## `modulate` multiplica, y el filo oscuro que despega el símbolo del terreno se
+## perdería. Vacíos = se dibuja el cuadradito de `marker_px`.
+##
+## Los cuatro caben en la misma caja —11×11 en el mapa grande, 7×7 en el
+## minimapa— aunque cada uno tenga su forma: el rombo la llena entera, el
+## rectángulo mide 11×7 y el cuadrado 9×9. Eso es lo que hace que la marca de
+## dominio caiga siempre en el mismo sitio sea cual sea el bando.
+@export var contact_player: Texture2D
+@export var contact_ally: Texture2D
+@export var contact_enemy: Texture2D
+@export var contact_neutral: Texture2D
+
+@export_subgroup("Dominio")
+## La barra que dice en qué medio se mueve el contacto. **Es la misma pieza
+## arriba y abajo**: encima del marco significa que vuela y debajo que navega.
+## No lleva color de bando — eso ya lo dice el marco.
+@export var domain_bar: Texture2D
+## Y la T invertida, sólo debajo: bajo el agua. Puesta y sin usar todavía —
+## `UnitType.Domain` distingue aire de superficie y nada más, así que aún no hay
+## quien conteste "esto es un submarino".
+@export var domain_subsurface: Texture2D
+## Cuánto aire queda entre la marca y el marco, en píxeles.
+##
+## **Separadas, no pegadas.** Solapándolas la barra se comía la punta del rombo y
+## el símbolo dejaba de leerse como un rombo; y a cero, el filo oscuro de las dos
+## piezas se toca y parecen una sola forma rara. Con un par de píxeles de hueco
+## se leen como lo que son: un contacto y encima el dato de en qué medio va.
+@export_range(0, 6, 1) var domain_gap: int = 2
 ## Ondas donde nos han enganchado o nos están disparando. Ver [ThreatPulses].
 @export var show_alerts: bool = true
 ## Hasta dónde se abre cada onda, en píxeles de pantalla. **No escala con el
@@ -484,14 +519,60 @@ func _draw_units(drawn: Vector2) -> void:
 		# de las coordenadas y mentiría sobre dónde está.
 		if not inside.has_point(center):
 			continue
-		var rect := Rect2((center - Vector2(half, half)).round(),
-				Vector2(marker_px, marker_px))
-		draw_rect(rect.grow(1.0), _COLOR_MARKER_EDGE, true)
-		draw_rect(rect, Team.color(unit.team), true)
+		var symbol := _symbol_for(unit.team)
+		var rect: Rect2
+		if symbol != null:
+			rect = _draw_symbol(symbol, center)
+			_draw_domain(unit, rect)
+		else:
+			rect = Rect2((center - Vector2(half, half)).round(),
+					Vector2(marker_px, marker_px))
+			draw_rect(rect.grow(1.0), _COLOR_MARKER_EDGE, true)
+			draw_rect(rect, Team.color(unit.team), true)
 		# La seleccionada lleva su propio recuadro, separado del punto para que
 		# no se coma el color del bando. Esto sustituye al recuadro de cámara.
 		if unit == _selected:
 			draw_rect(rect.grow(3.0), _COLOR_ACCENT, false, 1.0)
+
+
+## El marco que le toca a ese bando, o `null` si este mapa no lleva símbolos.
+func _symbol_for(team: Team.Side) -> Texture2D:
+	match team:
+		Team.Side.PLAYER:
+			return contact_player
+		Team.Side.ALLY:
+			return contact_ally
+		Team.Side.ENEMY:
+			return contact_enemy
+		_:
+			return contact_neutral
+
+
+## Planta el marco centrado en el contacto y devuelve el hueco que ocupa.
+##
+## La posición se redondea a píxel entero: el símbolo es arte, no terreno, y a
+## media rejilla el filo oscuro se emborrona contra el mapa.
+func _draw_symbol(symbol: Texture2D, center: Vector2) -> Rect2:
+	var size := symbol.get_size()
+	var at := (center - size * 0.5).round()
+	draw_texture(symbol, at)
+	return Rect2(at, size)
+
+
+## La marca de dominio, pegada al marco. Arriba si vuela, abajo si navega.
+##
+## **Hoy sólo sale la de aire.** `UnitType.Domain` sólo separa lo que vuela de lo
+## que no, así que un buque y un tanque son la misma cosa para esto y pintarle la
+## barra de superficie a los dos sería mentir sobre el tanque. La pieza está
+## puesta y el sitio calculado; falta el dato.
+func _draw_domain(unit: Unit, frame: Rect2) -> void:
+	if domain_bar == null or unit.get_domain() != UnitType.Domain.AIR:
+		return
+	var size := domain_bar.get_size()
+	# Centrada a lo ancho del marco y separada por arriba.
+	var at := Vector2(frame.position.x + (frame.size.x - size.x) * 0.5,
+			frame.position.y - size.y - float(domain_gap))
+	draw_texture(domain_bar, at.round())
 
 
 ## Qué unidad hay bajo un punto del panel, o `null` si sólo hay terreno. Se

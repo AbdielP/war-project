@@ -45,15 +45,50 @@ func clear_weapons() -> void:
 ##
 ## Descolgar el sprite y descontar munición son cosas distintas a propósito:
 ## una estación puede llevar más armas de las que caben dibujadas, así que el
-## avión sigue teniendo con qué tirar aunque el ala ya se vea vacía.
+## avión sigue teniendo con qué tirar aunque el ala ya se vea vacía. Y hay armas
+## cuyo sprite no se descuelga con el tiro porque no es el arma sino el aparato
+## que la lanza — ver [method _sprite_goes_with_the_shot].
 func release(weapon: WeaponType) -> Marker2D:
 	var loaded := _markers_loaded_with(weapon)
 	if not loaded.is_empty():
 		var marker := _pick_alternating(loaded)
-		_empty(marker)
+		if _sprite_goes_with_the_shot(weapon, loaded.size()):
+			_empty(marker)
 		return marker
 	var stations := _markers_for(weapon)
 	return _pick_alternating(stations) if not stations.is_empty() else null
+
+
+## ¿Se va el dibujo con el disparo? Depende de qué sea el dibujo.
+##
+## Un arma que **es** lo que cuelga se va y deja el pilón vacío. Un contenedor se
+## queda mientras le queden cohetes dentro, y se suelta cuando ya no puede llevar
+## lo que falta por tirar: con dos contenedores de 19 y 19 tiros gastados, uno
+## sobra y cae; con el último vacío, cae también.
+##
+## Se cuenta desde la munición y no llevando la cuenta aquí, porque el rack no es
+## el contador — mirar el mismo número desde dos sitios es como se acaba con dos
+## verdades distintas. Ojo al orden: esto corre **después** de gastar el tiro, así
+## que lo que se lee ya está descontado.
+func _sprite_goes_with_the_shot(weapon: WeaponType, hanging: int) -> bool:
+	if not weapon.icon_is_launcher:
+		return true
+	var per_station := _per_station_of(weapon)
+	if per_station <= 0 or _loadout == null:
+		return true
+	var left := _loadout.ammo_of(weapon)
+	var still_needed := int(ceil(float(left) / float(per_station)))
+	return hanging > still_needed
+
+
+## Cuántas armas lleva cada estación de ese tipo, o 0 si no está montada.
+func _per_station_of(weapon: WeaponType) -> int:
+	if _loadout == null:
+		return 0
+	for mount in _loadout.mounts:
+		if mount.weapon == weapon:
+			return mount.per_station
+	return 0
 
 
 func _mount_on_station(mount: WeaponMount, station: String) -> void:

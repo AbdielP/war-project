@@ -2,6 +2,192 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-25 — el SuperCobra dispara: postura de tiro, cohetes que no llenan la pantalla y el arma que el jugador eligió
+
+### La maniobra de tiro de un helicóptero es un destino, no un comportamiento
+El avión necesita `AttackRunBehavior` porque no puede parar: hay que inventarle cómo acercarse a un
+blanco sin frenar. El helicóptero no. Su maniobra de tiro es **plantarse a la distancia que pida el
+arma con el morro puesto**, y eso cabe en el piloto que ya existía.
+
+Dentro de `HelicopterController` los dos mandos se separan del todo: el pedal clava el morro en el
+blanco —sin `face_range` que valga, encarar de cerca es justo lo que se quiere— y el cíclico se
+ocupa **sólo de la distancia**. Y el sitio bueno no es un punto sino un **anillo**: cualquiera a esa
+distancia sirve, así que dentro de `hold_band` se da por colocado y deja de corregir. Sin holgura
+corregiría eternamente el último píxel contra un blanco que también se mueve.
+
+De ahí sale gratis el gesto que se buscaba desde que voló: al entrar, mientras la cola todavía gira,
+el mismo vector radial sale con componente lateral y **el aparato entra de costado**. No está
+programado; es lo que pasa cuando el morro va por un lado y el cíclico por otro.
+
+### El blanco y el destino no conviven: dar uno suelta el otro
+Un aparato que siguiera encarado al enemigo mientras el jugador lo manda a otro sitio estaría
+obedeciendo a medias, y esto es un juego de órdenes. `set_target()` suelta el blanco y `attack()`
+suelta el destino. La base ya lo hacía por su lado —`Unit.receive_move_order` pone el blanco a
+`null`—, así que las dos mitades dicen lo mismo.
+
+### A qué distancia plantarse lo decide la unidad, no el piloto
+El piloto no sabe de alcances ni de munición; quien da la orden sí. Así que `attack()` recibe la
+distancia ya calculada y el `AH-1W` la saca del arma activa: `standoff_fraction` (0,8) del alcance
+máximo, nunca por dentro del mínimo.
+
+**Y sin nada con lo que dispararle, se queda donde está** con el morro puesto. Meterse en el alcance
+de algo a lo que no puedes hacer nada es sólo ponerse a tiro. No es negarse a la orden —el blanco
+queda marcado y el HUD lo dice—, es no gastar el aparato en un viaje que no sirve.
+
+### Un solo sitio traduce "a quién ataco" en maniobra
+No hay `receive_attack_order` sobrescrito en el Cobra: la orden sólo anota a quién, y todo pasa por
+`attack_target_changed`. Por ese mismo aviso entran el ataque que empieza porque el jugador lo pidió,
+el que se cancela porque mandó al aparato a otro sitio y el que termina porque el blanco murió. Tres
+caminos, un handler.
+
+### Un aparato al que se le apunta el blanco en cubierta tiene que despegar igual
+`HelicopterController.enable()` miraba si había **destino** para arrancar la subida. Pero la cubierta
+apunta el blanco antes de soltar el aparato (`FlightDeck._obey_standing_order` llama a
+`set_attack_target`, no a `receive_attack_order`), así que al llegar a `enable()` lo que está puesto
+es `aim` y no `has_target`. Resultado: un Cobra lanzado desde el hangar con orden de atacar **se
+quedaba en cubierta para siempre**, con el morro girado hacia el enemigo y sin que nadie volviera a
+sacarlo — la orden no se repite porque el blanco no ha cambiado.
+
+Se arregla mirando las dos clases de orden. La lección general: cuando a un estado se llega por dos
+caminos, la puerta de salida tiene que preguntar por los dos.
+
+### El cañón de un helicóptero necesita ráfagas; el de un avión no
+El `M197` salió clonado del GAU-12 del Harrier y traía `min_range = 220`, que es distancia de pasada
+de reactor. Un helicóptero dispara desde parado y a bocajarro: a 0.
+
+Más de fondo: el cañón del avión tiene `burst_seconds = 0` porque **la pasada ya es la ráfaga** —
+entra, tira, rompe. Uno en estacionario no tiene pasada que le marque el ritmo, así que aguantaría el
+gatillo indefinidamente y se leería como un chorro continuo. Ráfagas de 0,9 s con 0,5 de silencio.
+Es el mismo razonamiento que ya estaba escrito para la batería antiaérea, aplicado a algo que vuela.
+
+### El humo es el gasto, no los cohetes
+La duda al montar los cohetes era si instanciarlos de verdad o falsearlos como las trazadoras del
+cañón. Falsearlos está mal: una bala es invisible e instantánea y la trazadora es una mentira que
+vale por cinco, pero un cohete es lento, grande, su vuelo **es** el espectáculo y sobre todo **tiene
+que poder fallar**. Falseado, el daño se decidiría al apretar el gatillo y los fallos se verían
+arbitrarios.
+
+Lo que llena la pantalla no son los cohetes: es su estela. Medido en el motor, nodos vivos a la vez:
+
+| | proyectiles | bocanadas de humo |
+|---|---|---|
+| **un** AGM-114 | 1 | **95** |
+| **siete** Hydra-70 | 7 | **133** |
+
+Una salva entera cuesta un 40 % más de humo que un solo misil. La diferencia está en usar la
+bocanada del cañón (10 fotogramas) en vez de la del misil (23) y separarlas más. El proyectil no era
+el problema.
+
+### La salva no es el cargador
+19 Hydras es lo que lleva el contenedor, no lo que sale por gatillazo. `salvo_size` y `salvo_interval`
+ya hacían la ristra para las bombas del Harrier, así que no hubo que construir nada: Hydra sale de 7
+en 7 cada 0,06 s, Zuni de 2 en 2. En pantalla nunca hay más de 7.
+
+### Del pilón cuelga a veces el arma y a veces el aparato que la lanza
+`HardpointRack.release()` descolgaba el sprite en cada disparo. Con un misil está bien —el misil
+**es** lo que cuelga y el pilón queda pelado—, pero el primer Hydra se llevaba el contenedor entero
+del ala y los dieciocho siguientes salían de la nada.
+
+De ahí `WeaponType.icon_is_launcher`. El contenedor se queda mientras le queden cohetes y se suelta
+cuando **ya no puede llevar lo que falta por tirar**: con dos de 19 y 19 gastados, uno sobra y cae.
+Se cuenta desde la munición y no llevando la cuenta en el rack, porque el rack no es el contador —
+el mismo número mirado desde dos sitios es como se acaba con dos verdades distintas.
+
+Va en el arma y no en la carga porque no depende del contexto: un contenedor de cohetes es un
+contenedor cuelgue de donde cuelgue.
+
+### Un cohete no es un misil sin buscador ni una bomba con motor
+`Rocket` no hereda de ninguno de los dos. El misil corrige durante todo el vuelo —la mitad de su
+código es guiado proporcional y radio de giro— y la bomba no tiene motor y todo su vuelo sale de
+cuánto frena. Un cohete empuja recto: es el más simple de los tres y meterlo en cualquiera de los
+otros sería arrastrar maquinaria que no usa jamás.
+
+**Fija el rumbo al salir y no lo vuelve a tocar.** A partir de esa línea ya no sabe dónde está el
+blanco, sólo hacia dónde va. Y de ahí sale que falle, sin ninguna tirada: cada cohete de la salva
+apunta a un punto distinto alrededor del objetivo (`salvo_spread`), así que uno quieto se come casi
+todos y uno que se movió, casi ninguno. Eso es exactamente lo que significa "sin guía".
+
+Sin cuenta atrás de impacto, por lo mismo: un número prometería una puntería que este arma no tiene.
+
+### El punto de apuntado se comprueba contra el tramo, no contra el final del paso
+A 340 px/s un cohete avanza 5,7 px por fotograma. Mirando sólo dónde acaba el paso, cruza su punto de
+apuntado sin enterarse y sigue de largo. Se mide la distancia del punto al **segmento** recorrido.
+
+### Los dos calibres son dos oficios
+Hydra-70 son 70 mm con cabeza HE o de flechettes: infantería, blandos y vehículos ligeros; su arma es
+la saturación. Zuni son 127 mm con cabeza mucho mayor, contra lo duro. Contra un T-14 de 100 de vida,
+medido: **los 38 Hydras lo dejan al 0,1 y los 4 Zunis al 0,8**. El contenedor entero de Hydras cuesta
+lo mismo que cuatro Zunis, que es la diferencia entre saturar y perforar.
+
+El AGM-114 es el tercero y no se parece al GBU-54 pese a que los dos son "lo que cuelga contra
+tierra": el JDAM es una bomba de 227 kg **sin motor** que planea, y el Hellfire un misil de 49 kg con
+cohete y carga hueca de 9 kg. Diez veces menos explosivo y aun así es el que mata carros, porque una
+carga hueca perfora lo que a la onda expansiva le da igual. Y para el juego manda el motor: la bomba
+necesita velocidad y altura —por eso el Harrier hace la pasada— y el misil se va solo, que es lo que
+permite lanzarlo desde un helicóptero parado.
+
+### La elección de arma del jugador no caduca por cambiar de blanco
+Se descartaba en cuanto apuntabas a otro, con este razonamiento: si elegiste un AMRAAM para un caza y
+ahora apuntas a un tanque, tu elección ya no significa nada. Pero contra tierra el automático elige
+**la que más lejos llega**, y eso era buen sustituto de "la más adecuada" cuando el Harrier llevaba
+Maverick, GBU y Mk-82. Con el Cobra deja de serlo: el Zuni y el Hellfire no son dos bandas de
+distancia, son dos oficios. Elegías Zuni, apuntabas al siguiente tanque y te ponía el Hellfire encima.
+
+La regla nueva: **se respeta la elección salvo que el arma no pueda dispararse** contra el blanco
+nuevo — ni sirve contra ese medio, o se acabó. Que otra encaje mejor no cuenta: eso es preferencia, y
+la preferencia es del jugador.
+
+Al cambiar la pregunta de "¿es el mismo blanco?" a "¿todavía sirve?", `_manual_target` y
+`_manual_pending` se quedaron sin nadie que las leyera — existían sólo para llevar la cuenta de para
+qué objetivo se había elegido. Fuera. Y el caso raro que protegían —elegir el arma **antes** de tener
+blanco— sale bien solo.
+
+### La frase que se canta y la abreviatura que se escribe son el mismo dato en dos sitios
+El cañón cantaba `guns, guns, guns!` por una convención de radio que no es tal, y los cohetes
+heredaron `Rifle` del Maverick, que es la llamada de **misil** aire-superficie. Ninguna de las dos
+armas tiene llamada propia de radio.
+
+Primer intento: una frase en el HUD elegida por `fire_mode == SUSTAINED`. Funcionaba para el cañón y
+no daba para los cohetes, que son lanzadores igual que los misiles. Se acabó en
+**`WeaponType.radio_call`**: la frase vive en el arma, y vacío = se canta el código. Siguen siendo dos
+campos porque son dos sitios —el parte de eventos escribe `(Guns)`, `(Rockets)` entre paréntesis—
+pero un solo camino.
+
+### Una llamada de radio se calla mientras dure lo que anuncia
+El cañón sacaba un cartel cada dos ráfagas y un helicóptero en estacionario los sacaba para siempre.
+Dos fallos sumados:
+
+- La ventana de agrupado (2,8 s) era **más corta que el ciclo de ráfaga** (0,9 + 0,5). Las armas de
+  chorro continuo tienen la suya, `sustained_call_window`, a 6 s.
+- Y el de fondo: la cuenta arrancaba en **la última vez que se cantó**, no en el último disparo. Por
+  larga que fuera la ventana, un cañón que no para volvía a cantar al cumplirse. Ahora la hora se
+  apunta también cuando la llamada se calla, y eso convierte la ventana en "hace mucho que no pasa"
+  en vez de "hace mucho que no lo digo".
+
+Medido: **un cartel en 25 s de fuego continuo**, donde antes salía uno cada dos ráfagas.
+
+### La cuenta atrás de impacto la contesta la unidad, y el Cobra no contestaba
+`Unit.get_time_to_impact()` devuelve −1 de fábrica y el único que lo sobrescribía era el Harrier. El
+contador no se veía y el recuadro del blanco no se cerraba, y no era del misil ni del HUD: faltaba el
+dato en la unidad. Se pregunta **acotado al propio blanco**, o al cambiar de objetivo el nuevo
+hereda la cuenta atrás del anterior.
+
+**Anotado y sin arreglar**: la cuenta no baja lineal. `Projectile.time_to_impact()` divide la
+distancia entre la velocidad **de ahora mismo**, y un misil acelera — frena al separarse del ala (el
+número sube) y al llegar a crucero se desploma. Es la fórmula de siempre, compartida con el Maverick
+y el AMRAAM; en el Hellfire canta más porque sale a 55 px/s y cruza a 280. Arreglarlo cambiaría la
+cuenta de todas las armas del juego.
+
+### El contador de impacto: Yellow Pixel a 16, y por qué no a 8
+Su tamaño nativo es **8** — el dígito cae en 3×5 con trazos de 1 px sólido. Por debajo el `8` se
+convierte en un borrón macizo; en 9, 10 y 12 se deforma. Los múltiplos enteros son exactos.
+
+Va a **16** y no a 8, que también sería nítido: el contador se dibuja encima del terreno sin borde ni
+fondo, y a 1 px de trazo se pierde. A 16 son dígitos de 6×10 con trazo de 2 px, el mismo tamaño que
+el resto del texto del HUD. Comprobado sobre los cuatro colores que de verdad hay en el mapa —sacados
+contando píxeles de los dos tilesets— y el render sale con exactamente cinco colores: los cuatro
+fondos y la tinta.
+
 ## 2026-08-25 — señalar sin envolver: cursor propio, marcas de unidad y el arma que se quedó vacía
 
 ### El recuadro de selección se sustituye por una flecha encima

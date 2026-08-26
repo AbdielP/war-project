@@ -37,9 +37,29 @@ enum FireMode {
 ## nadie tiene que acordarse de añadirla a una lista aparte. Vacío = no se canta
 ## nada y el registro sólo dice el nombre.
 @export var brevity_code: String = ""
+## Lo que se canta **en voz alta** encima del aparato al disparar. Vacío = se
+## canta el código a secas, que es lo normal.
+##
+## Son dos campos y no uno porque son dos sitios: el código es la abreviatura y
+## es lo que el parte de eventos escribe entre paréntesis —"(Guns)",
+## "(Rockets)"—, mientras que esto es la frase. En casi todas coinciden: un misil
+## se canta `Fox Three!` y no hay más que decir. Sólo se separan en las armas que
+## **no tienen llamada propia de radio** —el cañón y los cohetes—, donde la
+## abreviatura sola se queda a medias.
+@export var radio_call: String = ""
 ## El arma tal y como se ve **colgada del ala**: es el sprite que cuelga el
 ## `HardpointRack` en el mundo, no un icono de menú.
 @export var icon: Texture2D
+## Lo que cuelga del pilón, ¿es el arma o el aparato que la lanza?
+##
+## Un misil ES lo que cuelga: se va con el disparo y el pilón queda pelado. Un
+## contenedor de cohetes no — se queda ahí, escupiendo, y sólo se suelta cuando
+## está vacío. Sin esta distinción el primer Hydra se llevaba el contenedor
+## entero del ala y los dieciocho siguientes salían de la nada.
+##
+## Va en el arma y no en la carga porque no depende del contexto: un contenedor
+## de cohetes es un contenedor cuelgue de donde cuelgue.
+@export var icon_is_launcher: bool = false
 ## El arma tal y como se ve **en el HUD**, en un lienzo de 32×32 con la silueta
 ## ya centrada. Es un dibujo aparte de `icon` y no el mismo a otro tamaño: el
 ## del ala se ve desde arriba y a la escala del mundo, éste se ve de frente y

@@ -8,6 +8,7 @@ script = ExtResource("1")
 display_name = "2A38M"
 short_name = "CAÑÓN AA"
 brevity_code = "Guns"
+radio_call = "Using guns"
 ui_icon = ExtResource("2")
 targets = 1
 min_range = 70.0

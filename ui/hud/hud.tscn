@@ -17,6 +17,7 @@
 [ext_resource type="PackedScene" path="res://ui/hud/brevity_calls/brevity_calls.tscn" id="14"]
 [ext_resource type="PackedScene" path="res://ui/hud/vessel_window/vessel_window.tscn" id="15"]
 [ext_resource type="PackedScene" path="res://ui/hud/cursor/cursor.tscn" id="16"]
+[ext_resource type="FontFile" uid="uid://e43eukj7ara3" path="res://assets/fonts/Yellow Pixel Font/Yellow_pixel_font.ttf" id="17"]
 
 [node name="HUD" type="CanvasLayer" unique_id=1219806315]
 process_mode = 3
@@ -69,10 +70,11 @@ offset_bottom = 4.0
 
 [node name="ImpactTimer" type="Label" parent="." unique_id=106900932]
 visible = false
-offset_right = 24.0
-offset_bottom = 9.0
+offset_right = 32.0
+offset_bottom = 18.0
 theme_override_colors/font_color = Color(0.9098039, 0.23137255, 0.23137255, 1)
-theme_override_font_sizes/font_size = 7
+theme_override_fonts/font = ExtResource("17")
+theme_override_font_sizes/font_size = 16
 vertical_alignment = 1
 
 [node name="ZoomControls" parent="." unique_id=1381776980 instance=ExtResource("9")]

@@ -18,6 +18,11 @@ class_name BrevityCalls
 ##
 ## **El código sale del arma** (`brevity_code`), no está escrito aquí. Un arma
 ## nueva trae su llamada puesta.
+##
+## Y la frase también (`radio_call`), para las armas que no tienen llamada propia
+## de radio: el cañón y los cohetes. Su código —`Guns`, `Rockets`— es lo que el
+## parte de eventos escribe entre paréntesis, pero cantado encima del aparato se
+## dice entero. El mismo dato en dos sitios distintos, no dos datos.
 
 ## Cuánto se ve entera antes de empezar a irse.
 @export var hold_time: float = 1.8
@@ -34,19 +39,19 @@ class_name BrevityCalls
 @export var font: Font
 @export_range(6, 32, 1) var font_size: int = 16
 @export var color: Color = Color(1.0, 0.85, 0.4)
-## Cuántas veces se repite el código del cañón. En radio se canta
-## "guns, guns, guns" — tres, por convención, igual que `Fox` va con su número.
-## El `.tres` del arma sigue diciendo `Guns` a secas: repetirlo es cosa de cómo
-## se enseña, no del dato.
-@export_range(1, 3, 1) var gun_call_repeats: int = 3
-## Qué código se repite. Se compara en minúsculas.
-@export var repeated_code: String = "Guns"
-
 @export_group("Agrupado")
 ## Dos disparos del mismo avión y la misma arma dentro de esta ventana cuentan
 ## como uno. Es lo que hace que una ristra de seis Mk-82 cante **un** `Pickle!`
 ## y no seis encima del mismo avión.
 @export var same_call_window: float = 2.8
+## Y la de un arma de chorro continuo, que es mucho más larga.
+##
+## Un cañón no dispara una vez: **sigue disparando**, cortado en ráfagas. Con la
+## ventana corta, cada ráfaga que cae fuera de ella saca otro cartel, y un
+## helicóptero parado tirándole a algo los sacaba para siempre. La ventana tiene
+## que ser más larga que el hueco entre ráfagas para que la andanada entera
+## cuente como una sola cosa, que es lo que es.
+@export var sustained_call_window: float = 6.0
 
 ## Lo dicho hace poco, para no repetirlo: `"idUnidad:arma" -> cuándo`.
 var _said: Dictionary = {}
@@ -121,20 +126,25 @@ func _hush(unit: Unit) -> void:
 func _is_new_call(unit: Unit, weapon: WeaponType) -> bool:
 	var key := "%d:%d" % [unit.get_instance_id(), weapon.get_instance_id()]
 	var now := Time.get_ticks_msec() / 1000.0
-	if _said.has(key) and now - float(_said[key]) < same_call_window:
-		return false
+	var window := sustained_call_window \
+		if weapon.fire_mode == WeaponType.FireMode.SUSTAINED \
+		else same_call_window
+	var recent: bool = _said.has(key) and now - float(_said[key]) < window
+	# La hora se apunta **también cuando no se canta**, y ahí está la diferencia
+	# entre "hace mucho que no lo digo" y "hace mucho que no pasa". Sin esto, un
+	# cañón que no para de tirar volvía a cantar cada vez que se cumplía la
+	# ventana: la cuenta arrancaba en la última llamada en vez de en el último
+	# disparo. Así la andanada calla mientras dure, y vuelve a cantar cuando de
+	# verdad se ha estado callado.
 	_said[key] = now
-	return true
+	return not recent
 
 
+## Lo que sale escrito. La frase del arma si la trae y su código si no: el código
+## siempre existe, la frase sólo en las armas que no tienen llamada de radio.
 func _text_for(weapon: WeaponType) -> String:
-	var code := weapon.brevity_code
-	if code.to_lower() == repeated_code.to_lower() and gun_call_repeats > 1:
-		var parts := PackedStringArray()
-		for i in gun_call_repeats:
-			parts.append(code.to_lower())
-		return "%s!" % ", ".join(parts)
-	return "%s!" % code
+	var said := weapon.radio_call if weapon.radio_call != "" else weapon.brevity_code
+	return "%s!" % said
 
 
 ## Cada llamada es un `Label` suyo que nace, sigue a la unidad y se borra solo.

@@ -676,8 +676,35 @@ medio mapa.
 
 **El rumbo va aparte de la traslación.** `_wanted_heading` se ata al destino sólo si está a más
 de `face_range`; más cerca se entra de lado sin girar (medido: punto a 49 px por detrás, **0
-grados** de giro). Es la separación que permitirá, cuando haya armamento, apuntar al blanco
-mientras el aparato se desplaza de costado.
+grados** de giro). Es la separación de la que sale la postura de tiro.
+
+**Y en combate los dos mandos se separan del todo.** Con blanco puesto —`attack()`— el pedal deja
+de mirar el destino y clava el morro en el objetivo, sin `face_range` que valga; el cíclico se
+ocupa **sólo de la distancia**. Y no se llega a un destino: el sitio bueno es un **anillo** de
+radio `hold_distance`, así que dentro de `hold_band` se da por colocado y suelta el mando. Sin esa
+holgura corregiría eternamente el último píxel contra un blanco que también se mueve.
+
+```gdscript
+var closing := to_target.length() - hold_distance
+if absf(closing) <= hold_band:
+    _stick = Vector2.ZERO
+    _set_state(State.HOVER)
+    return
+var local := (to_target.normalized() * closing).rotated(-heading)
+_stick = Vector2(
+    _axis_input(local.x, forward_speed if local.x > 0.0 else back_speed),
+    _axis_input(local.y, strafe_speed))
+```
+
+El movimiento es **radial**: entra de morro y sale de espaldas, que es el eje lento, así que se
+resiste mucho más a retroceder que a acercarse. Y mientras la cola todavía gira, ese mismo vector
+sale con componente lateral y **el aparato entra de costado**. No está programado: es lo que pasa
+cuando el morro va por un lado y el cíclico por otro. Medido, ordenado a atacar desde 60 px con el
+anillo en 240: retrocede describiendo una curva y termina a 239,1 px con el morro a 1,2°.
+
+**El blanco y el destino no conviven**: `attack()` pone `has_target = false` y `set_target()` pone
+`aim = null`. Un aparato que siguiera encarado a un enemigo mientras el jugador lo manda a otro
+sitio estaría obedeciendo a medias.
 
 **Llega exacto.** Cada eje pide la velocidad que le deja pararse en lo que falta (`v² = 2·a·d`) y
 el mando es analógico, así que se planta en el punto en vez de pasarse y volver: 40 de 40 órdenes
@@ -711,15 +738,28 @@ animaciones de hélice, vuelo y despegue):
 | `face_range` | 70 px | por debajo no gira para encarar: entra de lado |
 | `axis_deadzone` | 1,5 px | desvío por eje que ya no se corrige |
 | `arrive_radius` / `settle_speed` | 3 px / 12 px/s | llegar es estar cerca **y** lento, no cruzar el punto de paso |
+| `hold_band` | 8 px | holgura del anillo de tiro: dentro se da por colocado |
 | `lift_time` | 1,6 s | el despegue vertical |
 | `sprite_offset_deg` | −90 | el arte apunta a +Y, como todo en el proyecto |
 
-**API:** `enable()` / `disable()`, `set_target()` / `clear_target()`, `get_state()`,
-`is_airborne()`.
+**API:** `enable()` / `disable()`, `set_target()` / `clear_target()`, `attack()` /
+`set_hold_distance()` / `stop_attack()`, `get_state()`, `is_airborne()`.
 
-`enable()` recoge el aparato **posado** y, si ya le habían ordenado un punto mientras el barco lo
-colocaba, sale a cumplirlo en vez de olvidarlo. `set_target()` estando en `GROUNDED` es también
-la orden de despegar.
+`attack(unit, distance)` no calcula la distancia: la recibe. El piloto no sabe de alcances ni de
+munición y quien da la orden sí. `set_hold_distance()` la cambia **sin volver a empezar la
+maniobra**, para quien cambia de arma en pleno ataque: la envolvente es otra pero el gesto de
+encarar ya se hizo, y repetirlo dejaría el aparato clavado metiendo morro. `stop_attack()` lo deja
+donde esté — soltar el blanco no es una orden de ir a ninguna parte.
+
+`enable()` recoge el aparato **posado** y, si ya le habían ordenado algo mientras el barco lo
+colocaba, sale a cumplirlo en vez de olvidarlo. `set_target()` o `attack()` estando en `GROUNDED`
+son también la orden de despegar.
+
+> **Las dos clases de orden cuentan en `enable()`**, y ahí hubo un fallo real: la cubierta apunta
+> el blanco antes de soltar el aparato, así que al llegar aquí lo que está puesto es `aim` y no
+> `has_target`. Mirando sólo el destino, un Cobra lanzado desde el hangar con orden de atacar se
+> quedaba en cubierta para siempre —morro girado hacia el enemigo, sin despegar— porque la orden no
+> se repite si el blanco no ha cambiado.
 
 #### `Countermeasures` — `countermeasures.gd`
 ```
@@ -1004,8 +1044,10 @@ icono no se desincronizan entre misiones.
 |-------|--------|-----|
 | — | `display_name` | String |
 | — | `short_name` | Designación corta. Ya no la pinta `WeaponBar` —ahora usa el icono— pero sigue valiendo como nombre de ~6 caracteres |
-| — | `brevity_code` | Código OTAN que se canta al soltarla, para el `EventLog` |
+| — | `brevity_code` | Abreviatura de radio. Es lo que el `EventLog` escribe entre paréntesis: `(Guns)`, `(Rifle)` |
+| — | `radio_call` | La frase que se **canta** encima del aparato. Vacío = se canta el código |
 | — | `icon` | Texture2D — el arma **colgada del ala**, el sprite que cuelga `HardpointRack` en el mundo |
+| — | `icon_is_launcher` | Lo que cuelga, ¿es el arma o el aparato que la lanza? Decide si el sprite se va con el disparo |
 | — | `ui_icon` | Texture2D — el arma **en el HUD**, centrada en 32×34 (`core/weapon/icons/`). Dibujo aparte del anterior: el del ala se ve desde arriba, éste de frente |
 | Objetivos | `targets` | Flags Aire / Superficie. Contra qué sirve |
 | Alcance | `min_range`, `max_range` | Envolvente de tiro. Debajo del mínimo el arma aún no se estabilizó; encima del máximo se queda sin combustible |
@@ -1028,15 +1070,33 @@ disparar de frente se vuela derecho, y sólo se va a buscar la cola cuando el ar
 **Sólo cuenta contra blancos aéreos** — un tanque no tiene cola táctica, y exigirlo dejaría al
 cañón sin disparar contra tierra salvo llegando justo por detrás.
 
-**`ui_icon` puede repetirse entre armas.** Dice de qué **clase** es —bomba, bomba guiada, misil
+**`brevity_code` y `radio_call` son el mismo dato en dos sitios, no dos datos.** El código es la
+abreviatura y va al parte de eventos; la frase es lo que se dice en voz alta encima del aparato.
+En casi todas las armas coinciden y `radio_call` va vacío: un AIM-9 se canta `Fox Two!` y no hay
+más que decir. Sólo se separan en las que **no tienen llamada propia de radio** — el cañón y los
+cohetes —, donde la abreviatura sola se queda a medias: `(Guns)` en el parte y `Using guns!`
+cantado, `(Rockets)` y `Using rockets!`.
+
+Hubo un intento previo con la frase viviendo en el HUD y elegida por `fire_mode == SUSTAINED`.
+Funcionaba para el cañón y no daba para los cohetes, que son lanzadores igual que los misiles.
+
+**`icon_is_launcher` distingue lo que se gasta de lo que se queda.** Un misil **es** lo que cuelga:
+se va con el tiro y el pilón queda pelado. Un contenedor de cohetes no — se queda escupiendo, y
+sólo se suelta cuando ya no puede llevar lo que falta por tirar. Sin esto el primer Hydra se
+llevaba el contenedor entero del ala y los dieciocho siguientes salían de la nada. Va en el arma y
+no en la carga porque no depende del contexto: un contenedor es un contenedor cuelgue de donde
+cuelgue.
+
+**`ui_icon` puede repetirse entre armas.**
+ Dice de qué **clase** es —bomba, bomba guiada, misil
 corto, misil largo, cañón—; el nombre exacto lo lleva el tooltip. Hoy: GBU-54 la bomba guiada,
 Mk-82 el par de bombas, AIM-9 el par de misiles, AIM-120 y 9M311 el misil largo, AGM-65 el corto,
 y GAU-12, M197 y 2A38M comparten la ráfaga.
 
 **`icon` también se repite, y por el mismo motivo del mundo real:** Hydra-70 y Zuni cuelgan los dos
 `rocket_pod.tres`, porque del pilón cuelga **el contenedor**, no el cohete. Lo que cambia entre
-las dos es lo que sale de dentro. Los recortes de cohete (`hydra70.tres`, `zuni.tres`) están hechos
-y sin usar: son los proyectiles del día que el Cobra dispare.
+las dos es lo que sale de dentro. Los recortes de cohete (`hydra70.tres`, `zuni.tres`) son el
+sprite del proyectil en vuelo, no lo que cuelga.
 
 **Los recortes nuevos son ajustados al dibujo, no tiles de 16×16.** `agm114_hellfire` `(87,2)` 4×12,
 `rocket_pod` `(98,3)` 4×10, `hydra70` `(103,3)` 3×11, `zuni` `(107,1)` 3×14. El sprite se cuelga
@@ -1054,7 +1114,14 @@ Métodos: `in_range_against(distance, domain)`, `min_range_against(domain)`,
 | Lanzamiento | `reload_time` | Segundos entre andanadas |
 | Lanzamiento | `slows_to_aim` | Si el avión frena para alinearse con esta arma |
 
-**`salvo_spread` sólo aplica a armas que apuntan.** Dispersa el *punto de apuntado*, y una
+**`salvo_size` es la salva, no el cargador.** 19 Hydras es lo que lleva el contenedor; lo que sale
+por gatillazo son 7, y el resto espera al siguiente. `salvo_interval` convierte eso en una ristra
+—una detrás de otra— en vez de siete en el mismo instante, y `WeaponSystem` sólo emite `fired` al
+soltar la última. Es la misma maquinaria que hace la tirada de bombas del Harrier; los cohetes no
+necesitaron nada nuevo.
+
+**`salvo_spread` sólo aplica a armas que apuntan.**
+ Dispersa el *punto de apuntado*, y una
 bomba tonta no tiene punto de apuntado: cae donde la deja la inercia. Su dispersión está en
 la escena de la bomba, porque lo que varía es **cómo se desprende cada una**, no a dónde
 apunta. Por eso la Mk-82 lo lleva a 0 y no está roto.
@@ -1134,6 +1201,20 @@ montada. Si ya no hay sprite que descolgar —la estación llevaba más de las q
 dibujadas— devuelve igualmente un marker de esa estación: **descolgar el sprite y
 descontar munición son cosas distintas**, y el avión sigue teniendo con qué tirar aunque
 el ala se vea vacía.
+
+**Y hay armas cuyo sprite no se descuelga con el tiro**, porque no es el arma sino el aparato que
+la lanza (`WeaponType.icon_is_launcher`). El contenedor de cohetes se queda mientras le queden
+dentro y cae cuando ya no puede llevar lo que falta:
+
+```gdscript
+var still_needed := int(ceil(float(_loadout.ammo_of(weapon)) / float(per_station)))
+return hanging > still_needed
+```
+
+Con dos contenedores de 19 y 19 tiros gastados, uno sobra y cae; con el último vacío, cae también.
+**Se cuenta desde la munición y no llevando la cuenta aquí**: el rack no es el contador, y el mismo
+número mirado desde dos sitios es como se acaba con dos verdades distintas. Ojo al orden — corre
+**después** de gastar el tiro, así que lo que lee ya está descontado.
 
 El nombre del marker empieza por el id de su estación — `L2a`, `L2b`, `L2c` son la
 estación `L2`. **Mover, añadir o borrar markers en la escena cambia lo que se dibuja
@@ -1779,6 +1860,46 @@ vuelve a cerrar. El `sprite_offset_deg` estuvo en +90 y **la bomba volaba de cul
 freno desplegándose por delante**: el arte de este proyecto apunta a +Y y la convención es
 −90 en todas partes (avión, misil, planeadora, trazadora). Salirse de ella nunca sale bien.
 
+#### `Rocket` — `rocket.gd` (`extends Projectile`)
+
+Cohete sin guía. Sale del contenedor apuntado a un sitio y va derecho hasta él; lo que pase por el
+camino le da igual y lo que se mueva se le escapa.
+
+**No hereda de `GuidedMissile` ni de `BallisticBomb`**, y no por descuido. El misil corrige durante
+todo el vuelo —la mitad de su código es guiado proporcional y radio de giro— y la bomba no tiene
+motor: todo su vuelo sale de cuánto frena. Un cohete empuja recto y ya está. Es el más simple de los
+tres y meterlo en cualquiera de los otros sería arrastrar maquinaria que no usa jamás.
+
+**Fija el rumbo en `launch()` y no lo vuelve a tocar.** Es lo único que hay que entender de la
+clase: a partir de esa línea ya no sabe dónde está el blanco, sólo hacia dónde va.
+
+**De ahí sale que falle, sin ninguna tirada.** El punto al que va se lo desvía quien lo lanza
+(`WeaponType.salvo_spread`), así que cada cohete de la salva apunta a un sitio distinto alrededor
+del blanco y el conjunto bate un área. Uno quieto en el centro se come casi todos; uno que se movió
+mientras volaban, casi ninguno. Eso es exactamente lo que significa "sin guía", y por eso `guides()`
+sigue diciendo que no: una cuenta atrás prometería una puntería que este arma no tiene.
+
+Vuela en dos tiempos —`boost_time` subiendo de `launch_speed` a `cruise_speed`, y `fuel_time` de
+motor; agotado sigue recto perdiendo velocidad— y emite `motor_ignited` / `fuel_spent` para la
+estela. Sin llama de escape ni sombra: siete llamas de 15 px sobre cohetes de 11 serían una mancha,
+y la estela ya vende el motor.
+
+**La espoleta mira el tramo, no el final del paso.** A 340 px/s un cohete avanza 5,7 px por
+fotograma, así que cruzaría su punto de apuntado sin enterarse: se mide la distancia del punto al
+**segmento** recorrido.
+
+| export | Hydra-70 | Zuni-127 |
+|---|---|---|
+| `launch_speed` / `cruise_speed` | 95 / 340 | 85 / 300 |
+| `boost_time` / `fuel_time` | 0,35 / 1,1 s | 0,4 / 1,2 s |
+| `max_lifetime` | 3 s | 3 s |
+| `arm_radius` | 5 px | 5 px |
+
+Escenas: `hydra70_rocket.tscn` y `zuni_rocket.tscn`. Las dos con `SmokeTrail` cargado con
+**`cannon_smoke_puff.tscn`, no el del misil**: 10 fotogramas contra 23, y `spacing_px` a 9–10 en vez
+de 5. Ahí está todo el ahorro — medido, un solo AGM-114 deja 95 bocanadas vivas a la vez y **siete**
+Hydras dejan 133. El proyectil nunca fue el problema.
+
 #### `WeaponSystem` — `weapon_system.gd`
 ```
 extends Node   class_name WeaponSystem
@@ -1915,19 +2036,19 @@ ráfagas. Medido en el Tunguska: 0,80 s de fuego / 0,70 s de pausa, exactos.
 extends Node   class_name WeaponSelector
 ```
 Elige con qué arma se ataca según a qué distancia está el blanco. Cuelga de la unidad y lo usan
-el Harrier y el Tunguska — salió del script del Tunguska en cuanto hizo falta lo mismo en el
-avión.
+el Harrier, el SuperCobra y el Tunguska — salió del script del Tunguska en cuanto hizo falta lo
+mismo en el avión.
 
-**Quién manda, que costó tres correcciones:**
+**Quién manda, que costó cuatro correcciones:**
 
 | situación | manda |
 |---|---|
 | duelo aéreo sin que el jugador toque nada | el automático, cambiando de banda según se cierra |
 | ataque a tierra | **el jugador**: se pone un arma que sirva al empezar y no se vuelve a tocar |
-| el jugador elige en la barra | él, hasta que el arma se agote o cambie a otro blanco |
-| elige el arma **antes** de dar la orden | él: la elección **espera** al blanco que venga |
+| el jugador elige en la barra | **él, y no se le quita por cambiar de blanco** |
+| lo que eligió no puede dispararse contra el blanco nuevo | vuelve el automático |
 
-Los dos últimos son bugs que se vieron jugando, no razonando:
+Tres de los cuatro son bugs que se vieron jugando, no razonando:
 
 - Elegir arma y **después** pulsar al enemigo es el orden normal, y la primera versión daba la
   elección por caducada justo al atacar, pisándole el arma al jugador.
@@ -1935,6 +2056,21 @@ Los dos últimos son bugs que se vieron jugando, no razonando:
   un duelo con el cañón puesto, mandabas el avión contra un tanque y se iba a ametrallar con
   distancia de sobra para bombardear. De ahí la distinción entre *no cambiarla durante* y *poner
   una que sirva al empezar*.
+- **Cambiar de blanco caducaba la elección**, con este razonamiento: si elegiste un AMRAAM para un
+  caza y ahora apuntas a un tanque, tu elección ya no significa nada. Pero contra tierra el
+  automático elige la que más lejos llega, y eso era buen sustituto de "la más adecuada" cuando el
+  Harrier llevaba Maverick, GBU y Mk-82. Con el Cobra deja de serlo: el Zuni y el Hellfire no son
+  dos bandas de distancia, son **dos oficios**. Elegías Zuni, apuntabas al siguiente tanque y te
+  ponía el Hellfire encima porque llega más lejos.
+
+Así que la elección **no caduca**: sólo se devuelve el mando si el arma no puede dispararse contra
+el blanco nuevo — ni sirve contra ese medio (`_still_serves`), o se acabó (`_on_ammo_changed`). Que
+otra encaje mejor no cuenta: eso es preferencia, y la preferencia es del jugador.
+
+Al cambiar la pregunta de "¿es el mismo blanco?" a "¿todavía sirve?", `_manual_target` y
+`_manual_pending` se quedaron sin quien las leyera y desaparecieron: existían sólo para apuntar
+para qué objetivo se había elegido. `take_manual_control()` es hoy una línea. Y el caso raro que
+protegían —elegir el arma antes de tener blanco— sale bien solo.
 
 **Cómo elige** (`best_for`), con el alcance y el aspecto que aplican a ese blanco:
 
@@ -2023,10 +2159,43 @@ blanco sin frenar —la pasada—. Aquí ir y esperar son lo mismo: se le manda 
 queda. Sin patrón de espera a propósito.
 
 Lo que resuelve: `get_facing()` y `get_velocity()` desde el piloto, `get_move_destination()` para
-la etiqueta del HUD, `start_flight()` —que recoge el control **con el aparato en cubierta**, al
-revés que el avión— y `receive_move_order()`. Reemite `took_off` del piloto para que el barco
-libere la plaza, y `order_fulfilled` al llegar, que es lo que `SelectionManager` espera de
-cualquier unidad que cumpla una orden.
+la etiqueta del HUD, `get_time_to_impact()` para la cuenta atrás, `start_flight()` —que recoge el
+control **con el aparato en cubierta**, al revés que el avión— y `receive_move_order()`. Reemite
+`took_off` del piloto para que el barco libere la plaza, y `order_fulfilled` al llegar, que es lo
+que `SelectionManager` espera de cualquier unidad que cumpla una orden.
+
+**Atacar tampoco es un comportamiento**, por lo mismo. La maniobra de tiro es plantarse a la
+distancia que pida el arma con el morro puesto, y eso es un destino más — lo vuela
+`HelicopterController.attack()`. Lo único que se decide aquí es **cuál** es esa distancia:
+
+```gdscript
+@export_range(0.1, 1.0, 0.05) var standoff_fraction: float = 0.8
+
+func _firing_distance(target: Unit) -> float:
+    var weapon := active_weapon
+    var here := global_position.distance_to(target.global_position)
+    if weapon == null or not has_ammo(weapon):
+        return here                      # sin nada con que tirarle: quedarse
+    var domain := target.get_domain()
+    if not weapon.can_engage_domain(domain):
+        return here
+    var reach := weapon.max_range_against(domain)
+    return maxf(weapon.min_range_against(domain), reach * standoff_fraction)
+```
+
+Devolver la distancia actual es "quédate donde estás". Meterse en el alcance de algo a lo que no
+puedes hacer nada es sólo ponerse a tiro; y no es negarse a la orden, que el blanco queda marcado.
+
+**Todo pasa por `attack_target_changed`**, y no hay `receive_attack_order` sobrescrito: la orden
+sólo anota a quién. Por ese aviso entran los tres caminos —el jugador ataca, el jugador manda mover
+(la base pone el blanco a `null`), el blanco muere— y salen a `pilot.attack()` o `pilot.stop_attack()`.
+Que el blanco haya muerto lo vigila un `_physics_process` de tres líneas: el piloto suelta su
+referencia solo, pero `attack_target` es de la unidad y hay que soltarlo aquí o el HUD seguiría
+diciendo que ataca.
+
+`weapons.set_active(false)` en `_ready` y `true` al **despegar**, no al recibir el control: el barco
+cede el mando con el aparato todavía posado, y un cañón abriendo fuego desde la cubierta le tiraría
+a la superestructura.
 
 **Cómo sabe la cubierta que no debe lanzarlo por pista:** se lo pregunta al aparato.
 `get_takeoff_speed()` devuelve 0 en todo lo que no despega en carrera, y `FlightDeck._launch_next()`
@@ -2034,7 +2203,18 @@ se lo salta. Sin listas de modelos: el día que haya otro helicóptero funciona 
 
 **Cañón fijo:** M197 de 20 mm, 750 disparos (`m197_cannon.tres`, en `UnitType.cannon`). No ocupa
 estación y va con cualquier carga, igual que el GAU-12 del Harrier — por eso no aparece en el
-catálogo de configuraciones.
+catálogo de configuraciones. Montado **fijo al morro**: apunta el aparato entero. La variante que
+gira sobre su eje depende del sistema de mejoras, que no existe, y además necesitaría arte nuevo —
+el sheet sólo trae fuselaje y palas.
+
+Sus cifras **no** son las del GAU-12 pese a haber salido de él: `min_range = 0` porque un
+helicóptero dispara desde parado, `max_range = 300`, y **ráfagas de 0,9 s con 0,5 de silencio**. El
+cañón del avión no las necesita porque la pasada ya es la ráfaga; uno en estacionario aguantaría el
+gatillo indefinidamente.
+
+Los efectos cuelgan de la raíz de la escena y escuchan a `WeaponSystem`: `CannonFlash` en `(0, 23)`
+—la punta del morro—, `CannonSmoke` en `(0, 19)`, `CannonTracers` en `(0, 23)` y `CannonCasings` en
+`(0, 20)`. Se ajustan arrastrando.
 
 **`Hardpoints`** — seis `Marker2D`, tres por ala:
 
@@ -2068,11 +2248,16 @@ dibujo), y en 23 px de ala no hay otra.
 `CLOSE AIR SUP` es la única que rellena `WeaponLoadout.self_defense`: con cuatro armas la fila del
 hangar no cabía, y su AIM-9 sube junto al cañón.
 
-> Pendiente: **el sistema de combate**. El Cobra tiene con qué —cañón, pilones y cargas— pero
-> todavía no tiene `WeaponSystem`, `WeaponSelector` ni comportamiento de ataque, así que no
-> dispara. Con ello llega el gesto que le falta al vuelo: morro clavado en el blanco mientras se
-> desplaza de costado. El controlador ya lleva el rumbo separado de la traslación, así que es
-> apuntar `_wanted_heading` al objetivo y dejar que el destino mande sólo en el movimiento.
+**Dispara.** `WeaponSystem` y `WeaponSelector` cuelgan de la escena como en el Harrier, sin
+`set_cleared_to_fire`: eso lo usa el avión para autorizar sólo dentro de la pasada, y aquí no hay
+pasada. Medido desde parado contra un T-14 a 600 px: sube en 1,6 s, cruza a 85 px/s con el morro a
+0,2° del blanco, abre fuego a 300 px y se planta a 239 — la distancia pedida era 240.
+
+> Pendiente: **el selector contra blancos aéreos**. Todo lo probado esta sesión fue contra tierra.
+> Cuando el selector no encuentra arma válida deja puesta la que hubiera, así que un Cobra con el
+> Hellfire activo al que se le manda atacar un Su-33 puede quedarse con él — y como el Hellfire no
+> puede engancharlo, `_firing_distance` además le dice que se quede quieto. El síntoma es más
+> aparatoso que la causa. Falta encontrar dónde falla `best_for` contra aire.
 
 ---
 
@@ -2219,15 +2404,30 @@ sincronía con la unidad seleccionada — enganchado a su señal y no refrescado
 porque el objetivo puede cambiar sin que la selección cambie (el enemigo murió).
 `_on_ammo_changed(...)` hace lo propio con la barra de armas.
 
-**`ImpactTimer` — cuenta atrás de impacto.** `Label` rojo (`font_size` 7) que se coloca
-sobre el objetivo, 10 px a la derecha y 14 arriba, con `get_global_transform_with_canvas()`.
-Se refresca en `_process` preguntando `Unit.get_time_to_impact()`.
+**`ImpactTimer` — cuenta atrás de impacto.** `Label` rojo en **Yellow Pixel a 16**, colocado
+sobre el objetivo 10 px a la derecha y 14 arriba con `get_global_transform_with_canvas()`. Se
+refresca en `_process` preguntando `Unit.get_time_to_impact()`.
+
+**El tamaño nativo de esa fuente es 8** —el dígito cae en 3×5 con trazos de 1 px sólido; por debajo
+el `8` es un borrón macizo y en 9, 10 y 12 se deforma—. Va a 16, que es el ×2 exacto, y no a 8, que
+también sería nítido: el contador se dibuja **encima del terreno sin borde ni fondo**, y a 1 px de
+trazo se pierde. A 16 son dígitos de 6×10 con trazo de 2 px, el mismo tamaño que el resto del texto
+del HUD. La caja mide 32×18, que es lo que ocupa `12.3`.
 
 **Vive con la selección**, igual que el recuadro del objetivo: es lo que está disparando
 la unidad que miras, no un adorno del mapa. Se va al deseleccionar y vuelve al
-reseleccionar. Sin nada en el aire (entre disparo y disparo) no muestra nada. Es una
-estimación honesta —distancia entre velocidad actual—, no un cronómetro: si el arma aún
-acelera o el blanco maniobra, la cifra se corrige sola.
+reseleccionar. Sin nada en el aire (entre disparo y disparo) no muestra nada.
+
+**Lo contesta la unidad, no el HUD.** `Unit.get_time_to_impact()` devuelve −1 de fábrica y cada
+aparato armado lo delega en su `WeaponSystem`, **acotado a su propio blanco** — sin acotarlo, cambiar
+de objetivo con un misil en el aire le pasa al nuevo la cuenta atrás del anterior. Un aparato que no
+lo sobrescriba no enseña contador y su blanco no cierra el recuadro: le pasó al Cobra, y el síntoma
+parecía del misil o del HUD cuando el dato faltaba en la unidad.
+
+> Anotado y sin arreglar: **la cuenta no baja lineal**. `Projectile.time_to_impact()` divide la
+> distancia entre la velocidad **de ahora mismo**, y un misil acelera — frena al separarse del ala
+> (el número sube) y al llegar a crucero se desploma. En el Hellfire canta más que en el Maverick
+> porque sale a 55 px/s y cruza a 280. Arreglarlo cambiaría la cuenta de todas las armas del juego.
 
 Ruteo de acciones en `_on_action_pressed(name)`:
 ```gdscript
@@ -2393,23 +2593,35 @@ uno solo: lo interesante es enterarte de lo que hacen los que no estás mirando.
 Vive en el HUD y en píxeles de pantalla, por lo mismo que la etiqueta. Se engancha solo a las
 unidades por el grupo, como el parte de eventos.
 
-**El código sale del arma** (`brevity_code`): un arma nueva trae su llamada puesta. Lo que es
-presentación se queda aquí — el cañón se canta `guns, guns, guns` porque en radio se repite tres
-veces, pero el `.tres` sigue diciendo `Guns` y en el parte sale corto.
+**Todo el texto sale del arma**: `radio_call` si la trae y `brevity_code` si no. Un arma nueva
+viene con su llamada puesta y aquí no hay nada que tocar. El cañón canta `Using guns!` y los
+cohetes `Using rockets!` porque ninguno de los dos tiene llamada de radio de verdad; el resto se
+cantan por su código (`Fox Two!`, `Rifle!`, `Pickle!`).
 
 | export | por defecto |
 |---|---|
 | `hold_time` / `fade_time` | 1,8 s + 1,0 s |
 | `offset` | `(30, −28)` — debajo del nombre |
 | `font_size`, `color` | 16, ámbar |
-| `gun_call_repeats` / `repeated_code` | 3, `"Guns"` |
 | `same_call_window` | 2,8 s |
+| `sustained_call_window` | 6 s |
 
-**Contra el spam, dos cortes distintos**, porque venía por dos caminos: `same_call_window`
-agrupa repeticiones **del mismo arma** —una ristra de seis Mk-82 canta un solo `Pickle!`— y
-además **un avión canta de uno en uno**: al llegar una llamada nueva, la anterior de ese avión
-se manda a desvanecer. Sin lo segundo, soltar un misil y abrir con el cañón sacaba dos carteles
-en la misma esquina.
+**Contra el spam, tres cortes distintos**, porque venía por tres caminos:
+
+- `same_call_window` agrupa repeticiones **del mismo arma** — una ristra de seis Mk-82 canta un
+  solo `Pickle!`.
+- **Un avión canta de uno en uno**: al llegar una llamada nueva, la anterior de ese avión se manda
+  a desvanecer. Sin esto, soltar un misil y abrir con el cañón sacaba dos carteles en la misma
+  esquina.
+- **Un arma de chorro continuo tiene su propia ventana, mucho más larga.** Un cañón no dispara una
+  vez: **sigue disparando**, cortado en ráfagas, y con 2,8 s cada ráfaga que caía fuera sacaba otro
+  cartel. Un helicóptero parado los sacaba para siempre.
+
+Y hay un cuarto arreglo que no es una ventana sino de qué se mide: **la hora se apunta también
+cuando la llamada se calla**. Antes la cuenta arrancaba en la última vez que se cantó, así que por
+larga que fuera la ventana un cañón que no para volvía a cantar al cumplirse. Ahora la ventana
+significa "hace mucho que no pasa" y no "hace mucho que no lo digo". Medido: **un cartel en 25 s de
+fuego continuo**, donde antes salía uno cada dos ráfagas.
 
 Cada llamada es un `BrevityCall` (`brevity_call.gd`) suyo, no un `Label` reutilizado: pueden
 coincidir varias. **Sobrevive a la unidad** — si derriban al avión justo después de disparar, su
@@ -3773,7 +3985,12 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Llamadas de radio** al disparar (`BrevityCalls`): `Fox Three!`, `Pickle!`, sobre cualquier avión propio, con el código sacado del arma
 - [x] Estado de la unidad en su etiqueta: en espera, moviéndose a, atacando a
 - [x] **AH-1W SuperCobra**: en el hangar con sus tres misiones, sale a cubierta y se coloca en su punto. Rotor girando (provisional) que arranca al quedarse quieto
-- [x] **Armamento del SuperCobra**: cañón M197 fijo (750), seis pilones con Hellfire, contenedores de Hydra-70 y Zuni-127, y AIM-9 en las puntas. Las tres cargas cuelgan sus sprites en el ala; falta el sistema de combate para que dispare
+- [x] **Armamento del SuperCobra**: cañón M197 fijo (750), seis pilones con Hellfire, contenedores de Hydra-70 y Zuni-127, y AIM-9 en las puntas. Las tres cargas cuelgan sus sprites en el ala
+- [x] **El SuperCobra dispara.** `WeaponSystem` + `WeaponSelector` + postura de tiro en el piloto: clava el morro en el blanco y se planta a `standoff_fraction` (0,8) del alcance del arma. Medido contra un T-14 a 600 px: despega en 1,6 s, cruza a 85 px/s con el morro a 0,2°, abre fuego a 300 px y se planta a 239 de los 240 pedidos
+- [x] **Cohetes sin guía** (`Rocket`): Hydra-70 en ristras de 7 y Zuni-127 de 2, con la dispersión del punto de apuntado como única fuente de fallo. Medido contra un T-14 de 100 de vida: los 38 Hydras lo dejan al 0,1 y los 4 Zunis al 0,8
+- [x] **Contenedores que no se caen con el primer tiro** (`WeaponType.icon_is_launcher`). Medido: dos contenedores de 19 quedan colgados hasta que restan 17, cae uno, y el último cae al vaciarse
+- [x] **AGM-114 Hellfire**, sobre `GuidedMissile`. Medido: lanza a 508 px, el misil vuela 508 px en 2,3 s y mata un T-14 de un impacto
+- [x] **La elección de arma del jugador no caduca por cambiar de blanco.** Probados los seis casos: otro tanque conserva el Zuni, un Su-33 devuelve el mando, un arma agotada también
 - [x] Un arma puede enseñarse **junto al cañón** en vez de en la fila de armamento, y lo decide la carga (`WeaponLoadout.self_defense`) — así una carga de cuatro armas no ensancha la ventana y las demás no se enteran
 - [x] El modelo del aparato se recentra en su hueco al cambiar éste de tamaño, no sólo al elegirlo
 - [x] El contador de impacto sólo sale donde significa algo: arma guiada contra tierra
@@ -3865,8 +4082,10 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [ ] Cadena de repliegue de arma: usar la siguiente cuando se acaba una, cañón como último recurso
 - [ ] **Proyectil propio de los misiles aire-aire.** El AIM-120 y el AIM-9 usan prestado el del Maverick, igual que el 9M311: vuelan y guían, pero sale un AGM-65 con sombra de altitud
 - [ ] **Comportamiento del Su-33.** Hoy sólo orbita: no responde, no dispara, no huye. Va con las misiones
-- [ ] **El gesto de combate del helicóptero:** morro clavado en el blanco mientras se desplaza de costado, y giro sobre su eje para apuntar. Es lo que el vuelo de hoy todavía no enseña, y no por falta de máquina: el rumbo ya va aparte de la traslación, falta que haya un blanco al que apuntar `_wanted_heading`. Va con el armamento
-- [ ] **Armamento del AH-1W.** Las tres misiones existen vacías para poder sacarlo a cubierta
+- [ ] **El selector de armas contra blancos aéreos.** Todo lo probado del Cobra fue contra tierra. Cuando `best_for` no encuentra arma válida, el selector **deja puesta la que hubiera**: con el Hellfire activo y orden de atacar un Su-33 puede quedarse con él, y como el Hellfire no engancha nada que vuele, `_firing_distance` además le dice que se quede quieto. El síntoma —una unidad congelada— es más aparatoso que la causa. Falta encontrar dónde falla contra aire
+- [ ] **El cañón mejorado que gira sobre su eje.** Depende del sistema de mejoras de unidad, que no existe, y además necesita arte nuevo: el sheet del Cobra sólo trae fuselaje y palas
+- [ ] **La munición del cañón no se gasta.** `Unit.get_ammo()` devuelve −1 para cualquier cañón, así que los 750 proyectiles que el hangar enseña son decorativos. Vale para todas las unidades, no sólo el Cobra
+- [ ] **La cuenta atrás de impacto no baja lineal.** `Projectile.time_to_impact()` usa la velocidad instantánea y los misiles aceleran, así que el número sube al separarse del ala y se desploma al llegar a crucero. Compartido con el Maverick y el AMRAAM; arreglarlo cambia la cuenta de todas las armas
 - [ ] **El helicóptero no reacciona a lo que hace.** No se inclina al acelerar, ni alabea al desplazarse de lado, ni cae de cola al frenar: es un dibujo rígido deslizándose, y eso es lo que hace que el vuelo se sienta soso por bien medido que esté. No hace falta redibujarlo en ángulos — dos o tres frames de inclinación, o un píxel de separación contra la sombra, ya cambian la lectura
 - [ ] **Snap de píxel en 2D.** Sin comprobar. A 20–40 px/s —un helicóptero colocándose— el sprite avanza un píxel cada dos o tres frames de forma irregular, y eso se ve como tirones. Los aviones no lo acusan porque van al triple. `rendering/2d/snap/*` no está tocado en `project.godot`
 - [ ] **Animación de despegue vertical.** Hoy `lift_time` (1,6 s) es sólo una espera con el aparato quieto. El hueco está: `HelicopterController` anuncia `LIFTING` por `state_changed`

@@ -3,11 +3,25 @@
 [ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
 [ext_resource type="Texture2D" path="res://assets/art/sprites/rocket_pod.tres" id="2"]
 [ext_resource type="Texture2D" uid="uid://dnh8a16of2pxg" path="res://core/weapon/icons/icon_rocket_single.png" id="3"]
+[ext_resource type="PackedScene" path="res://core/weapon/zuni_rocket.tscn" id="4"]
 
 [resource]
 script = ExtResource("1")
 display_name = "Zuni-127 Rockets"
 short_name = "ZUNI"
+brevity_code = "Rockets"
+radio_call = "Using rockets"
 icon = ExtResource("2")
+icon_is_launcher = true
 ui_icon = ExtResource("3")
 targets = 2
+min_range = 50.0
+max_range = 330.0
+firing_arc_deg = 10.0
+damage = 75.0
+blast_radius = 22.0
+projectile_scene = ExtResource("4")
+salvo_size = 2
+salvo_spread = 10.0
+salvo_interval = 0.12
+reload_time = 2.2

@@ -4,9 +4,10 @@ class_name WeaponSelector
 ## Elige con qué arma se ataca, según a qué distancia está el blanco.
 ##
 ## Va colgado de la unidad y se apaga solo cuando el jugador toca la barra de
-## armas: **mandar es suyo**. Vuelve a mandar cuando el arma que eligió se acaba
-## o cuando cambia de blanco, que es cuando su elección ha dejado de significar
-## algo.
+## armas: **mandar es suyo**, y no se le devuelve por cambiar de objetivo. Sólo
+## vuelve a mandar cuando lo que eligió **no puede dispararse** contra el blanco
+## nuevo: se acabó, o no sirve contra ese medio. Que otra arma encaje mejor no
+## cuenta — eso es preferencia, y la preferencia es del jugador.
 ##
 ## El orden lo da `Unit.get_weapons()` — cañón primero y después el armamento
 ## colgado, en el orden del `WeaponLoadout`. Aquí se recorre **de más alcance a
@@ -27,11 +28,6 @@ var automatic := true
 
 var _unit: Unit
 var _until_check: float = 0.0
-## Contra qué blanco se hizo la última elección manual. `null` = se eligió sin
-## tener ninguno, y entonces vale para el primero que llegue.
-var _manual_target: Unit = null
-## ¿La elección manual está todavía esperando blanco? Ver [method take_manual_control].
-var _manual_pending := false
 
 
 func _ready() -> void:
@@ -44,29 +40,42 @@ func _ready() -> void:
 
 ## El jugador eligió a mano: a partir de aquí no se le toca el arma.
 ##
-## Si todavía no hay blanco, la elección queda **esperando** al que venga. Es el
-## orden normal de las cosas —se elige el arma y después se pulsa al enemigo—, y
-## darla por caducada al llegar el blanco era pisarle el arma justo al atacar.
+## No hace falta apuntar para qué blanco se eligió. Antes sí —la elección valía
+## para ese objetivo y caducaba con él—, y por eso había que distinguir el caso de
+## elegir sin tener ninguno delante: es el orden normal de las cosas, primero el
+## arma y después el enemigo. Ahora la pregunta es otra y ese apunte sobra.
 func take_manual_control() -> void:
 	automatic = false
-	_manual_target = _unit.attack_target if _unit != null else null
-	_manual_pending = not is_instance_valid(_manual_target)
 
 
 func _on_target_changed(target: Unit) -> void:
 	_until_check = 0.0
+	# **Cambiar de blanco NO caduca la elección del jugador.** Antes sí, y era
+	# quitarle el mando: elegías Zuni, apuntabas al siguiente tanque y el
+	# automático te ponía el Hellfire encima nada más, porque llega más lejos. Con
+	# qué se ataca es suyo, y el alcance no es razón para desdecirlo.
 	if not automatic:
-		if _manual_pending:
-			# Éste es el blanco al que iba dirigida la elección. Deja de esperar y
-			# se queda con él.
-			_manual_target = target
-			_manual_pending = false
+		if _still_serves(target):
 			return
-		if target == _manual_target:
-			return
-		# Otro blanco distinto: lo que se eligió era para el anterior.
 		automatic = true
 	_rearm_for(target)
+
+
+## ¿Sigue valiendo el arma que eligió el jugador contra este blanco?
+##
+## No se pregunta si es la más adecuada — eso es preferencia, y la preferencia es
+## del jugador. Se pregunta si **puede dispararse**, que no lo es: un AIM-9 no le
+## hace nada a un tanque, y respetarle la elección hasta ahí sería mandar al
+## aparato a un blanco con un arma que no va a salir nunca. Sólo entonces vuelve
+## a mandar el automático.
+##
+## Lo de quedarse sin munición ya lo cubre [method _on_ammo_changed], que devuelve
+## el mando en el acto al gastarse la última.
+func _still_serves(target: Unit) -> bool:
+	var weapon: WeaponType = _unit.active_weapon
+	if weapon == null or not is_instance_valid(target):
+		return false
+	return weapon.can_engage_domain(target.get_domain()) and _unit.has_ammo(weapon)
 
 
 ## Blanco nuevo y manda el automático: hay que empezar con un arma que sirva

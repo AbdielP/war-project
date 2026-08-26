@@ -1,0 +1,25 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://core/weapon/rocket.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/art/sprites/hydra70.tres" id="2"]
+[ext_resource type="Script" path="res://core/weapon/smoke_trail.gd" id="3"]
+[ext_resource type="PackedScene" path="res://core/weapon/cannon_smoke_puff.tscn" id="4"]
+
+[node name="Hydra70Rocket" type="Node2D"]
+z_index = 9
+script = ExtResource("1")
+launch_speed = 95.0
+cruise_speed = 340.0
+boost_time = 0.35
+fuel_time = 1.1
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2")
+
+[node name="SmokeTrail" type="Node2D" parent="."]
+position = Vector2(0, -6)
+script = ExtResource("3")
+spacing_px = 10.0
+spawn_scene = ExtResource("4")
+start_signal = &"motor_ignited"
+stop_signal = &"fuel_spent"

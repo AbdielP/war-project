@@ -1,0 +1,47 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" uid="uid://bcwglvnq3iy1q" path="res://core/weapon/guided_missile.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://7xatq53fucoa" path="res://assets/art/sprites/agm114_hellfire.tres" id="2"]
+[ext_resource type="Script" uid="uid://mxb8knsacjjx" path="res://core/weapon/missile_exhaust.gd" id="3"]
+[ext_resource type="SpriteFrames" path="res://core/weapon/missile_exhaust_frames.tres" id="4"]
+[ext_resource type="Script" path="res://core/weapon/smoke_trail.gd" id="5"]
+[ext_resource type="PackedScene" path="res://core/weapon/smoke_puff.tscn" id="6"]
+[ext_resource type="Script" path="res://core/weapon/missile_shadow.gd" id="7"]
+[ext_resource type="SpriteFrames" path="res://core/weapon/missile_shadow_frames.tres" id="8"]
+
+[node name="Agm114Missile" type="Node2D"]
+z_index = 9
+script = ExtResource("1")
+separation_time = 0.2
+launch_speed = 55.0
+cruise_speed = 280.0
+acceleration = 420.0
+boost_time = 0.7
+min_turn_radius = 70.0
+fuel_time = 2.6
+max_lifetime = 7.0
+proximity_radius = 10.0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2")
+
+[node name="Exhaust" type="AnimatedSprite2D" parent="."]
+visible = false
+z_index = -1
+position = Vector2(0, -13)
+sprite_frames = ExtResource("4")
+animation = &"burn"
+script = ExtResource("3")
+
+[node name="SmokeTrail" type="Node2D" parent="."]
+position = Vector2(0, -12)
+script = ExtResource("5")
+spawn_scene = ExtResource("6")
+start_signal = &"motor_ignited"
+stop_signal = &"fuel_spent"
+
+[node name="Shadow" type="AnimatedSprite2D" parent="."]
+z_index = -2
+sprite_frames = ExtResource("8")
+animation = &"descend"
+script = ExtResource("7")

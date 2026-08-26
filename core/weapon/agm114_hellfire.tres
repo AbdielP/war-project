@@ -1,13 +1,22 @@
-[gd_resource type="Resource" script_class="WeaponType" format=3]
+[gd_resource type="Resource" script_class="WeaponType" format=3 uid="uid://di7it2ni5hugu"]
 
 [ext_resource type="Script" uid="uid://7byvps8lp5ao" path="res://core/weapon/weapon_type.gd" id="1"]
-[ext_resource type="Texture2D" path="res://assets/art/sprites/agm114_hellfire.tres" id="2"]
+[ext_resource type="Texture2D" uid="uid://7xatq53fucoa" path="res://assets/art/sprites/agm114_hellfire.tres" id="2"]
 [ext_resource type="Texture2D" uid="uid://bbe66iikkbxyw" path="res://core/weapon/icons/icon_missile_fin.png" id="3"]
+[ext_resource type="PackedScene" path="res://core/weapon/agm114_missile.tscn" id="4"]
 
 [resource]
 script = ExtResource("1")
 display_name = "AGM-114 Hellfire"
 short_name = "AGM114"
+brevity_code = "Rifle"
 icon = ExtResource("2")
 ui_icon = ExtResource("3")
 targets = 2
+min_range = 60.0
+max_range = 550.0
+firing_arc_deg = 20.0
+damage = 110.0
+blast_radius = 10.0
+projectile_scene = ExtResource("4")
+reload_time = 1.2

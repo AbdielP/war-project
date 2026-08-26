@@ -7,6 +7,16 @@
 [ext_resource type="Script" uid="uid://dw72p5ihshnch" path="res://core/unit/ah1w_supercobra/ah1w_supercobra.gd" id="5"]
 [ext_resource type="Script" uid="uid://c5ura44j8wtyt" path="res://core/unit/flight/helicopter_controller.gd" id="6"]
 [ext_resource type="Script" uid="uid://bim4jv2yqqy6a" path="res://core/weapon/hardpoint_rack.gd" id="7"]
+[ext_resource type="Script" uid="uid://dqfwj1xrfic38" path="res://core/weapon/weapon_system.gd" id="8"]
+[ext_resource type="Script" uid="uid://dw0vhym2gel8b" path="res://core/weapon/weapon_selector.gd" id="9"]
+[ext_resource type="Script" uid="uid://dj8ko3tggrbdb" path="res://core/weapon/muzzle_flash.gd" id="10"]
+[ext_resource type="SpriteFrames" uid="uid://cdwbvnuj2xeu3" path="res://core/weapon/cannon_flash_frames.tres" id="11"]
+[ext_resource type="Script" uid="uid://1do5br64c6er" path="res://core/weapon/smoke_trail.gd" id="12"]
+[ext_resource type="PackedScene" path="res://core/weapon/cannon_smoke_puff.tscn" id="13"]
+[ext_resource type="Script" uid="uid://bsjekc6u5xhjv" path="res://core/weapon/tracer_stream.gd" id="14"]
+[ext_resource type="PackedScene" path="res://core/weapon/tracer.tscn" id="15"]
+[ext_resource type="Script" uid="uid://bv57amugr3vv0" path="res://core/weapon/casing_ejector.gd" id="16"]
+[ext_resource type="PackedScene" path="res://core/weapon/casing_25mm.tscn" id="17"]
 
 [sub_resource type="AtlasTexture" id="Body"]
 atlas = ExtResource("2")
@@ -22,6 +32,7 @@ region = Rect2(38, 5, 6, 47)
 [node name="Ah1wSuperCobra" unique_id=1330189822 groups=["unit_air"] instance=ExtResource("1")]
 z_index = 10
 script = ExtResource("5")
+standoff_fraction = 0.8
 unit_type = ExtResource("3")
 
 [node name="Sprite2D" parent="." index="0"]
@@ -42,7 +53,13 @@ script = ExtResource("4")
 [node name="HelicopterController" type="Node" parent="." index="4" unique_id=1083713370]
 script = ExtResource("6")
 
-[node name="Hardpoints" type="Node2D" parent="." index="5" unique_id=1833576964]
+[node name="WeaponSystem" type="Node" parent="." index="5" unique_id=1833576960]
+script = ExtResource("8")
+
+[node name="WeaponSelector" type="Node" parent="." index="6" unique_id=1833576961]
+script = ExtResource("9")
+
+[node name="Hardpoints" type="Node2D" parent="." index="7" unique_id=1833576964]
 script = ExtResource("7")
 
 [node name="L1" type="Marker2D" parent="Hardpoints" index="0" unique_id=2100921229]
@@ -62,3 +79,37 @@ position = Vector2(10, 6)
 
 [node name="R1" type="Marker2D" parent="Hardpoints" index="5" unique_id=153977970]
 position = Vector2(12, 6)
+
+[node name="CannonFlash" type="AnimatedSprite2D" parent="." index="8" unique_id=1833576965]
+z_index = 1
+position = Vector2(0, 23)
+sprite_frames = ExtResource("11")
+animation = &"start"
+script = ExtResource("10")
+source_path = NodePath("../WeaponSystem")
+
+[node name="CannonSmoke" type="Node2D" parent="." index="9" unique_id=1833576966]
+position = Vector2(0, 19)
+script = ExtResource("12")
+spacing_px = 5.0
+spawn_scene = ExtResource("13")
+source_path = NodePath("../WeaponSystem")
+start_signal = &"firing_started"
+stop_signal = &"firing_stopped"
+
+[node name="CannonTracers" type="Node2D" parent="." index="10" unique_id=1833576967]
+position = Vector2(0, 23)
+script = ExtResource("14")
+spawn_scene = ExtResource("15")
+source_path = NodePath("../WeaponSystem")
+start_signal = &"firing_started"
+stop_signal = &"firing_stopped"
+
+[node name="CannonCasings" type="Node2D" parent="." index="11" unique_id=1833576968]
+position = Vector2(0, 20)
+script = ExtResource("16")
+eject_angle_deg = -90.0
+spawn_scene = ExtResource("17")
+source_path = NodePath("../WeaponSystem")
+start_signal = &"firing_started"
+stop_signal = &"firing_stopped"

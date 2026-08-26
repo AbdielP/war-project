@@ -32,6 +32,18 @@ class_name HelicopterController
 ## El carácter está en el **peso**: lo que cuesta arrancar y parar, lo que tarda
 ## la cola en girar, lo torpe que es de costado. No en el error.
 ##
+## [b]Y en combate los dos mandos se separan del todo.[/b]
+##
+## Fuera de combate el rumbo sale de la marcha: se encara a donde se va. Con
+## blanco puesto —`attack()`— el pedal deja de mirar el destino y clava el morro
+## en el objetivo, mientras el cíclico se ocupa sólo de la distancia. De ahí sale
+## el gesto del helicóptero artillado: entra de costado mientras la cola todavía
+## viene girando, y se planta apuntando.
+##
+## El blanco y el destino **no conviven**: dar uno suelta el otro. Un aparato que
+## siguiera encarando a un enemigo mientras el jugador lo manda a otro sitio
+## estaría obedeciendo a medias, y esto es un juego de órdenes.
+##
 ## Anuncia en qué fase está —`state_changed`— y no toca ningún sprite. Las
 ## animaciones de hélice, vuelo y despegue se cuelgan de esa señal cuando las
 ## haya, sin volver a tocar el vuelo.
@@ -102,6 +114,12 @@ enum State {
 ## (+Y local), por eso -90.
 @export var sprite_offset_deg: float = -90.0
 
+@export_group("Combate")
+## Margen del anillo de tiro, en píxeles. Dentro de él se da por colocado y deja
+## de meter cíclico: sin holgura corregiría eternamente el último píxel contra un
+## blanco que también se mueve.
+@export var hold_band: float = 8.0
+
 @export_group("Despegue")
 ## Lo que tarda en despegar en vertical antes de salir hacia el primer destino.
 ## Ahora mismo es sólo una espera —no hay nada que dibujar todavía—, pero es el
@@ -112,6 +130,14 @@ var heading: float = 0.0
 var velocity: Vector2 = Vector2.ZERO
 var target: Vector2 = Vector2.ZERO
 var has_target: bool = false
+
+## A quién le apunta el morro, o `null` si a nadie. Mientras haya alguien, el
+## rumbo deja de salir de la marcha y sale del blanco: es la postura de tiro de
+## un helicóptero artillado, y lo que hace que se le vea entrar de costado.
+var aim: Node2D = null
+## A qué distancia del blanco se planta a disparar. La decide quien da la orden
+## —que es quien sabe con qué arma va—, no el piloto.
+var hold_distance: float = 0.0
 
 var _body: Node2D
 var _state: State = State.GROUNDED
@@ -147,10 +173,17 @@ func enable() -> void:
 	_pedal = 0.0
 	_yaw_rate = 0.0
 	set_physics_process(true)
-	# Si le ordenaron un sitio mientras el barco todavía lo estaba colocando, la
-	# orden vale: se sale a cumplirla en cuanto hay control. Resetear a posado
-	# sería tragarse una orden que el jugador ya dio y ve marcada en el mapa.
-	if has_target:
+	# Si le ordenaron algo mientras el barco todavía lo estaba colocando, la orden
+	# vale: se sale a cumplirla en cuanto hay control. Resetear a posado sería
+	# tragarse una orden que el jugador ya dio y ve marcada en el mapa.
+	#
+	# **Las dos clases de orden cuentan**, y ahí estaba el fallo: la cubierta le
+	# apunta el blanco antes de soltarlo, así que al llegar aquí `aim` ya está
+	# puesto y `has_target` no. Mirando sólo el destino, un helicóptero mandado a
+	# atacar desde el hangar se quedaba en cubierta con el morro girado hacia el
+	# enemigo, y nadie volvía a pasar por aquí a sacarlo: la orden no se repite
+	# porque el blanco no ha cambiado.
+	if has_target or is_instance_valid(aim):
 		_lift_off()
 	else:
 		_set_state(State.GROUNDED)
@@ -159,6 +192,7 @@ func enable() -> void:
 func disable() -> void:
 	set_physics_process(false)
 	has_target = false
+	aim = null
 	velocity = Vector2.ZERO
 	_stick = Vector2.ZERO
 	_pedal = 0.0
@@ -180,6 +214,10 @@ func is_airborne() -> bool:
 func set_target(world_pos: Vector2) -> void:
 	target = world_pos
 	has_target = true
+	# Irse a un sitio suelta el blanco. El aparato es del jugador: si le manda
+	# marcharse, se marcha — quedarse encarado a un enemigo mientras se va sería
+	# obedecer a medias.
+	aim = null
 	_hold = stick_delay
 	if _state == State.GROUNDED:
 		# Puede estar todavía sin control —el barco colocándolo en cubierta—, y
@@ -188,6 +226,44 @@ func set_target(world_pos: Vector2) -> void:
 			_lift_off()
 	elif _state == State.HOVER:
 		_set_state(State.FLYING)
+
+
+## Se pone a tirarle a alguien: morro puesto y colocarse a la distancia que pida
+## el arma. `distance` no se calcula aquí a propósito — el piloto no sabe de
+## alcances ni de munición, y quien da la orden sí.
+##
+## Es una orden de las que empiezan por el morro, igual que un destino: se mete
+## pedal y el cíclico espera `stick_delay`. Y cancela el destino que hubiera,
+## porque atacar y viajar compiten por el mismo mando.
+func attack(unit: Node2D, distance: float) -> void:
+	if not is_instance_valid(unit):
+		return
+	aim = unit
+	hold_distance = maxf(distance, 0.0)
+	has_target = false
+	_hold = stick_delay
+	if _state == State.GROUNDED:
+		# Puede estar todavía en cubierta sin control. Ver [method enable].
+		if is_physics_processing():
+			_lift_off()
+	elif _state == State.HOVER:
+		_set_state(State.FLYING)
+
+
+## Cambia la distancia de tiro sin volver a empezar la maniobra. La usa quien
+## cambia de arma en pleno ataque: la envolvente es otra, pero el gesto de
+## encarar ya se hizo y repetirlo dejaría el aparato clavado metiendo morro.
+func set_hold_distance(distance: float) -> void:
+	hold_distance = maxf(distance, 0.0)
+
+
+## Deja de apuntar. Se queda donde esté: soltar el blanco no es una orden de ir
+## a ninguna parte.
+func stop_attack() -> void:
+	aim = null
+	_stick = Vector2.ZERO
+	if _state == State.FLYING and not has_target:
+		_set_state(State.HOVER)
 
 
 ## Empieza a subir. `took_off` sale de aquí y no de la orden porque lo que le
@@ -199,6 +275,8 @@ func _lift_off() -> void:
 	took_off.emit()
 
 
+## Suelta el destino, no el blanco: son dos mandos distintos y el morro sigue
+## puesto donde estaba.
 func clear_target() -> void:
 	has_target = false
 	_stick = Vector2.ZERO
@@ -232,6 +310,14 @@ func _fly(delta: float) -> void:
 ## Mira dónde está y dónde tiene que ir, y coloca el mando. Es lo único que sabe
 ## del destino: de aquí para abajo ya sólo hay mando y física.
 func _work_the_controls() -> void:
+	# El blanco manda sobre el destino porque no coexisten: dar uno suelta el
+	# otro. La comprobación es de validez, no de prioridad — un blanco que murió
+	# entre dos frames sigue siendo una referencia con tipo, y hay que soltarla.
+	if aim != null:
+		if is_instance_valid(aim):
+			_work_the_attack()
+			return
+		aim = null
 	if not has_target:
 		_stick = Vector2.ZERO
 		_pedal = 0.0
@@ -262,6 +348,43 @@ func _work_the_controls() -> void:
 	# y lo que tiene al costado. Esto es exactamente lo que un jugador lee de la
 	# pantalla antes de decidir qué tecla aprieta.
 	var local := to_target.rotated(-heading)
+	_stick = Vector2(
+		_axis_input(local.x, forward_speed if local.x > 0.0 else back_speed),
+		_axis_input(local.y, strafe_speed))
+
+
+## Colocarse para tirar. Dos mandos separados, como siempre en este aparato: el
+## pedal clava el morro en el blanco y el cíclico sólo se ocupa de la distancia.
+##
+## No hay `face_range` que valga aquí — encarar de cerca es justo lo que se
+## quiere— ni se llega a "destino": el sitio bueno es un **anillo** alrededor del
+## blanco, y dentro de él ya está colocado.
+func _work_the_attack() -> void:
+	var to_target := aim.global_position - _body.global_position
+	_wanted_heading = to_target.angle()
+	_pedal = _pedal_input()
+
+	if _hold > 0.0:
+		# Todavía metiendo morro. El cíclico aún no.
+		_stick = Vector2.ZERO
+		return
+
+	# Lo que sobra o falta para el anillo de tiro. El movimiento es radial: se
+	# entra de morro y se sale de espaldas —que es el eje lento—, así que el
+	# aparato se resiste a retroceder mucho más que a acercarse. Es correcto: un
+	# helicóptero que se pasó de cerca preferiría girar, pero girando perdería
+	# la puntería, y aquí la puntería es lo que se está sirviendo.
+	var closing := to_target.length() - hold_distance
+	if absf(closing) <= hold_band:
+		_stick = Vector2.ZERO
+		_set_state(State.HOVER)
+		return
+	_set_state(State.FLYING)
+
+	# Mientras la cola todavía está girando, este mismo vector sale con
+	# componente lateral y el aparato entra de costado. No está buscado: es lo
+	# que pasa cuando el morro va por un lado y el cíclico por otro.
+	var local := (to_target.normalized() * closing).rotated(-heading)
 	_stick = Vector2(
 		_axis_input(local.x, forward_speed if local.x > 0.0 else back_speed),
 		_axis_input(local.y, strafe_speed))

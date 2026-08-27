@@ -2,6 +2,115 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-27 — el juego deja de ser una misión suelta: carcasa, router y secuencia de pantallas
+
+> **Las pantallas están en hueso.** Navegan de verdad, se guardan de verdad y se pueden recorrer de
+> punta a punta, pero su contenido es texto de muestra y su arte es el mínimo para leerse. Lo que
+> queda cerrado aquí es el esqueleto y el flujo, no el aspecto.
+
+### El problema no era "falta un menú", era que la misión *era* el juego
+`main.tscn` se abría al arrancar y ahí acababa todo. Cualquier pantalla nueva —menú, puerto,
+briefing— habría tenido que colgarse de la misión o reemplazarla a mano desde algún sitio.
+
+Lo que se ha hecho es lo contrario: la raíz del proyecto pasa a ser `game.tscn`, **una carcasa con
+un hueco y un velo**, y todo lo demás son inquilinos de ese hueco. La misión deja de ser el juego y
+pasa a ser una pantalla más. No se ha tocado una línea de `main.tscn`.
+
+### Ninguna pantalla depende de que otra la haya preparado
+Es la regla que sostiene todo lo demás, y la petición explícita del usuario: *"no puedo pasar por
+todo eso cada vez que vengo a programar"*. Si una pantalla necesita que alguien le pase datos antes
+de existir, sólo se puede probar atravesando la secuencia entera.
+
+Así que cada pantalla trae **contexto de muestra** en un `@export` y lo usa cuando nadie la
+configuró. Abres `port.tscn`, F6, y estás en el Puerto en medio segundo — sin logo, sin menú, sin
+partida guardada. Es la misma idea del `preview: PackedScene` del hangar, subida un nivel.
+
+No es un apaño de desarrollo: una pantalla que no puede existir sin las tres anteriores está mal
+aislada, y eso se paga igual el día que haya que cambiar el orden de la secuencia.
+
+### El router va aparte porque si no, todo se conoce con todo
+`Screens` es un autoload y **nadie instancia a nadie**. Sin él, el menú acabaría guardando una
+referencia a la campaña y la campaña al menú.
+
+Tiene dos caminos y las pantallas no saben en cuál están:
+- **Con carcasa**: fundido, carga en hilo aparte, pantalla de carga si tarda.
+- **Sin carcasa** (F6 sobre una pantalla suelta): cambio de escena a pelo. Se pierde el fundido y
+  **la navegación sigue funcionando**, así que se puede recorrer el flujo desde donde estabas.
+
+### El Puerto no es un destino, es una pantalla hija
+Decisión del usuario: al Puerto sólo se llega desde el briefing o desde la pantalla de campaña. Eso
+cambia cómo se programa: no puede tener una salida fija, porque tiene dos entradas.
+
+De ahí que el router lleve **pila** además de reemplazo. `push()` recuerda desde dónde se vino,
+`back()` devuelve. El Puerto no necesita saber quién lo abrió, y abierto suelto con F6 el botón sale
+apagado en vez de muerto.
+
+```
+Splash → Menú ─┬─ Nueva ─────↘
+               └─ Continuar ─→ CAMPAÑA ──→ Briefing ──→ Misión
+                                ↑  ↓ ↑        ↓ ↑          ↓
+                                │ Puerto ─────┘        Debriefing
+                                └──────────────────────────┘
+```
+
+### No hay pantalla de arranque
+El arranque lo hace la propia carcasa antes de enseñar nada. Una pantalla para eso sería un fundido
+a negro para entrar en algo negro y otro para salir — y además obligaría a que la primera pantalla
+del juego pidiese otra desde su propio `_ready`, que es el caso que más cuesta encadenar bien.
+
+### Guardar entre misiones, y eso decide el formato entero
+El usuario puso *Guardar* como opción de la pantalla de campaña. Eso cierra la pregunta que quedaba
+abierta: se guarda **con la campaña quieta**, no en mitad de un tiroteo.
+
+La diferencia no es de comodidad, es de coste. Guardar a mitad de misión obliga a serializar cada
+unidad, cada proyectil en el aire y cada orden pendiente, y condiciona cómo se escribe todo lo demás
+desde hoy. Entre misiones cabe en cuatro campos —progreso, dinero, desbloqueos, versión de formato—
+y es todo lo que hace falta para que *Continuar* funcione.
+
+`Campaign.FORMAT` está desde el primer día: un guardado de otra versión **se descarta entero**, no se
+carga a medias. Media partida cargada es peor que ninguna.
+
+### El progreso se apunta en el debriefing, no al terminar la misión
+Hasta que el jugador no ha leído el parte, la misión no está cerrada. Si cierra el juego antes de
+darle a *Continuar*, la vuelve a jugar. Es también lo que evita tener que decidir qué pasa si sale
+por la ventana de al lado.
+
+### F6 lleva a una pantalla; `dev_boot.cfg` lleva a una situación
+La distinción es la que de verdad ahorra tiempo. F6 no puede darte "el Puerto con 50.000 y el Cobra
+desbloqueado" ni "el debriefing de una misión perdida".
+
+`dev_boot.cfg` dice a qué pantalla ir y con qué contexto. **No va al repositorio** —es de tu máquina
+y de tu día de trabajo— y **no llega nunca a una versión publicada** sin tener que acordarse de
+quitarlo: se lee bajo `OS.has_feature("editor")`, que es falso en cualquier build exportada. Lo mismo
+por línea de comandos (`--screen=port --instant`), que es lo que sirve para lanzar pruebas
+automáticas dentro de una pantalla concreta.
+
+### La pantalla de carga sale por tiempo, no siempre
+Casi todas las pantallas cargan en un fotograma, y enseñar "CARGANDO" durante 30 ms es un parpadeo
+que se lee como un fallo. Sólo sale si la carga pasa de `loading_delay` (0,25 s), y hoy sólo la
+misión pasa de ahí.
+
+**Y hubo que destaparla**: el primer montaje la dibujaba debajo del velo negro, así que no se veía
+nunca. El fundido tiene que abrirse cuando la barra aparece y volver a cerrarse antes del cambio. Se
+descubrió mirando la captura, no leyendo el código — el juego arrancaba sin un solo error.
+
+### Lo que sí molesta y se deja apuntado
+La carga en hilo aparte deja **11 objetos internos sin liberar al cerrar** el juego, y sólo con la
+misión: `main.tscn` arrancada sola no los deja, y con carga bloqueante tampoco. **No se acumulan** —
+entrar y salir de la misión tres veces sigue dando 11— así que no es una fuga que crezca, sino caché
+del cargador que el motor no suelta al salir. Se queda la carga en hilo, que es lo que hace posible
+la barra.
+
+### El menú no tiene *Opciones*, a propósito
+No hay ninguna opción todavía, y un botón que abre una pantalla vacía es peor que no tenerlo.
+
+### La salida de la misión es un andamio y está marcada como tal
+Mientras no haya condiciones de victoria hace falta alguna forma de llegar al debriefing para poder
+recorrer el juego entero. Hoy es **F10**, en el envoltorio de la misión y no dentro del juego. Se va
+el día que la misión sepa terminarse sola.
+
+---
+
 ## 2026-08-26 — el mapa deja de ser cuadraditos: símbolos de contacto, y arte nuevo de marcadores
 
 > **Los colores no son definitivos.** Falta trabajo, sobre todo en el aliado, y el azul del jugador

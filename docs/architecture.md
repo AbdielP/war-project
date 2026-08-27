@@ -4,7 +4,188 @@ Referencia de sesión. Actualizar cuando cambie algo relevante.
 
 ---
 
-## Escena principal (`main.tscn`)
+## Pantallas y arranque
+
+La raíz del proyecto es `game.tscn`, **no la misión**. La misión es una pantalla más.
+
+```
+Game (Node)                        game_shell.gd — GameShell
+├── Slot (Node)                    donde vive la pantalla que se está viendo
+└── Veil (CanvasLayer, layer 128)
+    └── Fade (ColorRect negro)     el fundido, por encima de todo
+```
+
+```
+res://
+├── game.tscn                      la carcasa (main_scene del proyecto)
+├── dev_boot.cfg                   arranque de desarrollo (fuera del repositorio)
+├── main.tscn                      la MISIÓN — sin cambios, sigue abriéndose sola con F6
+├── core/screens/
+│   ├── screens.gd                 autoload `Screens` — el router
+│   ├── game_shell.gd              GameShell — hueco, velo, carga
+│   ├── screen.gd                  Screen — base de toda pantalla
+│   └── dev_boot.gd                DevBoot — lee `dev_boot.cfg` y la línea de comandos
+├── core/campaign/campaign.gd      autoload `Campaign` — la partida guardada
+└── ui/screens/
+    ├── screens_theme.tres         fuentes y estilos comunes de las pantallas
+    ├── splash/  main_menu/  campaign/  briefing/  port/  debriefing/
+    ├── loading/                   NO es una Screen: la pone la carcasa
+    └── mission/                   envoltorio de `main.tscn`
+```
+
+### El flujo
+
+```
+Splash → Menú ─┬─ Nueva ─────↘
+               └─ Continuar ─→ CAMPAÑA ──→ Briefing ──→ Misión
+                                ↑  ↓ ↑        ↓ ↑          ↓
+                                │ Puerto ─────┘        Debriefing
+                                └──────────────────────────┘
+```
+
+| Pantalla | Ofrece | Notas |
+|----------|--------|-------|
+| Splash | — | Se salta con cualquier tecla o clic desde el primer fotograma. `logo` va como `@export` para cuando exista el arte |
+| Menú | Continuar · Nueva partida · Salir | *Continuar* va **primero**, y sale apagado si no hay guardado. Falta *Opciones* a propósito: no hay ninguna todavía |
+| Campaña | Puerto · Iniciar · Guardar · Salir al menú | El hogar de la partida. **El único sitio desde el que se guarda** |
+| Briefing | Volver · Puerto · Lanzar | Último punto para ir al Puerto antes de despegar |
+| Puerto | Volver | **Pantalla hija**: se llega desde campaña o briefing y vuelve a quien la abrió |
+| Misión | (F10 provisional) | `main.tscn` envuelta. Ver más abajo |
+| Debriefing | Continuar | **Aquí se apunta el progreso**, no al terminar la misión |
+
+### `Screens` — `core/screens/screens.gd` (autoload)
+
+Router. **Nadie instancia a nadie.**
+
+| Método | Descripción |
+|--------|-------------|
+| `go_to(id, ctx = {})` | Reemplaza y **vacía la pila**. El movimiento normal |
+| `push(id, ctx = {})` | Reemplaza **recordando desde dónde**. Lo usa el Puerto |
+| `back() → bool` | Vuelve a quien abrió esta pantalla. `false` si nadie la abrió |
+| `has_previous() → bool` | Si hay a dónde volver. Lo pregunta el Puerto para apagar su botón |
+| `context() → Dictionary` | Lo que le pasaron a la pantalla actual |
+| `current() → Id` · `name_of(id)` · `id_from_name(txt)` | |
+| `instant` | Fundidos a cero. Lo enciende el arranque de desarrollo |
+
+`enum Id { SPLASH, MAIN_MENU, CAMPAIGN, BRIEFING, PORT, MISSION, DEBRIEFING }`. **No hay `BOOT`**:
+el arranque lo hace la carcasa antes de enseñar nada.
+
+Las rutas van en `PATHS` como texto y **no con `preload`**: precargar aquí metería la misión entera
+—terreno, unidades, HUD— en memoria nada más arrancar, que es justo lo que la carga en hilo evita.
+
+**Dos caminos, y la pantalla no sabe en cuál está.** Con carcasa enganchada: fundido y carga en hilo.
+Sin ella —F6 sobre una pantalla suelta— `change_scene_to_file` a pelo: se pierde el fundido y la
+navegación sigue funcionando.
+
+El contexto se queda **en el router** y no se le pasa a la pantalla por parámetro. Así lo recoge
+igual la que nace dentro de la carcasa y la que nace de un cambio de escena.
+
+### `GameShell` — `core/screens/game_shell.gd`
+
+| Export | Por defecto | Uso |
+|--------|-------------|-----|
+| `fade_time` | 0.18 | Duración del fundido. Ida y vuelta cuestan el doble |
+| `loading_delay` | 0.25 | Cuánto tarda una carga en merecer pantalla de carga |
+| `first_screen` | splash | A dónde ir sin arranque de desarrollo |
+
+`show_screen(path, ctx)` encadena en **bucle y no recursivamente**: la pantalla que acaba de nacer
+puede pedir otra desde su propio `_ready` —el splash saltándose solo— y eso tiene que encolarse, no
+perderse. Mientras hay un cambio en marcha, las peticiones nuevas se apuntan en `_pending` y la
+última gana.
+
+El orden de un cambio, y **el velo importa**:
+
+1. Fundido a negro.
+2. Vaciar el hueco (`remove_child` antes de `queue_free`).
+3. Cargar en hilo aparte. Si pasa de `loading_delay`, sale la barra **y el velo se abre**, o se
+   estaría dibujando debajo del negro y no se vería nunca.
+4. Si la barra llegó a verse, cerrar el velo otra vez antes de cambiar.
+5. Instanciar la pantalla y abrir.
+
+### `Screen` — `core/screens/screen.gd`
+
+```
+extends Control   class_name Screen
+```
+
+Lo único que aporta es la regla que hace que el desarrollo no tenga que atravesar la secuencia:
+
+> **Ninguna pantalla depende de que otra la haya preparado.** Si nadie le pasó contexto —porque la
+> abriste con F6— usa `default_context`, que se rellena en el inspector con datos de trabajo.
+
+| Miembro | Descripción |
+|---------|-------------|
+| `default_context` | `@export Dictionary`. Con qué arranca cuando nadie la configuró |
+| `enter()` | **Se sobrescribe esto, no `_ready`.** Así no hay que acordarse de `super._ready()` y los `@onready` ya están resueltos |
+| `ctx(key, fallback)` | Un dato del contexto |
+
+La misión **no** hereda de `Screen`: el juego es un `Node2D` y las pantallas son `Control`. Lo único
+que la carcasa le pide a un inquilino es existir.
+
+### `Campaign` — `core/campaign/campaign.gd` (autoload)
+
+El contenido del guardado, y nada más. La economía y las mejoras las pondrá el Puerto encima.
+
+| Campo | Uso |
+|-------|-----|
+| `progress` | Misiones superadas. Es también el índice de la siguiente |
+| `money` | |
+| `unlocked` | `Array[String]`. **Por nombre y no por recurso**: un guardado no puede depender de rutas que mañana se muevan |
+| `FORMAT` | Versión. Un guardado de otra versión **se descarta entero**: media partida cargada es peor que ninguna |
+
+API: `has_save()`, `start_new()`, `mission_cleared(reward)`, `save()`, `load_game()`, señal `changed`.
+
+Se guarda **entre misiones y no en mitad de una**, en `user://campaign.save`. No es comodidad, es
+coste: guardar a mitad obliga a serializar cada unidad, cada proyectil en el aire y cada orden
+pendiente, y condiciona cómo se escribe todo lo demás.
+
+`start_new()` **no borra el archivo**: se sobrescribe al guardar, y mientras tanto la partida vieja
+sigue ahí por si el jugador se arrepiente.
+
+### `DevBoot` — `core/screens/dev_boot.gd`
+
+A qué pantalla ir al abrir el proyecto **y con qué estado**. Existe porque F6 te lleva a una
+pantalla, pero no a una pantalla en una situación concreta.
+
+```ini
+; res://dev_boot.cfg   — en .gitignore, es de tu máquina
+[boot]
+screen="port"
+instant=true
+
+[context]
+mission=2
+```
+
+O por línea de comandos: `godot --screen=port --instant`, que es lo que sirve para lanzar una prueba
+automática dentro de una pantalla concreta.
+
+**No llega nunca a una versión publicada** sin tener que acordarse de quitarlo: se consulta bajo
+`OS.has_feature("editor")`, falso en cualquier build exportada. Todo lo que haya en `[context]` se le
+pasa a la pantalla tal cual; cada una mira las claves que entiende.
+
+### La salida de la misión es un andamio
+
+`ui/screens/mission/mission.gd` escucha **F10** y va al debriefing. Mientras no haya condiciones de
+victoria hace falta alguna forma de recorrer el juego entero. Está fuera de `main.tscn` a propósito,
+y se va el día que la misión sepa terminarse sola. Al salir pone `paused = false`: `paused` es estado
+del árbol, no de la misión, y saldría al menú con el juego congelado.
+
+### Sabido y sin resolver
+
+- **La carga en hilo deja 11 objetos internos sin liberar al cerrar**, y sólo con la misión.
+  `main.tscn` sola no los deja y con carga bloqueante tampoco. **No se acumulan**: entrar y salir
+  tres veces sigue dando 11. Es caché del cargador que el motor no suelta al salir.
+- **El cursor propio vive en el HUD de la misión**, así que en las pantallas se ve el del sistema, que
+  no escala con el zoom entero. Hace falta subirlo a la carcasa.
+- Las pantallas están **en hueso**: navegan y guardan de verdad, el contenido es de muestra.
+
+---
+
+## Escena principal — la misión (`main.tscn`)
+
+Ya no es la raíz del proyecto: la carga la carcasa como una pantalla más (ver arriba). No ha
+cambiado nada dentro, y se sigue abriendo sola con F6.
 
 ```
 Node2D
@@ -3624,6 +3805,9 @@ hay que acordarse de avisar a nadie al cargar otro.
 
 ## Autoloads
 
+`Screens` y `Campaign` están descritos arriba, en **Pantallas y arranque**. Orden de declaración en
+`project.godot`: `Screens`, `Campaign`, `PlayerFleet`.
+
 ### `PlayerFleet` — `core/fleet/player_fleet.gd`
 ```
 extends Node   (Autoload)
@@ -4006,6 +4190,10 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 ## Estado de implementación
 
 ### Implementado y funcional
+- [x] **Carcasa de pantallas** (`game.tscn`): router con pila, fundido, carga en hilo y pantalla de carga por tiempo. La misión pasa a ser una pantalla más sin tocar `main.tscn`
+- [x] **Secuencia completa recorrible**: splash → menú → campaña → briefing → misión → debriefing → campaña, con el Puerto colgando de campaña y briefing
+- [x] **Guardado entre misiones** (`Campaign`): progreso, dinero y desbloqueos, con versión de formato y descarte de guardados viejos
+- [x] **Toda pantalla corre sola con F6** gracias a `Screen.default_context`; `dev_boot.cfg` lleva además a una situación concreta y no llega a una build exportada
 - [x] Cámara con pan + follow a unidad seleccionada
 - [x] Selección de unidades por click (física query manual)
 - [x] Órdenes de movimiento (click izq. vacío / click der.)
@@ -4105,6 +4293,12 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Cámara con foco desplazable** (`PanCamera.focus_offset` / `pan_focus`): al abrir la ventana del buque, la unidad se aparta a un lado con una transición y vuelve al centro —de golpe si se cambia de unidad, animado si sólo se suelta— al cerrarla
 
 ### Pendiente
+- [ ] **Contenido del Puerto**: economía, mejoras y desbloqueos. Hoy es un panel con un rótulo
+- [ ] **Las misiones son texto escrito a mano** en `CampaignScreen.missions`; falta un recurso de misión del que salgan nombre, briefing y escena
+- [ ] **La misión no sabe terminarse sola**: sin condiciones de victoria, la salida al debriefing es F10 y es un andamio
+- [ ] **El cursor propio no llega a las pantallas** — vive en el HUD de la misión y fuera de ella se ve el del sistema, que no escala con el zoom entero
+- [ ] **Falta *Opciones*** en el menú: no se ha puesto porque no hay ninguna opción todavía
+- [ ] Arte de las pantallas: hoy son cajas planas y texto. Nada de nine-patch todavía
 - [ ] **Sombra propia para la Mk-82.** Hoy usa la del misil, que no le corresponde: es otra silueta y otra forma de caer
 - [ ] **Elegir la fuente del juego.** `assets/fonts/ui_theme.tres` está vacío a propósito (cae en la del motor) mientras se prueban candidatas. En uso hoy: **M5X7 a 16** en `UnitTag` y el registro de eventos, **Public Pixel a 8** en los retratos. Las cuatro, medidas con la misma frase de 28 letras en el panel de 200 px del parte:
 

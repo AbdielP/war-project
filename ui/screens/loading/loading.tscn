@@ -1,0 +1,39 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/screens/loading/loading.gd" id="1"]
+[ext_resource type="Theme" path="res://ui/screens/screens_theme.tres" id="2"]
+
+[node name="Loading" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("2")
+script = ExtResource("1")
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.14901961, 0.16470588, 0.17254902, 1)
+
+[node name="Label" type="Label" parent="."]
+offset_top = 180.0
+offset_right = 640.0
+offset_bottom = 196.0
+mouse_filter = 2
+text = "CARGANDO"
+horizontal_alignment = 1
+
+[node name="Bar" type="ProgressBar" parent="."]
+offset_left = 220.0
+offset_top = 204.0
+offset_right = 420.0
+offset_bottom = 210.0
+mouse_filter = 2
+show_percentage = false

@@ -10,9 +10,44 @@ RTT (real-time tactics) 2D, inspirado visualmente en Raid on Bungeling Bay. Mec�
 - **Plataformas objetivo:** PC, móvil, Nintendo Switch
 
 ## Cómo correr
-1. Abrir el proyecto en Godot 4
-2. F5 (o botón Play) para correr desde `main.tscn`
-3. F6 para correr solo la escena actual
+
+El proyecto arranca por `game.tscn`, la **carcasa**: un hueco donde van entrando las pantallas.
+La misión (`main.tscn`) es una de ellas. Ver `docs/architecture.md` → **Pantallas y arranque**.
+
+| Quiero… | Hago |
+|---------|------|
+| El juego entero, desde el principio | F5 con `dev_boot.cfg` sin `screen` |
+| Sólo la pantalla que tengo abierta | **F6**. Funciona con cualquiera, incluida `main.tscn` |
+| Arrancar donde estoy trabajando | Poner `screen=` en `dev_boot.cfg` y F5 |
+
+### `dev_boot.cfg` — arrancar donde estabas
+
+F6 te lleva a una pantalla; esto te lleva a una pantalla **en una situación**.
+
+```ini
+[boot]
+screen="mission"     ; splash | main_menu | campaign | briefing | port | mission | debriefing
+instant=true         ; fundidos a cero, para no esperar entre pantallas
+
+[context]
+mission=2            ; lo que la pantalla entienda; el resto lo ignora
+```
+
+Comentando la línea `screen` se vuelve a arrancar por el principio. El archivo **está en
+`.gitignore`** —es de tu máquina— y **se lee sólo con el editor delante**: en una build exportada no
+existe, así que no hay nada que acordarse de quitar.
+
+Lo mismo por línea de comandos, que es lo que sirve para lanzar pruebas automáticas dentro de una
+pantalla concreta:
+
+```
+godot --screen=port --instant
+```
+
+### Volver al menú desde la misión
+
+**F10** saca al debriefing, y de ahí *Continuar* → campaña → *Salir al menú*. Es un **andamio**
+hasta que la misión sepa terminarse sola; no es un control del juego.
 
 ## Controles (build actual)
 
@@ -31,6 +66,7 @@ gestos separados por plataforma.
 | Centrar cámara en unidad | Click en card del panel superior | Tap en card del panel superior |
 | **Acercar / alejar** (0,5x / 1x / 2x) | Botones `+` y `−` del borde derecho | Igual |
 | **Pausa / play** | Barra espaciadora, o el botón bajo los de zoom | Botón bajo los de zoom |
+| **Salir de la misión** (provisional) | `F10` — lleva al debriefing. Andamio hasta que haya condiciones de victoria | — |
 | **Mapa táctico** (abrir) | Tecla `M`, o click en el minimapa | Tap en el minimapa |
 | **Cerrar el mapa táctico** | Tecla `M`, o botón `×` | Botón `×` |
 | **Ir a un punto del mapa** | Click sobre el mapa, sin unidad seleccionada | Igual |

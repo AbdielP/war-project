@@ -20,3 +20,4 @@ damage = 120.0
 blast_radius = 20.0
 projectile_scene = ExtResource("3")
 reload_time = 1.5
+price = 1800

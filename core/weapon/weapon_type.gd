@@ -225,6 +225,13 @@ enum Seeker { NONE, RADAR, HEAT }
 
 ## El nombre corto si lo tiene; si no, el largo — un botón sin texto no se
 ## puede pulsar a ciegas.
+
+@export_group("Puerto")
+## Lo que cuesta una unidad de esta arma en el arsenal. Mismo criterio que
+## [member UnitType.price]: el precio es del arma, no del sitio donde se vende.
+## 0 = no está a la venta.
+@export var price: int = 0
+
 func get_short_name() -> String:
 	return short_name if short_name != "" else display_name
 

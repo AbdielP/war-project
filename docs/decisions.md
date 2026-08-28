@@ -2,6 +2,119 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-27 — el puerto: dos menús en vez de tres, y el fondo lo último que se dibuja
+
+> **El puerto está en hueso, como las demás pantallas.** Navega, cobra y enseña datos de verdad
+> —los tres vehículos aliados y las ocho armas del proyecto—, pero los precios están inventados,
+> la munición todavía no tiene cantidades y el muelle son bandas de color con el sprite del LHD
+> amarrado encima. Lo que sí está decidido es la **forma**: qué menús hay, dónde viven y por qué.
+
+### La munición no puede ser una tienda
+
+El plan de partida eran tres menús: tienda de vehículos, tienda de municiones y ventana de mejoras.
+El segundo se cayó solo en cuanto se miró de cerca: **cuánta munición cabe lo decide el barco**, no
+el jugador. Comprarla en una pantalla para asignarla en otra obliga a viajar entre dos sitios para
+tomar una sola decisión, y en el sitio donde se compra no se ve contra qué se está gastando.
+
+Así que la munición vive **dentro de la ficha del barco**, en el pañol, junto a lo que ya se lleva.
+El día que haya cantidades, rellenar será un botón al lado del número — no una tienda.
+
+### Y las mejoras tampoco son un árbol
+
+Una mejora se aplica a **una** unidad concreta, así que hay que estar mirando esa unidad. Un árbol
+de habilidades es una pantalla entera, con su navegación y su arte, para un juego que hoy tiene dos
+aeronaves. Va como una lista corta en la ficha de cada unidad, dentro de Flota.
+
+Quedan dos menús:
+
+- **Arsenal** — lo que **no** tienes: vehículos y armas, con su precio.
+- **Flota** — lo que **sí** tienes: qué lleva cada barco y en qué estado.
+
+Un tercer botón cabe el día que sobre contenido. Quitar uno después es mucho más caro que añadirlo.
+
+### Los menús van en una barra abajo y se abren *encima* del muelle
+
+Ni botones flotantes repartidos por la pantalla ni una ventana que hay que arrastrar. Una barra fija
+abajo con `ARSENAL`, `FLOTA` y `VOLVER`, y el panel se abre sobre el centro.
+
+Abajo y no arriba **porque arriba ya vive el dinero**, y encima del centro porque es lo que interesa
+tapar sólo cuando hace falta: con los dos paneles cerrados se ve el puerto entero, que es de lo que
+va la pantalla. Los dos ocupan el mismo hueco y son excluyentes; el botón se queda hundido mientras
+su panel está abierto, que es lo único que dice de dónde salió lo que se está mirando.
+
+### El dinero no necesita una ventana: necesita no moverse nunca
+
+Arriba a la derecha, en el mismo píxel siempre, para que se mire sin buscarlo. Todo el diseño son
+dos estados: el precio en tan cuando llega y en rojo cuando no, **y además** el botón de comprar
+apagado. Dos vías que no fallan juntas — el color solo no vale.
+
+### El fondo se dibuja el último, y no es pereza
+
+La duda que bloqueaba era "no sé qué dibujar ni si estoy perdiendo el tiempo". La respuesta es que
+**hasta que el esqueleto no está puesto no se sabe qué trozo de fondo no tapa nunca ningún panel**.
+Dibujar el muelle antes es dibujar debajo de una ventana que todavía no existe.
+
+El orden que salió de ahí, y que vale para cualquier pantalla nueva:
+
+1. La barra y el hueco, sin arte.
+2. El contenido, con datos de verdad.
+3. El arte del fondo, cuando ya se sabe qué rectángulo sobrevive.
+
+Mientras tanto el muelle son cuatro `ColorRect` y el sprite real del LHD girado y amarrado al dique.
+Es un andamio y está marcado como tal en el script de la pantalla.
+
+### El precio vive en el recurso, no en una lista del puerto
+
+`UnitType.price` y `WeaponType.price`. La alternativa —una tabla de precios en la pantalla— daba dos
+sitios donde mirar, y el día que se añada un arma el precio se queda en el sitio equivocado. Es la
+misma regla que ya costó una lista de armamentos duplicada en `UnitType`, por el otro lado: **antes
+de escribir un dato, decidir de quién es.**
+
+Lo que sí va en la pantalla es **el catálogo** —qué está a la venta hoy—, por `@export`, para poder
+moverlo desde el inspector sin tocar código.
+
+### Comprar es una llamada, no tres
+
+`Campaign.buy(id, precio)` comprueba, cobra, apunta en `unlocked` y avisa. Repartido en tres pasos,
+quien compra puede quedarse a medias si falla el de en medio, y el día que una compra cueste algo
+más que dinero hay que acordarse de tocar todos los botones que compran.
+
+### Un hueco de dato que no existe se deja vacío
+
+La primera versión del pañol ponía `SIN LIMITE` en las ocho armas. Eso no era un dato: era un hueco
+disfrazado de dato, y lee como si el juego estuviera diciendo algo cuando no dice nada. Ahora cada
+arma enseña **contra qué sirve**, que es información que existe de verdad; la cantidad aparecerá
+cuando exista.
+
+### Lo que salió de mirar el render, no de pensarlo
+
+Cinco cosas que sólo aparecieron al componer la pantalla y verla:
+
+- **`anchors_preset = 15` con un `offset_left` negativo no alinea a la derecha: estira.** A una
+  etiqueta no se le nota —el texto se coloca solo dentro de su caja—, pero la barra de potencia salió
+  de 38 px a 326 y cruzando media ficha. Para pegar algo al borde derecho se mueve el **ancla**
+  izquierda, no el offset.
+- **El color de un rótulo se cambia por `font_color`, no tiñendo con `self_modulate`.** El tinte
+  multiplica sobre el color que ya trae el tema: el tan salía apagado y el rojo, marrón. Se
+  estropeaban los dos casos para arreglar uno.
+- **Un rótulo hijo de un botón no se entera de que el botón está pulsado.** El color de "pulsado"
+  alcanza sólo al texto propio del botón, así que el precio se quedaba en tan sobre el azul del
+  hundido. Lo que cuelga dentro necesita su propio cambio de color.
+- **Un dato anclado a una altura fija deja un agujero cuando la ficha trae menos datos.** La potencia
+  estaba clavada a 60 px por debajo de la última fila posible; metida **dentro** del mismo contenedor
+  y reordenada al final, la columna queda apretada tenga tres datos o siete.
+- **Una barra de nota a cero dice "es malísimo", no "nadie le ha puesto nota".** El buque tiene
+  `power = 0` porque nunca se le puntuó, así que su barra no se enseña.
+
+Y una que sí se pensó antes, porque ya estaba escrita: el hueco del icono de la ficha mide 40×40 y
+**el zoom se adapta a él en enteros** — los iconos de unidad son de 20 px y van a ×2, los de arma de
+32 y van a ×1. Remuestrear a una medida común los habría ensuciado a los dos.
+
+### Pendiente
+
+Cantidades de munición con su botón de rellenar, las mejoras por unidad dentro de la ficha, y el arte
+del muelle. En ese orden: el arte, el último.
+
 ## 2026-08-27 — el juego deja de ser una misión suelta: carcasa, router y secuencia de pantallas
 
 > **Las pantallas están en hueso.** Navegan de verdad, se guardan de verdad y se pueden recorrer de

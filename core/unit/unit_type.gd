@@ -121,6 +121,13 @@ const THUMB_SCALES: PackedFloat32Array = [1.0, 0.5, 0.25, 0.125]
 ## el mismo avión puede cambiarlo.
 @export_range(0.0, 1.0, 0.05) var ecm_evasion: float = 0.0
 
+@export_group("Puerto")
+## Lo que cuesta comprarla en el arsenal. **Va en el tipo y no en una lista del
+## puerto** porque el precio es del modelo: teniéndolo aquí, el arsenal enseña lo
+## que hay y no existe una segunda tabla que se quede vieja el día que se toque
+## una. 0 = no está a la venta.
+@export var price: int = 0
+
 
 ## El [member thumb_zoom] como número, para dárselo a la cámara. Se traduce aquí
 ## y no en quien lo usa: el día que haga falta un 1/16 se añade al enum y a

@@ -17,3 +17,4 @@ power = 7
 domain = 0
 max_health = 60.0
 ecm_evasion = 0.2
+price = 42000

@@ -21,3 +21,4 @@ seeker = 1
 projectile_scene = ExtResource("3")
 reload_time = 2.5
 slows_to_aim = false
+price = 2400

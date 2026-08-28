@@ -1,8 +1,48 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://ui/screens/port/port.gd" id="1"]
 [ext_resource type="Theme" path="res://ui/screens/screens_theme.tres" id="2"]
 [ext_resource type="FontFile" uid="uid://7ca3evvd0bp2" path="res://assets/fonts/MX611Plus/m6x11plus.ttf" id="3"]
+[ext_resource type="Texture2D" uid="uid://btjvrg8cyhnvf" path="res://ui/hud/vessel_window/window_frame.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://1d1e1byt3hnh" path="res://ui/hud/vessel_window/content_frame.png" id="5"]
+[ext_resource type="Texture2D" uid="uid://btafk6rokee4o" path="res://ui/hud/vessel_window/power_bar.png" id="6"]
+[ext_resource type="Texture2D" uid="uid://cnjtmdbvdvacx" path="res://assets/art/sprites/LHD_WASP.png" id="7"]
+[ext_resource type="Texture2D" uid="uid://divo0r1hmojlp" path="res://assets/art/UI/icon_av8b.png" id="8"]
+[ext_resource type="Resource" uid="uid://bpcombri2c111" path="res://core/unit/lhd_wasp/lhd_wasp_type.tres" id="9"]
+[ext_resource type="Resource" uid="uid://dt4e6sl6ifbwv" path="res://core/unit/av8b_harrier/av8b_harrier_type.tres" id="10"]
+[ext_resource type="Resource" uid="uid://c3sptrjt3dfse" path="res://core/unit/ah1w_supercobra/ah1w_supercobra_type.tres" id="11"]
+[ext_resource type="Resource" path="res://core/weapon/aim9_sidewinder.tres" id="12"]
+[ext_resource type="Resource" path="res://core/weapon/aim120_amraam.tres" id="13"]
+[ext_resource type="Resource" uid="uid://be3fm1vlu26vl" path="res://core/weapon/agm65_maverick.tres" id="14"]
+[ext_resource type="Resource" path="res://core/weapon/agm114_hellfire.tres" id="15"]
+[ext_resource type="Resource" path="res://core/weapon/mk82.tres" id="16"]
+[ext_resource type="Resource" path="res://core/weapon/gbu54.tres" id="17"]
+[ext_resource type="Resource" path="res://core/weapon/hydra70.tres" id="18"]
+[ext_resource type="Resource" path="res://core/weapon/zuni.tres" id="19"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_power"]
+atlas = ExtResource("6")
+region = Rect2(0, 0, 19, 5)
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_tabs"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_arsenal"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_fleet"]
+
+[sub_resource type="StyleBoxEmpty" id="row_off"]
+content_margin_left = 5.0
+content_margin_right = 5.0
+
+[sub_resource type="StyleBoxFlat" id="row_hover"]
+content_margin_left = 5.0
+content_margin_right = 5.0
+bg_color = Color(0.24313726, 0.27058825, 0.28235295, 1)
+
+[sub_resource type="StyleBoxFlat" id="row_on"]
+content_margin_left = 5.0
+content_margin_right = 5.0
+bg_color = Color(0.56078434, 0.827451, 1, 1)
 
 [node name="Port" type="Control"]
 anchors_preset = 15
@@ -13,61 +53,561 @@ grow_vertical = 2
 mouse_filter = 2
 theme = ExtResource("2")
 script = ExtResource("1")
+vehicles_for_sale = Array[UnitType]([ExtResource("10"), ExtResource("11"), ExtResource("9")])
+weapons_for_sale = Array[WeaponType]([ExtResource("12"), ExtResource("13"), ExtResource("14"), ExtResource("15"), ExtResource("16"), ExtResource("17"), ExtResource("18"), ExtResource("19")])
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Harbor" type="Control" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.14901961, 0.16470588, 0.17254902, 1)
 
-[node name="Title" type="Label" parent="."]
+[node name="Water" type="ColorRect" parent="Harbor"]
+offset_top = 31.0
+offset_right = 640.0
+offset_bottom = 348.0
+mouse_filter = 2
+color = Color(0.30196078, 0.60784316, 0.9019608, 1)
+
+[node name="Land" type="ColorRect" parent="Harbor"]
+offset_top = 31.0
+offset_right = 640.0
+offset_bottom = 96.0
+mouse_filter = 2
+color = Color(0.13725491, 0.5647059, 0.3882353, 1)
+
+[node name="Quay" type="ColorRect" parent="Harbor"]
+offset_top = 96.0
+offset_right = 640.0
+offset_bottom = 116.0
+mouse_filter = 2
+color = Color(0.60784316, 0.67058825, 0.69803923, 1)
+
+[node name="QuayEdge" type="ColorRect" parent="Harbor"]
+offset_top = 116.0
+offset_right = 640.0
+offset_bottom = 118.0
+mouse_filter = 2
+color = Color(0.38431373, 0.33333334, 0.39607844, 1)
+
+[node name="Bollard1" type="ColorRect" parent="Harbor"]
+offset_left = 60.0
+offset_top = 106.0
+offset_right = 64.0
+offset_bottom = 112.0
+mouse_filter = 2
+color = Color(0.24313726, 0.20784314, 0.27450982, 1)
+
+[node name="Bollard2" type="ColorRect" parent="Harbor"]
+offset_left = 156.0
+offset_top = 106.0
+offset_right = 160.0
+offset_bottom = 112.0
+mouse_filter = 2
+color = Color(0.24313726, 0.20784314, 0.27450982, 1)
+
+[node name="Bollard3" type="ColorRect" parent="Harbor"]
+offset_left = 252.0
+offset_top = 106.0
+offset_right = 256.0
+offset_bottom = 112.0
+mouse_filter = 2
+color = Color(0.24313726, 0.20784314, 0.27450982, 1)
+
+[node name="Bollard4" type="ColorRect" parent="Harbor"]
+offset_left = 348.0
+offset_top = 106.0
+offset_right = 352.0
+offset_bottom = 112.0
+mouse_filter = 2
+color = Color(0.24313726, 0.20784314, 0.27450982, 1)
+
+[node name="Bollard5" type="ColorRect" parent="Harbor"]
+offset_left = 444.0
+offset_top = 106.0
+offset_right = 448.0
+offset_bottom = 112.0
+mouse_filter = 2
+color = Color(0.24313726, 0.20784314, 0.27450982, 1)
+
+[node name="Bollard6" type="ColorRect" parent="Harbor"]
+offset_left = 540.0
+offset_top = 106.0
+offset_right = 544.0
+offset_bottom = 112.0
+mouse_filter = 2
+color = Color(0.24313726, 0.20784314, 0.27450982, 1)
+
+[node name="Lhd" type="Sprite2D" parent="Harbor"]
+position = Vector2(300, 169)
+rotation = -1.5707964
+texture = ExtResource("7")
+
+[node name="Caption" type="Label" parent="Harbor"]
 offset_left = 16.0
-offset_top = 12.0
-offset_right = 300.0
-offset_bottom = 32.0
+offset_top = 322.0
+offset_right = 400.0
+offset_bottom = 340.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "DIQUE NORTE    1 BUQUE FONDEADO"
+
+[node name="TopBar" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="TopBar"]
+offset_left = 16.0
+offset_top = 5.0
+offset_right = 220.0
+offset_bottom = 27.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.56078434, 0.827451, 1, 1)
 theme_override_fonts/font = ExtResource("3")
 theme_override_font_sizes/font_size = 16
 text = "PUERTO"
 
-[node name="Funds" type="Label" parent="."]
+[node name="FundsCaption" type="Label" parent="TopBar"]
 offset_left = 400.0
-offset_top = 14.0
-offset_right = 624.0
-offset_bottom = 30.0
+offset_top = 9.0
+offset_right = 500.0
+offset_bottom = 25.0
 mouse_filter = 2
-text = "FONDOS  0"
+text = "FONDOS"
 horizontal_alignment = 2
 
-[node name="Panel" type="Panel" parent="."]
-offset_left = 16.0
-offset_top = 44.0
+[node name="Funds" type="Label" parent="TopBar"]
+offset_left = 504.0
+offset_top = 5.0
 offset_right = 624.0
-offset_bottom = 320.0
+offset_bottom = 27.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.56078434, 0.827451, 1, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 16
+text = "128.400"
+horizontal_alignment = 2
 
-[node name="Text" type="Label" parent="Panel"]
+[node name="Rule" type="ColorRect" parent="TopBar"]
+offset_left = 16.0
+offset_top = 30.0
+offset_right = 624.0
+offset_bottom = 31.0
+mouse_filter = 2
+color = Color(0.6705882, 0.5803922, 0.4784314, 0.35)
+
+[node name="BottomBar" type="Control" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 6.0
-offset_right = -8.0
-offset_bottom = -6.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 0.5)
-text = "MEJORAS, DESBLOQUEOS Y COMPRA.
+mouse_filter = 2
 
-Pendiente de contenido."
-autowrap_mode = 3
-
-[node name="Back" type="Button" parent="."]
+[node name="Rule" type="ColorRect" parent="BottomBar"]
 offset_left = 16.0
-offset_top = 332.0
-offset_right = 136.0
-offset_bottom = 356.0
+offset_top = 348.0
+offset_right = 624.0
+offset_bottom = 349.0
+mouse_filter = 2
+color = Color(0.6705882, 0.5803922, 0.4784314, 0.35)
+
+[node name="Arsenal" type="Button" parent="BottomBar"]
+offset_left = 16.0
+offset_top = 356.0
+offset_right = 84.0
+offset_bottom = 376.0
+toggle_mode = true
+text = "ARSENAL"
+
+[node name="Fleet" type="Button" parent="BottomBar"]
+offset_left = 90.0
+offset_top = 356.0
+offset_right = 148.0
+offset_bottom = 376.0
+toggle_mode = true
+text = "FLOTA"
+
+[node name="Back" type="Button" parent="BottomBar"]
+offset_left = 556.0
+offset_top = 356.0
+offset_right = 624.0
+offset_bottom = 376.0
 text = "VOLVER"
+
+[node name="Arsenal" type="NinePatchRect" parent="."]
+offset_left = 16.0
+offset_top = 40.0
+offset_right = 624.0
+offset_bottom = 340.0
+texture = ExtResource("4")
+patch_margin_left = 3
+patch_margin_top = 3
+patch_margin_right = 4
+patch_margin_bottom = 4
+
+[node name="Title" type="Label" parent="Arsenal"]
+offset_left = 10.0
+offset_top = 3.0
+offset_right = 220.0
+offset_bottom = 25.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.56078434, 0.827451, 1, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 16
+text = "ARSENAL"
+
+[node name="Tabs" type="Control" parent="Arsenal"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Vehicles" type="Button" parent="Arsenal/Tabs"]
+offset_left = 10.0
+offset_top = 28.0
+offset_right = 90.0
+offset_bottom = 48.0
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("ButtonGroup_tabs")
+text = "VEHICULOS"
+
+[node name="Weapons" type="Button" parent="Arsenal/Tabs"]
+offset_left = 94.0
+offset_top = 28.0
+offset_right = 182.0
+offset_bottom = 48.0
+toggle_mode = true
+button_group = SubResource("ButtonGroup_tabs")
+text = "ARMAMENTO"
+
+[node name="List" type="NinePatchRect" parent="Arsenal"]
+offset_left = 10.0
+offset_top = 54.0
+offset_right = 250.0
+offset_bottom = 292.0
+texture = ExtResource("5")
+patch_margin_left = 2
+patch_margin_top = 2
+patch_margin_right = 2
+patch_margin_bottom = 2
+
+[node name="Rows" type="VBoxContainer" parent="Arsenal/List"]
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 236.0
+offset_bottom = 234.0
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Row" type="Button" parent="Arsenal/List/Rows"]
+custom_minimum_size = Vector2(0, 15)
+theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+theme_override_colors/font_hover_color = Color(0.56078434, 0.827451, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.14901961, 0.16470588, 0.17254902, 1)
+theme_override_styles/normal = SubResource("row_off")
+theme_override_styles/hover = SubResource("row_hover")
+theme_override_styles/pressed = SubResource("row_on")
+theme_override_styles/focus = SubResource("row_off")
+toggle_mode = true
+button_group = SubResource("ButtonGroup_arsenal")
+text = "AV-8B Harrier II"
+clip_text = true
+alignment = 0
+
+[node name="Price" type="Label" parent="Arsenal/List/Rows/Row"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -80.0
+offset_top = 1.0
+offset_right = -5.0
+offset_bottom = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+mouse_filter = 2
+text = "42.000"
+horizontal_alignment = 2
+
+[node name="Prompt" type="Label" parent="Arsenal"]
+offset_left = 256.0
+offset_top = 54.0
+offset_right = 598.0
+offset_bottom = 292.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 0.5)
+text = "ELIGE UN ARTICULO"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Detail" type="NinePatchRect" parent="Arsenal"]
+offset_left = 256.0
+offset_top = 54.0
+offset_right = 598.0
+offset_bottom = 292.0
+texture = ExtResource("5")
+patch_margin_left = 2
+patch_margin_top = 2
+patch_margin_right = 2
+patch_margin_bottom = 2
+
+[node name="Icon" type="TextureRect" parent="Arsenal/Detail"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 48.0
+offset_bottom = 48.0
+mouse_filter = 2
+texture = ExtResource("8")
+expand_mode = 1
+
+[node name="Name" type="Label" parent="Arsenal/Detail"]
+offset_left = 56.0
+offset_top = 6.0
+offset_right = 334.0
+offset_bottom = 28.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 16
+text = "AV-8B Harrier II"
+clip_text = true
+
+[node name="Kind" type="Label" parent="Arsenal/Detail"]
+offset_left = 56.0
+offset_top = 28.0
+offset_right = 334.0
+offset_bottom = 44.0
+mouse_filter = 2
+text = "AERONAVE"
+
+[node name="Rule" type="ColorRect" parent="Arsenal/Detail"]
+offset_left = 8.0
+offset_top = 52.0
+offset_right = 334.0
+offset_bottom = 53.0
+mouse_filter = 2
+color = Color(0.6705882, 0.5803922, 0.4784314, 0.3)
+
+[node name="Stats" type="VBoxContainer" parent="Arsenal/Detail"]
+offset_left = 8.0
+offset_top = 58.0
+offset_right = 334.0
+offset_bottom = 162.0
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Stat" type="Control" parent="Arsenal/Detail/Stats"]
+custom_minimum_size = Vector2(0, 14)
+mouse_filter = 2
+
+[node name="Key" type="Label" parent="Arsenal/Detail/Stats/Stat"]
+offset_right = 160.0
+offset_bottom = 14.0
+mouse_filter = 2
+text = "BLINDAJE"
+
+[node name="Value" type="Label" parent="Arsenal/Detail/Stats/Stat"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -160.0
+grow_horizontal = 0
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "60"
+horizontal_alignment = 2
+
+[node name="Power" type="Control" parent="Arsenal/Detail/Stats"]
+custom_minimum_size = Vector2(0, 14)
+mouse_filter = 2
+
+[node name="Key" type="Label" parent="Arsenal/Detail/Stats/Power"]
+offset_right = 160.0
+offset_bottom = 14.0
+mouse_filter = 2
+text = "POTENCIA"
+
+[node name="Bar" type="TextureRect" parent="Arsenal/Detail/Stats/Power"]
+anchors_preset = 0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -38.0
+offset_top = 2.0
+offset_bottom = 12.0
+grow_horizontal = 0
+mouse_filter = 2
+texture = SubResource("AtlasTexture_power")
+expand_mode = 1
+
+[node name="Footer" type="ColorRect" parent="Arsenal/Detail"]
+offset_left = 8.0
+offset_top = 196.0
+offset_right = 334.0
+offset_bottom = 197.0
+mouse_filter = 2
+color = Color(0.6705882, 0.5803922, 0.4784314, 0.3)
+
+[node name="Price" type="Label" parent="Arsenal/Detail"]
+offset_left = 8.0
+offset_top = 202.0
+offset_right = 200.0
+offset_bottom = 226.0
+mouse_filter = 2
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 16
+text = "42.000"
+vertical_alignment = 1
+
+[node name="Buy" type="Button" parent="Arsenal/Detail"]
+offset_left = 236.0
+offset_top = 204.0
+offset_right = 334.0
+offset_bottom = 226.0
+text = "COMPRAR"
+
+[node name="Fleet" type="NinePatchRect" parent="."]
+offset_left = 16.0
+offset_top = 40.0
+offset_right = 624.0
+offset_bottom = 340.0
+texture = ExtResource("4")
+patch_margin_left = 3
+patch_margin_top = 3
+patch_margin_right = 4
+patch_margin_bottom = 4
+
+[node name="Title" type="Label" parent="Fleet"]
+offset_left = 10.0
+offset_top = 3.0
+offset_right = 220.0
+offset_bottom = 25.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.56078434, 0.827451, 1, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 16
+text = "FLOTA"
+
+[node name="List" type="NinePatchRect" parent="Fleet"]
+offset_left = 10.0
+offset_top = 30.0
+offset_right = 250.0
+offset_bottom = 292.0
+texture = ExtResource("5")
+patch_margin_left = 2
+patch_margin_top = 2
+patch_margin_right = 2
+patch_margin_bottom = 2
+
+[node name="Rows" type="VBoxContainer" parent="Fleet/List"]
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 236.0
+offset_bottom = 258.0
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Row" type="Button" parent="Fleet/List/Rows"]
+custom_minimum_size = Vector2(0, 15)
+theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+theme_override_colors/font_hover_color = Color(0.56078434, 0.827451, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.14901961, 0.16470588, 0.17254902, 1)
+theme_override_styles/normal = SubResource("row_off")
+theme_override_styles/hover = SubResource("row_hover")
+theme_override_styles/pressed = SubResource("row_on")
+theme_override_styles/focus = SubResource("row_off")
+toggle_mode = true
+button_group = SubResource("ButtonGroup_fleet")
+text = "LHD Wasp"
+clip_text = true
+alignment = 0
+
+[node name="Price" type="Label" parent="Fleet/List/Rows/Row"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -80.0
+offset_top = 1.0
+offset_right = -5.0
+offset_bottom = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+mouse_filter = 2
+horizontal_alignment = 2
+
+[node name="Detail" type="NinePatchRect" parent="Fleet"]
+offset_left = 256.0
+offset_top = 30.0
+offset_right = 598.0
+offset_bottom = 292.0
+texture = ExtResource("5")
+patch_margin_left = 2
+patch_margin_top = 2
+patch_margin_right = 2
+patch_margin_bottom = 2
+
+[node name="Name" type="Label" parent="Fleet/Detail"]
+offset_left = 8.0
+offset_top = 5.0
+offset_right = 334.0
+offset_bottom = 27.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 16
+text = "LHD WASP"
+clip_text = true
+
+[node name="Rule" type="ColorRect" parent="Fleet/Detail"]
+offset_left = 8.0
+offset_top = 30.0
+offset_right = 334.0
+offset_bottom = 31.0
+mouse_filter = 2
+color = Color(0.6705882, 0.5803922, 0.4784314, 0.3)
+
+[node name="Lines" type="VBoxContainer" parent="Fleet/Detail"]
+offset_left = 8.0
+offset_top = 36.0
+offset_right = 334.0
+offset_bottom = 254.0
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Head" type="Label" parent="Fleet/Detail/Lines"]
+custom_minimum_size = Vector2(0, 17)
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.56078434, 0.827451, 1, 1)
+text = "AERONAVES A BORDO"
+vertical_alignment = 2
+
+[node name="Line" type="Control" parent="Fleet/Detail/Lines"]
+custom_minimum_size = Vector2(0, 14)
+mouse_filter = 2
+
+[node name="Key" type="Label" parent="Fleet/Detail/Lines/Line"]
+offset_right = 200.0
+offset_bottom = 14.0
+mouse_filter = 2
+text = "AV-8B Harrier II"
+
+[node name="Value" type="Label" parent="Fleet/Detail/Lines/Line"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -120.0
+grow_horizontal = 0
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "6 / 6"
+horizontal_alignment = 2

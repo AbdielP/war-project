@@ -49,6 +49,17 @@ var _loadouts: Dictionary = {
 	]
 }
 
+## El armamento que el jugador tiene hoy. Lo lee el puerto para enseñar el pañol;
+## el hangar sigue filtrando configuraciones por su cuenta con la misma lista.
+func available_weapons() -> Array:
+	return _available_weapons
+
+
+## Los barcos de la flota, por nombre. Sale de las claves del inventario y no de
+## una segunda lista: el día que se compre un barco crece solo.
+func ships() -> Array:
+	return _loadouts.keys()
+
 
 func get_loadout(ship_name: String) -> Array:
 	return _loadouts.get(ship_name, [])

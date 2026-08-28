@@ -49,6 +49,23 @@ func mission_cleared(reward: int = 0) -> void:
 	money += reward
 	changed.emit()
 
+## ¿Está comprado o desbloqueado? Por nombre, igual que [member unlocked].
+func owns(id: String) -> bool:
+	return unlocked.has(id)
+
+
+## Compra: cobra y apunta, o no hace nada. **Una llamada y no tres** —comprobar,
+## restar, apuntar—: quien pregunta no puede quedarse a medias si falla el paso
+## de en medio, y el día que una compra cueste algo más que dinero se añade aquí
+## y no en cada botón que compre.
+func buy(id: String, price: int) -> bool:
+	if id.is_empty() or price < 0 or price > money or owns(id):
+		return false
+	money -= price
+	unlocked.append(id)
+	changed.emit()
+	return true
+
 
 func save() -> bool:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)

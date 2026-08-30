@@ -24,9 +24,22 @@ signal map_context_requested(world_position: Vector2, unit: Unit)
 ## arbitrario, y lo que sobra se ve como borde muerto.
 signal refitted
 
+## Ver [member grid_style].
+enum GridStyle {
+	DASHED, ## Líneas punteadas de lado a lado.
+	TICKS,  ## Una cruz de 3 px en cada esquina de zona, y nada más.
+}
+
 ## Rejilla de zonas de coordenadas. **No dibuja las celdas de terreno**: eran
 ## casi 2900 cuadritos de 7 px, y el tamaño del tile no le dice nada a nadie.
 @export var show_grid: bool = false
+## Cómo se traza esa rejilla.
+##
+## Las líneas enteras enjaulan el mapa: cuanto más grande se dibuja, más se
+## parece a una reja y menos a un terreno. Las crucecitas dicen lo mismo —dónde
+## empieza cada zona— dejando el terreno entero, que es lo que se viene a mirar.
+## Para seguir una coordenada basta con dos cruces y el borde.
+@export var grid_style: GridStyle = GridStyle.DASHED
 ## Letras arriba y abajo, números a los lados.
 @export var show_labels: bool = false
 ## Cuántas celdas mide el lado de una zona de coordenadas. Con celdas de 32 px,
@@ -94,6 +107,61 @@ signal refitted
 ## piezas se toca y parecen una sola forma rara. Con un par de píxeles de hueco
 ## se leen como lo que son: un contacto y encima el dato de en qué medio va.
 @export_range(0, 6, 1) var domain_gap: int = 2
+
+@export_subgroup("Rumbo")
+## La flecha que dice hacia dónde mira el contacto. **Ésta sí gira**, al revés
+## que el resto de lo que acompaña al símbolo: una marca girada deja de leerse
+## como marca, pero esto *es* el rumbo y girarlo es lo único que puede
+## significar. El dibujo apunta al norte; se rota desde ahí.
+##
+## Cuatro dibujos y no uno teñido, por lo mismo que los marcos.
+@export var heading_player: Texture2D
+@export var heading_ally: Texture2D
+@export var heading_enemy: Texture2D
+@export var heading_neutral: Texture2D
+## Cuánto se aparta la cola de la flecha del centro del contacto.
+##
+## Del **centro** y no del borde del símbolo: así la flecha sale igual de larga
+## mire a donde mire, y el trozo de cola que cae dentro del símbolo queda
+## tapado por él —que se dibuja después—, igual que en el boceto. Midiendo
+## contra el borde, la flecha se alejaba y se acercaba según el rumbo y parecía
+## que cambiaba de tamaño.
+@export_range(0, 6, 1) var heading_gap: int = 0
+
+@export_subgroup("Selección")
+## Las cuatro esquinas alrededor del contacto seleccionado. Van en la caja común
+## de los símbolos —16×15— y no ajustadas a cada forma: si cada bando midiera lo
+## suyo, el corchete bailaría al cambiar de contacto.
+##
+## Los cuatro colores existen porque **se puede seleccionar a cualquiera**: en el
+## mapa se pulsa un enemigo para mirarlo, y el corchete tiene que decir de quién
+## es lo que se está mirando.
+@export var bracket_player: Texture2D
+@export var bracket_ally: Texture2D
+@export var bracket_enemy: Texture2D
+@export var bracket_neutral: Texture2D
+
+@export_subgroup("Destino")
+## La punta con el aspa que remata la línea de destino. **Cuelga encima del
+## punto, no encima de sí mismo**: plantada justo en el destino taparía el
+## terreno que se está señalando.
+@export var destination_mark: Texture2D
+## Cuánto aire queda entre el aspa y la punta de la línea.
+@export_range(0, 6, 1) var destination_gap: int = 1
+
+@export_group("Etiquetas de contacto")
+## El nombre corto al lado de cada símbolo.
+##
+## **No dice la clase, dice el modelo.** "PLANE" ya lo cuenta la forma del
+## símbolo y la barra de dominio; repetirlo gasta sitio sin añadir nada. "AV8"
+## en cambio no lo sabe nadie más.
+@export var show_contact_names: bool = false
+## La de tres letras: monoespaciada, trazo de 2 px y legible sobre cualquier
+## terreno. Vacía = la del tema.
+@export var contact_font: Font
+@export var contact_font_size: int = 8
+## Aire entre el símbolo y la primera letra.
+@export_range(0, 8, 1) var contact_name_gap: int = 3
 ## Ondas donde nos han enganchado o nos están disparando. Ver [ThreatPulses].
 @export var show_alerts: bool = true
 ## Hasta dónde se abre cada onda, en píxeles de pantalla. **No escala con el
@@ -117,7 +185,19 @@ const _COLOR_ACCENT := Color(0.56078434, 0.827451, 1.0)
 ## Filo oscuro alrededor de cada punto. No es adorno: el azul del jugador y el
 ## azul del agua se parecen demasiado, y un punto de 2 px sin borde desaparece.
 const _COLOR_MARKER_EDGE := Color(0.19215686, 0.21176471, 0.21960784)
+## La línea que va del contacto a su destino. Es el azul apagado del propio
+## dibujo de la marca, no el acento del HUD: la línea cruza medio mapa y con el
+## azul vivo competiría con los símbolos, que es lo que hay que mirar.
+const _COLOR_DESTINATION := Color(0.24705882, 0.38039216, 0.5411765)
+## El nombre corto va en blanco y no del color del bando. El bando ya lo dicen la
+## forma y el color del símbolo; lo que necesita el texto es leerse sobre el mar,
+## sobre la selva y sobre la arena, y para eso el blanco con filo oscuro es lo
+## único que no falla en ningún terreno.
+const _COLOR_CONTACT_NAME := Color(1.0, 1.0, 1.0)
 const _FONT_SIZE := 8
+## Brazo de la cruz de una esquina de zona, en píxeles. Uno: la cruz mide 3×3 y
+## se lee como marca de plano, no como el principio de una línea.
+const _TICK_ARM := 1.0
 ## Sitio que se reserva fuera del mapa para las coordenadas.
 const _LABEL_MARGIN := 10
 ## Lo mínimo que puede medir una zona en pantalla. Por debajo, las zonas se
@@ -324,7 +404,10 @@ func _draw() -> void:
 		_draw_labels(drawn)
 	if show_viewport_rect and not is_instance_valid(_selected):
 		_draw_viewport_rect()
-	if _has_order:
+	# Antes que los símbolos, para que la línea salga de detrás del contacto en
+	# vez de cruzarle el dibujo por encima.
+	var routed := _draw_destination(drawn)
+	if _has_order and not routed:
 		_draw_order_marker(drawn)
 	if show_units:
 		_draw_units(drawn)
@@ -372,6 +455,45 @@ func _draw_rings(center: Vector2, age: float, color: Color) -> void:
 		draw_arc(center, alert_radius_px * t, 0.0, TAU, 24, faded, 1.0)
 
 
+## La línea que une al contacto seleccionado con el punto al que va, rematada
+## por el aspa. Devuelve si la dibujó.
+##
+## **Sale de dónde está la unidad ahora**, no de dónde estaba al dar la orden:
+## así se va acortando sola conforme llega, sin que nadie tenga que refrescarla,
+## y desaparece cuando la unidad deja de tener destino. Por eso sustituye al
+## marcador suelto de [method set_order_marker], que dice lo mismo peor: un
+## punto sin línea no cuenta de quién es la orden.
+##
+## Se traza, no se pega: una textura estirada de un punto a otro engorda el
+## trazo de 1 px a 3 en cuanto la distancia crece. El color es el del dibujo de
+## la marca — ver [constant _COLOR_DESTINATION].
+func _draw_destination(drawn: Vector2) -> bool:
+	# Sólo de lo nuestro. La ficha de un enemigo se abre igual —para eso están
+	# los corchetes en cuatro colores—, pero a dónde va no es algo que se sepa
+	# por mirarlo: la flecha de rumbo dice hacia dónde apunta ahora y ahí acaba
+	# lo que el mapa puede contar de él.
+	if destination_mark == null or not is_instance_valid(_selected) \
+			or not _selected.is_player_controlled():
+		return false
+	var going: Variant = _selected.get_move_destination()
+	if going == null:
+		return false
+	var inside := Rect2(_origin, drawn)
+	var to := world_to_local(going)
+	if not inside.has_point(to):
+		return false
+	var from := world_to_local(_selected.global_position)
+	# Ya llegó: una línea de dos píxeles no dice nada y el aspa se le monta
+	# encima al propio contacto.
+	if from.distance_to(to) < 4.0:
+		return false
+	draw_line(from.round(), to.round(), _COLOR_DESTINATION, 1.0)
+	var size := destination_mark.get_size()
+	draw_texture(destination_mark,
+			(to - Vector2(size.x * 0.5, size.y + destination_gap)).round())
+	return true
+
+
 ## El destino de la orden en curso: la misma cruz dentro de un círculo que se
 ## planta en el mundo, al mismo tamaño en los dos mapas. Es un icono, no
 ## terreno — si escalara, en el minimapa no se vería.
@@ -393,6 +515,9 @@ func _draw_order_marker(drawn: Vector2) -> void:
 ## un tamaño que no tiene por qué ser múltiplo de la celda.
 func _draw_grid(drawn: Vector2) -> void:
 	var paso := cell_px() * _zone_side()
+	if grid_style == GridStyle.TICKS:
+		_draw_ticks(drawn, paso, grid_color)
+		return
 	if not _tiles_cleanly(paso):
 		_draw_lines(drawn, paso, grid_color)
 		return
@@ -438,6 +563,32 @@ func _draw_lines(drawn: Vector2, step: float, color: Color) -> void:
 	var y := step
 	while y < drawn.y:
 		_dashed(_origin + Vector2(0.0, y), _origin + Vector2(drawn.x, y), color)
+		y += step
+	if grid_border:
+		draw_rect(Rect2(_origin, drawn), color, false, 1.0)
+
+
+## Las esquinas de zona, marcadas con una cruz en vez de encerradas entre
+## líneas. Dice exactamente lo mismo —dónde empieza cada zona de coordenadas—
+## gastando nueve píxeles por esquina en vez de dos líneas de lado a lado.
+##
+## La cruz va opaca aunque el color de la rejilla venga translúcido: son puntos
+## sueltos y a media tinta desaparecen contra el terreno, mientras que una línea
+## entera translúcida se sigue viendo por larga.
+func _draw_ticks(drawn: Vector2, step: float, color: Color) -> void:
+	if step < 1.0:
+		return
+	var solid := Color(color, 1.0)
+	var y := step
+	while y < drawn.y:
+		var x := step
+		while x < drawn.x:
+			var at := (_origin + Vector2(x, y)).round()
+			draw_line(at - Vector2(_TICK_ARM, 0.0), at + Vector2(_TICK_ARM + 1.0, 0.0),
+					solid, 1.0)
+			draw_line(at - Vector2(0.0, _TICK_ARM), at + Vector2(0.0, _TICK_ARM + 1.0),
+					solid, 1.0)
+			x += step
 		y += step
 	if grid_border:
 		draw_rect(Rect2(_origin, drawn), color, false, 1.0)
@@ -521,9 +672,13 @@ func _draw_units(drawn: Vector2) -> void:
 			continue
 		var symbol := _symbol_for(unit.team)
 		var rect: Rect2
+		# Por dónde acaba TODO lo que dibuja este contacto, que es contra lo que
+		# se coloca su nombre.
+		var edge := 0.0
 		if symbol != null:
 			rect = _draw_symbol(symbol, center)
 			_draw_domain(unit, rect)
+			edge = _draw_heading(unit, rect)
 		else:
 			rect = Rect2((center - Vector2(half, half)).round(),
 					Vector2(marker_px, marker_px))
@@ -531,21 +686,40 @@ func _draw_units(drawn: Vector2) -> void:
 			draw_rect(rect, Team.color(unit.team), true)
 		# La seleccionada lleva su propio recuadro, separado del punto para que
 		# no se coma el color del bando. Esto sustituye al recuadro de cámara.
+		edge = maxf(edge, rect.end.x)
 		if unit == _selected:
-			draw_rect(rect.grow(3.0), _COLOR_ACCENT, false, 1.0)
+			edge = maxf(edge, _draw_bracket(unit.team, center))
+		if show_contact_names:
+			_draw_contact_name(unit, rect, edge)
 
 
 ## El marco que le toca a ese bando, o `null` si este mapa no lleva símbolos.
 func _symbol_for(team: Team.Side) -> Texture2D:
+	return _by_team(team, contact_player, contact_ally, contact_enemy, contact_neutral)
+
+
+func _heading_for(team: Team.Side) -> Texture2D:
+	return _by_team(team, heading_player, heading_ally, heading_enemy, heading_neutral)
+
+
+func _bracket_for(team: Team.Side) -> Texture2D:
+	return _by_team(team, bracket_player, bracket_ally, bracket_enemy, bracket_neutral)
+
+
+## Los tres juegos de dibujos van por bando y se eligen igual; el reparto se
+## escribe una vez. Lo que no se puede es teñir uno solo: ver [member
+## contact_player].
+func _by_team(team: Team.Side, player: Texture2D, ally: Texture2D,
+		enemy: Texture2D, neutral: Texture2D) -> Texture2D:
 	match team:
 		Team.Side.PLAYER:
-			return contact_player
+			return player
 		Team.Side.ALLY:
-			return contact_ally
+			return ally
 		Team.Side.ENEMY:
-			return contact_enemy
+			return enemy
 		_:
-			return contact_neutral
+			return neutral
 
 
 ## Planta el marco centrado en el contacto y devuelve el hueco que ocupa.
@@ -573,6 +747,75 @@ func _draw_domain(unit: Unit, frame: Rect2) -> void:
 	var at := Vector2(frame.position.x + (frame.size.x - size.x) * 0.5,
 			frame.position.y - size.y - float(domain_gap))
 	draw_texture(domain_bar, at.round())
+
+
+## La flecha de rumbo, apoyada en el borde del símbolo y apuntando a donde mira
+## la unidad.
+##
+## Se coloca con [method CanvasItem.draw_set_transform] y no rotando un nodo: el
+## dibujo es el mismo para todos los contactos y lo único que cambia es el
+## ángulo con el que se estampa. La cola queda a [member heading_gap] del borde
+## **de la caja medida en esa dirección**, que es lo que hace que un rectángulo
+## de 11×7 la lleve igual de separada mirando al norte que al este.
+func _draw_heading(unit: Unit, frame: Rect2) -> float:
+	var art := _heading_for(unit.team)
+	if art == null:
+		return frame.end.x
+	var size := art.get_size()
+	var center := frame.get_center().round()
+	var facing := unit.get_facing()
+	# El dibujo apunta al norte y el ángulo cero mira al este: de ahí el cuarto
+	# de vuelta.
+	draw_set_transform(center, facing + PI * 0.5, Vector2.ONE)
+	draw_texture(art, Vector2(-roundf(size.x * 0.5), -(float(heading_gap) + size.y)))
+	draw_set_transform_matrix(Transform2D.IDENTITY)
+	# Lo que se le reserva al contacto es **el círculo entero que barre la
+	# flecha**, no lo que ocupa con este rumbo. Es la misma regla que hace que
+	# todos los símbolos quepan en la misma caja: si cada uno se midiera por su
+	# cuenta, el nombre se movería doce píxeles cada vez que la unidad gira, y
+	# una formación entera bailaría al virar. Sale más aire del que pide un
+	# contacto mirando al norte; a cambio, nada se pisa nunca.
+	return center.x + float(heading_gap) + size.y
+
+
+## Las cuatro esquinas del contacto seleccionado. Devuelve por dónde acaban, que
+## es lo que el nombre necesita para no meterse dentro.
+##
+## Sin dibujo asignado queda el recuadro de siempre, para que un mapa sin arte
+## siga diciendo cuál está seleccionada.
+func _draw_bracket(team: Team.Side, center: Vector2) -> float:
+	var art := _bracket_for(team)
+	if art == null:
+		var fallback := Rect2(center, Vector2.ZERO).grow(6.0)
+		draw_rect(fallback, _COLOR_ACCENT, false, 1.0)
+		return fallback.end.x
+	var size := art.get_size()
+	draw_texture(art, (center - size * 0.5).round())
+	return center.x + size.x * 0.5
+
+
+## El nombre corto al lado del símbolo.
+##
+## Va **blanco con filo oscuro por los cuatro costados** y no del color del
+## bando: el texto se dibuja encima del terreno y tiene que ganarle al mar, a la
+## selva y a la arena, que es más de lo que puede un color solo. El bando ya lo
+## dicen la forma y el color del símbolo.
+func _draw_contact_name(unit: Unit, frame: Rect2, edge: float) -> void:
+	var font := contact_font if contact_font != null else get_theme_default_font()
+	if font == null:
+		return
+	var text := unit.get_short_name()
+	if text.is_empty():
+		return
+	var ascent := font.get_ascent(contact_font_size)
+	var descent := font.get_descent(contact_font_size)
+	var at := Vector2(edge + contact_name_gap,
+			frame.get_center().y + (ascent - descent) * 0.5).round()
+	for around: Vector2 in [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]:
+		draw_string(font, at + around, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+				contact_font_size, _COLOR_MARKER_EDGE)
+	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			contact_font_size, _COLOR_CONTACT_NAME)
 
 
 ## Qué unidad hay bajo un punto del panel, o `null` si sólo hay terreno. Se

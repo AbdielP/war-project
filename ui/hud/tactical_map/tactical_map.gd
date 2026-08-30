@@ -21,6 +21,10 @@ signal clicked(world_position: Vector2, unit: Unit)
 signal context_requested(world_position: Vector2, unit: Unit)
 signal opened
 signal closed
+## El jugador pidió ver u ocultar el registro de eventos. **El mapa no lo toca**:
+## el registro es del HUD, vive fuera de aquí y sigue existiendo con el mapa
+## cerrado. Aquí sólo hay un botón que cuenta lo que se pulsó.
+signal log_visibility_requested(shown: bool)
 
 ## Tecla que lo abre y lo cierra. `KEY_NONE` la desactiva. Mismo trato que el
 ## atajo de pausa: se atiende la tecla a mano en vez de inventar un `Shortcut`.
@@ -28,6 +32,10 @@ signal closed
 
 @onready var _view: MapView = $Map
 @onready var _hint: Label = $Hint
+@onready var _detail: UnitDetail = $Detail
+@onready var _objectives: ObjectivesPanel = $Objectives
+@onready var _log_button: TextureButton = $LogButton
+@onready var _objectives_button: TextureButton = $ObjectivesButton
 
 ## Quién está seleccionado ahora mismo. **Sólo para el rótulo.** El mapa no lo
 ## usa para decidir nada: el mismo click significa una cosa u otra según esto, y
@@ -47,6 +55,9 @@ func _ready() -> void:
 	# El atajo de teclado no existe en móvil: sin este botón no habría forma de
 	# salir del mapa.
 	$CloseButton.pressed.connect(close)
+	_log_button.toggled.connect(func(on: bool) -> void: log_visibility_requested.emit(on))
+	_objectives_button.toggled.connect(_objectives.set_visible)
+	_objectives.visible = _objectives_button.button_pressed
 	_update_hint()
 
 
@@ -73,7 +84,22 @@ func set_selected_unit(unit: Unit) -> void:
 	_selected = unit
 	if _view != null:
 		_view.set_selected_unit(unit)
+	_show_detail(unit)
 	_update_hint()
+
+
+## De quién se está enseñando la ficha. **No es lo mismo que la selección del
+## jugador**: en el mapa se pulsa un enemigo para mirarlo, y eso ni lo selecciona
+## ni le da una orden. Escriben aquí los dos —la selección al cambiar y el click
+## al mirar—, y manda el último, que es lo que el jugador acaba de hacer.
+func _show_detail(unit: Unit) -> void:
+	if _detail == null:
+		return
+	_detail.show_unit(unit, _view)
+	# Los corchetes salen del color del bando, así que el mapa tiene que saber a
+	# quién se está mirando aunque no sea de los nuestros.
+	if unit != null:
+		_view.set_selected_unit(unit)
 
 
 ## Dónde cae el punto de una unidad en la pantalla. Lo pregunta el HUD para
@@ -117,6 +143,10 @@ func _update_hint() -> void:
 ## salir de él: el destino aparece marcado en el propio mapa y el recuadro de
 ## cámara enseña a dónde se fue la vista. Cerrar es cosa de la tecla.
 func _on_map_clicked(world_position: Vector2, unit: Unit) -> void:
+	# Pulsar un contacto abre su ficha antes que nada, sea de quien sea. Lo que
+	# además signifique el click —una orden— lo decide quien escucha la señal.
+	if unit != null:
+		_show_detail(unit)
 	clicked.emit(world_position, unit)
 
 

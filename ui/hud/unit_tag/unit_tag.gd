@@ -237,30 +237,8 @@ func _follow_unit() -> void:
 	_boarding.position = on_screen + _boarding_home
 
 
-## En qué anda metida la unidad, en una línea.
-##
-## **Se compone aquí y no en la unidad**: ella expone hechos —a quién ataca, a
-## dónde va— y el HUD los pone en palabras. Así el mismo dato vale para el parte
-## de eventos, que los cuenta distinto.
-##
-## El orden importa: atacar manda sobre moverse, porque un avión que ataca
-## también se está moviendo y lo que el jugador quiere saber es lo primero.
 func _status_text() -> String:
-	if is_instance_valid(_unit.attack_target):
-		return status_attacking + _unit.attack_target.get_display_name()
-	var going: Variant = _unit.get_move_destination()
-	if going != null:
-		return status_moving + _zone_of(going)
-	return status_idle
-
-
-## La coordenada del mapa, o el punto en crudo si todavía no hay mapa que la
-## traduzca. Mejor decir dónde de forma fea que no decirlo.
-func _zone_of(world: Vector2) -> String:
-	if _map == null:
-		return "%d, %d" % [world.x, world.y]
-	var label := _map.zone_label_at(world)
-	return label if label != "" else "%d, %d" % [world.x, world.y]
+	return UnitWords.status(_unit, _map, status_idle, status_moving, status_attacking)
 
 
 func _start_name_entrance() -> void:

@@ -135,3 +135,21 @@ const THUMB_SCALES: PackedFloat32Array = [1.0, 0.5, 0.25, 0.125]
 func thumb_scale() -> float:
 	var i := int(thumb_zoom)
 	return THUMB_SCALES[i] if i >= 0 and i < THUMB_SCALES.size() else 1.0
+
+
+## Los tres caracteres que identifican al modelo de un vistazo: "AH-1W
+## SuperCobra" acaba en "AH1". Manda [member short_name] cuando está puesto; sin
+## él se recorta el primer token del nombre —el modelo, que es lo que distingue
+## una unidad de otra— quitándole los separadores, que sólo gastan sitio.
+##
+## **Es estática y recibe el nombre en vez de leerlo de la unidad** porque hay
+## dos sitios que la necesitan sin unidad viva: el cuadrito de una unidad
+## perdida, que conserva el tipo y el nombre pero ya no tiene instancia, y el
+## mapa, que la pinta mientras la unidad muere.
+static func short_label(full: String, type: UnitType) -> String:
+	if type != null and not type.short_name.is_empty():
+		return type.short_name
+	var cut := full.find(" ")
+	var model := full if cut < 1 else full.substr(0, cut)
+	model = model.replace("-", "").replace(".", "").to_upper()
+	return model.substr(0, 3)

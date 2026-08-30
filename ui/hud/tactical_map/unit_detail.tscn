@@ -1,0 +1,163 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://ui/hud/tactical_map/unit_detail.gd" id="1"]
+[ext_resource type="Texture2D" path="res://ui/hud/vessel_window/window_frame.png" id="2"]
+[ext_resource type="Texture2D" path="res://ui/hud/vessel_window/inner_frame.png" id="3"]
+[ext_resource type="Texture2D" path="res://ui/hud/vessel_window/content_frame.png" id="4"]
+[ext_resource type="PackedScene" path="res://ui/hud/vessel_window/unit_model.tscn" id="5"]
+[ext_resource type="FontFile" path="res://assets/fonts/MX611Plus/m6x11plus.ttf" id="6"]
+[ext_resource type="Texture2D" path="res://ui/hud/deployed_panel/health_bar.png" id="7"]
+[ext_resource type="FontFile" path="res://assets/fonts/M5X7/m5x7.ttf" id="8"]
+
+[node name="UnitDetail" type="Control"]
+offset_right = 144.0
+offset_bottom = 240.0
+mouse_filter = 2
+script = ExtResource("1")
+
+[node name="Frame" type="NinePatchRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2")
+patch_margin_left = 3
+patch_margin_top = 3
+patch_margin_right = 4
+patch_margin_bottom = 4
+
+[node name="Portrait" type="NinePatchRect" parent="Frame"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = 88.0
+grow_horizontal = 2
+mouse_filter = 2
+texture = ExtResource("3")
+patch_margin_left = 2
+patch_margin_top = 2
+patch_margin_right = 2
+patch_margin_bottom = 2
+
+[node name="Model" parent="Frame/Portrait" instance=ExtResource("5")]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 3.0
+offset_top = 3.0
+offset_right = -3.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Content" type="NinePatchRect" parent="Frame"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 92.0
+offset_right = -4.0
+offset_bottom = -4.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("4")
+patch_margin_left = 2
+patch_margin_top = 2
+patch_margin_right = 2
+patch_margin_bottom = 2
+
+[node name="Rows" type="VBoxContainer" parent="Frame/Content"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 3.0
+offset_right = -4.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="UnitName" type="Label" parent="Frame/Content/Rows"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.56078434, 0.827451, 1, 1)
+theme_override_fonts/font = ExtResource("6")
+theme_override_font_sizes/font_size = 16
+text = "AV-8B HARRIER II"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Team" type="Label" parent="Frame/Content/Rows"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 16
+text = "UNIDAD ALIADA"
+
+[node name="Heading" type="Label" parent="Frame/Content/Rows"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 16
+text = "RUMBO: NORTE"
+
+[node name="Damage" type="Label" parent="Frame/Content/Rows"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 16
+text = "DAÑO: 0%"
+
+[node name="Health" type="TextureProgressBar" parent="Frame/Content/Rows"]
+custom_minimum_size = Vector2(24, 7)
+layout_mode = 2
+size_flags_horizontal = 0
+mouse_filter = 2
+value = 100.0
+step = 0.0
+texture_under = ExtResource("7")
+texture_progress = ExtResource("7")
+tint_under = Color(0.22, 0.22, 0.22, 1)
+
+[node name="StatusHead" type="Label" parent="Frame/Content/Rows"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 16
+text = "ESTADO:"
+
+[node name="Status" type="Label" parent="Frame/Content/Rows"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.78039217, 0.8627451, 0.8156863, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 16
+text = " MOVIÉNDOSE A F6"
+autowrap_mode = 2
+
+[node name="ArmsHead" type="Label" parent="Frame/Content/Rows"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 16
+text = "ARMAMENTO:"
+
+[node name="Arm" type="Label" parent="Frame/Content/Rows"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.78039217, 0.8627451, 0.8156863, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 16
+text = " x2 AIM-9"

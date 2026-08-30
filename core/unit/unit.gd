@@ -246,6 +246,13 @@ func get_display_name() -> String:
 	return tr(unit_type.display_name) if unit_type else ""
 
 
+## Los tres caracteres con los que sale en el mapa y en el panel de desplegadas.
+## El trabajo lo hace [method UnitType.short_label]; aquí sólo se le pasan el
+## nombre y el tipo, que es lo que la unidad sí sabe.
+func get_short_name() -> String:
+	return UnitType.short_label(get_display_name(), unit_type)
+
+
 func get_actions() -> PackedStringArray:
 	return unit_type.actions if unit_type else []
 

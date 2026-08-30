@@ -1,22 +1,17 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://ui/hud/deployed_panel/unit_portrait.gd" id="1"]
 [ext_resource type="Texture2D" path="res://assets/art/UI/portrait_frame.png" id="2"]
 [ext_resource type="FontFile" uid="uid://cjs6kmcm1r6dx" path="res://assets/fonts/Public Pixel Font/PublicPixel.ttf" id="5"]
 [ext_resource type="FontFile" uid="uid://e43eukj7ara3" path="res://assets/fonts/Yellow Pixel Font/Yellow_pixel_font.ttf" id="6"]
+[ext_resource type="Texture2D" path="res://ui/hud/deployed_panel/health_bar.png" id="8"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_1"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hueco"]
-bg_color = Color(0.24313726, 0.20784314, 0.27450982, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_vida"]
-bg_color = Color(0.5686275, 0.85882354, 0.4117647, 1)
-
 [node name="UnitPortrait" type="Button"]
-custom_minimum_size = Vector2(24, 39)
+custom_minimum_size = Vector2(24, 41)
 offset_right = 24.0
-offset_bottom = 39.0
+offset_bottom = 41.0
 focus_mode = 0
 theme_override_styles/focus = SubResource("StyleBoxEmpty_1")
 theme_override_styles/disabled = SubResource("StyleBoxEmpty_1")
@@ -42,23 +37,23 @@ offset_bottom = 22.0
 mouse_filter = 2
 stretch_mode = 3
 
-[node name="Health" type="ProgressBar" parent="."]
+[node name="Health" type="TextureProgressBar" parent="."]
 layout_mode = 0
 offset_top = 26.0
 offset_right = 24.0
-offset_bottom = 29.0
+offset_bottom = 31.0
 mouse_filter = 2
-theme_override_styles/background = SubResource("StyleBoxFlat_hueco")
-theme_override_styles/fill = SubResource("StyleBoxFlat_vida")
-step = 0.0
 value = 100.0
-show_percentage = false
+step = 0.0
+texture_under = ExtResource("8")
+texture_progress = ExtResource("8")
+tint_under = Color(0.22, 0.22, 0.22, 1)
 
 [node name="Name" type="Label" parent="."]
 layout_mode = 0
-offset_top = 31.0
+offset_top = 33.0
 offset_right = 24.0
-offset_bottom = 39.0
+offset_bottom = 41.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.78039217, 0.8627451, 0.8156863, 1)
 theme_override_fonts/font = ExtResource("6")

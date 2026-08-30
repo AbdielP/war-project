@@ -11,7 +11,7 @@
 [ext_resource type="PackedScene" path="res://ui/hud/target_menu/target_menu.tscn" id="8"]
 [ext_resource type="PackedScene" path="res://ui/hud/zoom_controls/zoom_controls.tscn" id="9"]
 [ext_resource type="PackedScene" path="res://ui/hud/pause_button/pause_button.tscn" id="10"]
-[ext_resource type="PackedScene" path="res://ui/hud/minimap/tactical_map.tscn" id="11"]
+[ext_resource type="PackedScene" path="res://ui/hud/tactical_map/tactical_map.tscn" id="11"]
 [ext_resource type="PackedScene" uid="uid://b5s1m0lbu5wwg" path="res://ui/hud/unit_tag/unit_tag.tscn" id="12"]
 [ext_resource type="PackedScene" uid="uid://ctkl2vdhxhu6k" path="res://ui/hud/countermeasure_bar/countermeasure_bar.tscn" id="13"]
 [ext_resource type="PackedScene" path="res://ui/hud/brevity_calls/brevity_calls.tscn" id="14"]

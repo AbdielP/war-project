@@ -94,6 +94,14 @@ func _ready() -> void:
 	# encima del terreno y ahí no se dispara nada. El resto del HUD se queda.
 	_tactical_map.opened.connect(_refresh_weapon_bar)
 	_tactical_map.closed.connect(_refresh_weapon_bar)
+	# El registro se aparta con el mapa abierto —cae justo encima del terreno— y
+	# vuelve al cerrarlo. Mientras el mapa está abierto lo manda su botón, que es
+	# el único sitio desde el que se puede pedir.
+	_tactical_map.log_visibility_requested.connect(_event_log.set_visible)
+	_tactical_map.opened.connect(func() -> void: _event_log.hide())
+	_tactical_map.closed.connect(func() -> void: _event_log.show())
+	_tactical_map.opened.connect(_selection_panel.clear)
+	_tactical_map.closed.connect(_restore_selection_panel)
 	# Cerrar el mapa sin pulsar nada cancela la elección de blanco. Sin esto, el
 	# siguiente click en el mapa —hecho para otra cosa— lanzaría la salida.
 	_tactical_map.closed.connect(func() -> void:
@@ -123,6 +131,14 @@ func _on_tactical_map_clicked(where: Vector2, unit: Unit) -> void:
 		_vessel_window.launch_at(where, unit)
 		return
 	map_clicked.emit(where, unit)
+
+
+## La miniatura de la selección vuelve al cerrar el mapa, si sigue habiendo a
+## quién mirar. No se guarda si estaba puesta: quien manda es la selección, y
+## preguntárselo aquí evita tener dos sitios que decidan lo mismo.
+func _restore_selection_panel() -> void:
+	if is_instance_valid(_current_unit):
+		_selection_panel.show_unit(_current_unit)
 
 
 ## Hasta dónde puede seguir acercándose o alejándose. Se lo dice quien tiene la
@@ -180,7 +196,16 @@ func show_selected_unit(unit: Unit) -> void:
 	_vessel_window.close(true)
 	# La unidad entera y no sólo su nombre: la caja lleva una cámara en vivo
 	# apuntándola, así que necesita a quién mirar.
-	_selection_panel.show_unit(unit)
+	#
+	# Con el mapa abierto no sale: es una cámara apuntando al mundo y el mundo
+	# está tapado, y encima cae justo encima del panel de objetivos. La puerta se
+	# cierra **aquí, donde se enciende**, y no apagándola al abrir el mapa:
+	# pulsar una unidad dentro del mapa cambia la selección y la volvería a
+	# encender ella sola.
+	if _tactical_map.visible:
+		_selection_panel.clear()
+	else:
+		_selection_panel.show_unit(unit)
 	_actions_panel.show_actions(unit.get_actions() if unit.is_player_controlled() else [])
 	_refresh_weapon_bar()
 	unit.ammo_changed.connect(_on_ammo_changed)

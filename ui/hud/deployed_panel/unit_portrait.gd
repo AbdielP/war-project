@@ -32,7 +32,7 @@ const _LOST_TINT := Color(0.45, 0.45, 0.5, 0.7)
 
 @onready var _frame: TextureRect = $Frame
 @onready var _mark: TextureRect = $Mark
-@onready var _health: ProgressBar = $Health
+@onready var _health: TextureProgressBar = $Health
 @onready var _name: Label = $Name
 
 ## A quién representa, o `null` si es una baja.
@@ -52,7 +52,7 @@ func show_unit(shown: Unit, count: int = 1) -> void:
 	modulate = Color.WHITE
 	disabled = false
 	_mark.texture = shown.unit_type.portrait_icon if shown.unit_type != null else null
-	_name.text = _short(shown.get_display_name(), shown.unit_type)
+	_name.text = UnitType.short_label(shown.get_display_name(), shown.unit_type)
 	tooltip_text = shown.get_display_name() if count < 2 \
 		else "%s (%d)" % [shown.get_display_name(), count]
 	_health.show()
@@ -68,7 +68,7 @@ func show_unit(shown: Unit, count: int = 1) -> void:
 func show_lost(display_name: String, type: UnitType) -> void:
 	unit = null
 	_mark.texture = type.portrait_icon if type != null else null
-	_name.text = _short(display_name, type)
+	_name.text = UnitType.short_label(display_name, type)
 	tooltip_text = "%s (perdido)" % display_name
 	modulate = _LOST_TINT
 	disabled = true
@@ -78,20 +78,6 @@ func show_lost(display_name: String, type: UnitType) -> void:
 
 func set_selected(on: bool) -> void:
 	_frame.texture = _FRAME_ON if on else _FRAME
-
-
-## Lo que cabe en el cuadrito: tres caracteres, porque la fuente gasta 8 px por
-## letra y el cuadrito mide 24. Manda `UnitType.short_name` cuando está puesto;
-## sin él se recorta el primer token del nombre —el modelo, que es lo que
-## distingue una unidad de otra de un vistazo— quitándole los separadores, que
-## sólo gastan sitio: "AH-1W SuperCobra" acaba en "AH1".
-func _short(full: String, type: UnitType) -> String:
-	if type != null and not type.short_name.is_empty():
-		return type.short_name
-	var cut := full.find(" ")
-	var model := full if cut < 1 else full.substr(0, cut)
-	model = model.replace("-", "").replace(".", "").to_upper()
-	return model.substr(0, 3)
 
 
 func _refresh_health(current: float, maximum: float) -> void:

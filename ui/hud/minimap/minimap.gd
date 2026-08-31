@@ -177,6 +177,13 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 
 
+## Cuál está seleccionada. El minimapa no lo averigua por su cuenta —quien lo
+## sabe es la selección—, y de este dato cuelgan sus corchetes y la línea hasta
+## el destino: sin él los dibuja para nadie.
+func set_selected_unit(unit: Unit) -> void:
+	_view.set_selected_unit(unit)
+
+
 func set_order_marker(world_position: Vector2) -> void:
 	_view.set_order_marker(world_position)
 

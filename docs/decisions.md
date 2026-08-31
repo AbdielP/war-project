@@ -2,6 +2,185 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-31 — el minimapa que informa, el rumbo del LHD y los turnos de cubierta
+
+Tres frentes en el mismo día, y el hilo entre ellos es el mismo: **antes de añadir un dibujo,
+comprobar que alguien contesta la pregunta de la que depende.** Los corchetes del minimapa no
+salían porque nadie le decía qué estaba seleccionado; la flecha del LHD apuntaba al revés porque
+`get_facing()` daba por hecha una convención que ese arte no sigue; y dos aparatos compartían
+pista porque la cubierta preguntaba «¿llegó a proa?» donde tenía que preguntar «¿se fue?».
+
+### El minimapa enseña ahora lo mismo que el mapa grande: contactos, rumbo y destino
+
+Antes eran cuadraditos macizos de colores: se veía dónde había alguien y nada más. Ahora lleva
+los símbolos por bando con su silueta —rectángulo hueco propio y aliado, cuadrado neutral, rombo
+enemigo—, la flecha de rumbo y, de la unidad propia seleccionada, la línea hasta su destino con
+su marca. **Sin texto**: ni nombres de contacto ni el de la unidad seleccionada (`show_selected_name`
+venía en `true` de fábrica y hubo que apagarlo a mano).
+
+Fuera quedaron, por ahora, las barras de dominio y los corchetes de selección. Se enchufan desde
+el inspector el día que se quieran; no hace falta tocar código.
+
+**Primero se probó con el arte del mapa grande tal cual** y no valía: la flecha larga mide 15 px
+sobre un mapa de 74, así que un contacto ocupaba un tercio del alto y cuatro enemigos juntos eran
+una mancha. El usuario dibujó un juego pequeño —siluetas de 7 px y flechas de 6— y con eso entra.
+
+### `heading_at_edge`: la flecha nace en el centro o en el borde según qué flecha sea
+
+La flecha larga del mapa grande **lleva un punto en la cola que es la posición del contacto**, así
+que su cola tiene que caer sobre el centro del símbolo y el asta lo cruza por debajo. La corta del
+minimapa no lo lleva —no cabe en 6 px—, así que ahí quien marca la posición es el símbolo y la
+flecha tiene que nacer **fuera** de él o se ve medio enterrada.
+
+Son dos anclajes distintos porque son dos dibujos distintos, no porque uno guste más. Por eso va
+como bandera (`heading_at_edge`) y no como otro número: cambiar el `heading_gap` que ya había
+habría deshecho el centrado del mapa grande, que costó encontrar.
+
+Con la bandera puesta, la distancia se mide **contra la caja en la dirección del rumbo**
+(`|cos|·ancho + |sin|·alto`, a la mitad): un rectángulo de 7×5 mide 5 de alto mirando al norte y 7
+de ancho mirando al este, y con una medida fija la flecha se hunde en el símbolo en un rumbo de
+cada dos. El precio es que la flecha se acerca y se aleja 1 px al virar; sobre un símbolo de 7 px
+no se nota, y por eso el mapa grande —flecha de 15— se queda como estaba.
+
+**Y hace falta medio píxel más.** `heading_gap` cuenta hasta el *centro* del píxel de la cola
+—eso hace el `+ 0.5` de la colocación— mientras que media caja llega hasta su *borde*. Sin
+sumarlo, el aire pedido se lo comía el redondeo y la flecha salía pegada. Medido contando
+píxeles en el render, en dos rumbos: propio al sur, símbolo en las filas 365-369 y flecha en la
+371 con la 370 vacía; enemigo al este, rombo hasta la columna 36 y flecha en la 38 con la 37
+vacía.
+
+### El minimapa recorta lo que dibuja
+
+Con la flecha de 6 px, un contacto pegado al borde inferior la dibujaba **encima del marco del
+panel**. `clip_contents` en la vista, igual que hace el mapa grande. Sin arte que sobresalga no
+se había notado nunca.
+
+### Los corchetes y el destino no faltaban: faltaba decirle al minimapa qué está seleccionado
+
+Se enchufaron los cuatro `bracket_*` y el minimapa siguió sin dibujar nada, igual que la línea
+hasta el destino. La causa no era el arte: `HUD.show_selected_unit` se lo contaba **sólo al mapa
+grande**, y de ese dato cuelgan las dos cosas. El minimapa ni siquiera tenía por dónde recibirlo.
+
+Ahora `Minimap.set_selected_unit` es la pasarela y el HUD avisa a los dos mapas, al seleccionar y
+al deseleccionar. Los corchetes son los mismos de 16×15 del mapa grande: alrededor de un símbolo
+de 7 px quedan holgados, pero se leen y no hizo falta arte nuevo.
+
+Verificado con un Harrier propio puesto a mano en la misión —la única unidad propia de la escena
+es el LHD, que no se mueve y por tanto nunca devuelve destino—, ordenándole un punto en mar
+abierto y contando píxeles: corchete en las filas 353-367, línea de 1 px bajando hasta el
+contacto y marca de destino en las 330-340.
+
+### El LHD tenía la flecha de rumbo media vuelta girada
+
+`Unit.get_facing()` da por hecho que **todo el arte apunta a +Y** y devuelve `rotación + 90°`. El
+LHD está dibujado con la proa a **−Y**, así que a rotación 0 decía sur estando de proa al norte.
+En los dos mapas, porque los dos preguntan lo mismo.
+
+**La silueta no lo dice.** Mirando el dibujo, el extremo que se estrecha es el de +Y y por ahí se
+diría que está la proa — y es al revés. Quien lo dice es cómo está **montada** la unidad: la
+cubierta taxia los aviones desde `y=+94` hasta el `LaunchPoint` en `y=−85` y los suelta
+`post_bow_distance` más allá, y de un barco se despega **por la proa**. Ese extremo es la proa.
+
+Se declara con un campo nuevo, `Unit.art_offset_deg` (180° en el LHD), aplicado dentro de
+`get_facing()`. Así sigue habiendo **una sola** corrección y en un solo sitio: el armamento, las
+bengalas y la flecha del mapa contestan todos lo mismo. Girar el PNG no era opción — los dos
+ascensores, los cuatro puntos de despegue y el de lanzamiento están colocados contra ese dibujo.
+
+### El LHD no tiene ruta porque no tiene con qué moverse
+
+No sale la línea al pulsar el mapa, y no es del mapa: la línea se dibuja desde
+`get_move_destination()`, y el LHD no lo sobrescribe —devuelve `null`— porque **no tiene sistema
+de movimiento ninguno**. Sus nodos son sprite, colisión, indicador de selección y los marcadores
+de cubierta; no hay timonel ni nada que lo empuje, y `receive_move_order` sólo cancela el ataque.
+Ordenarle un punto planta el marcador de orden en los dos mapas y ahí acaba.
+
+Cuando el buque navegue, la línea sale sola: el mapa ya está preparado y lo único que falta es
+que la unidad conteste a dónde va.
+
+### Un aparato que aparcaba a mitad de una tanda se quedaba en cubierta para siempre
+
+`FlightDeck._check_ready_to_launch()` tiene tres puertas de salida y se llama **desde un solo
+sitio**: el final del taxi de cada aparato. Dos de esas puertas se vuelven a abrir solas —el que
+sigue rodando pasará por aquí al aparcar—; la de `_launching` no, porque mientras se suelta una
+tanda no hay nadie esperando a que termine.
+
+Así que el aparato que terminaba de rodar **mientras se lanzaba la tanda anterior** se quedaba
+aparcado sin que nadie le cediera el control: sordo a las órdenes, con el destino apuntado y el
+piloto sin arrancar. No se movía por más clicks que recibiera. Y salía a volar en cuanto se
+lanzaba **otro** aparato cualquiera, porque esa salida vuelve a abrir la puerta y la tanda nueva
+se hace con **todas** las plazas ocupadas, arrastrando de paso al que llevaba ahí plantado. De
+ahí el síntoma raro: dos helicópteros que arrancan a la vez, cada uno a su destino.
+
+Reproducido en el juego antes de tocar nada —Harrier, y el Cobra pedido con la secuencia ya en
+marcha: `has_target=true`, `fisica=false`, `movido=0.0 px` durante ocho segundos— y comprobado
+después: ahora despega solo, sin necesidad de una segunda salida.
+
+El arreglo es que el final de la tanda vuelva a preguntar. Y con él hace falta una condición
+nueva en el portero —**que haya alguien a quien soltar**—, porque si no la repregunta se contesta
+a sí misma con la cubierta vacía y monta una secuencia cada `launch_delay` para siempre.
+
+### Un despegue por vez: reservar la plaza no era reservar el camino
+
+Que la plaza no se libere hasta despegar impide que dos aparatos aparquen en el mismo punto. No
+impide lo otro: **los cuatro puntos de despegue y el de proa están en la misma línea** (`x=-22`),
+así que el que hace la carrera pasa por encima del que sigue posado.
+
+Medido antes de tocar nada, con el Harrier en la plaza de `y=58` y el Cobra posado en `y=-17`: el
+Harrier estaba en `y=-14` y al fotograma siguiente en `y=-23`. Lo atravesaba.
+
+Lo permitía `_launch_next`, que arrancaba al siguiente **al llegar el anterior a proa** —no al
+rebasarla— y, si el anterior era un helicóptero, **en el mismo fotograma** en que se le cedía el
+control, con el aparato todavía posado en mitad de la pista.
+
+Ahora la tanda espera a que el de delante haya dejado la pista de verdad: el avión, al rebasar la
+proa; el helicóptero, al despegar (`took_off`, la misma señal con la que ya se liberaba la
+plaza). Comprobado: dos Harrier seguidos, el segundo arranca con el primero a `y=-194` —antes lo
+hacía a `y=-85`—; y con el Cobra posado, el Harrier **no se mueve** hasta que el jugador le da
+orden al helicóptero, y entonces sale.
+
+**Y la regla vale también para el taxi, que es donde faltaba de verdad.** `_process_queue` sacaba
+al siguiente a rodar en el instante de pedirlo, sin mirar `_launching` — y el taxi recorre el
+mismo eje que la carrera. Ahora la cola espera y se reanuda al terminar la tanda, desde el mismo
+sitio que vuelve a mirar si hay que lanzar. Comprobado: un Cobra pedido en t=408, con el Harrier
+lanzándose, no aparece en cubierta hasta t=840, cuando el Harrier ya ha rebasado la proa.
+
+Y con tres de golpe —dos Harrier y un Cobra— no se atasca: los tres ruedan y aparcan mientras no
+hay nadie lanzándose, luego sale el de proa, el segundo arranca con el primero a `y=-195`, y el
+helicóptero espera su orden en `y=94` sin que nadie le pase por encima.
+
+**Consecuencia aceptada:** un helicóptero sin orden para la cola. Sigue en medio de la pista y la
+cubierta está ocupada de verdad; en cuanto se le dice a dónde ir, la tanda continúa sola. La
+alternativa —sacarlo del eje— es mover los marcadores de la escena, y eso es decisión de quien
+dibujó la cubierta.
+
+La continuación va guardada para no dispararse dos veces: se llega a ella por dos caminos —se fue,
+o se murió por el camino— y llamarla dos veces se saltaría un aparato de la lista.
+
+### El zoom no se enseña donde no hace nada
+
+Los dos botones de zoom son del HUD y mueven la cámara del mundo. Con el mapa táctico delante el
+mundo no se ve, así que quedaban pulsables sin efecto visible. Se esconden al abrir el mapa y
+vuelven al cerrarlo, mismo trato que la barra de armas y el registro de eventos. **No se
+borraron**: fuera del mapa sí hacen su trabajo, y el mapa no lleva zoom propio ni se planea.
+
+### La ventana del juego no puede ir a 2x en una pantalla de 1366×768
+
+Se probó y se deshizo, pero conviene no repetir el experimento. Medido con el juego corriendo:
+
+| modo | ventana | escalado |
+|---|---|---|
+| override 1280×768 (lo que hay) | 1280×**749**, Windows la encoge | 1x |
+| pantalla completa | 1366×768 | **2x** |
+| sin marco, 1280×768 centrada | 1280×768 | **2x** |
+| maximizada con barra de título | 1366×705 | 1x |
+
+La aritmética: el arte a 2x pide **768 px** de alto de área de juego y la pantalla mide 768 en
+total. La barra de título se lleva 23 y la de tareas 40. Aunque se escondiera la barra de tareas
+quedarían 745, y siguen faltando 23. Así que **con barra de título sólo cabe 1x**; a 2x hay que
+renunciar al marco. El usuario prefirió quedarse como estaba —ventana normal, aunque se encoja—
+antes que perder los botones de cerrar y minimizar. Se deshizo entero: `project.godot` no lleva
+`mode` ni `borderless`.
+
 ## 2026-08-30 (tarde) — el mapa a pantalla completa: barrido de radar y coordenadas
 
 ### La flecha de rumbo estaba 1 px descentrada, y sólo en tres rumbos de cada cuatro

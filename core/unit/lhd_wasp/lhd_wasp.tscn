@@ -13,6 +13,7 @@ size = Vector2(160, 304)
 script = ExtResource("4")
 unit_type = ExtResource("3")
 unit_name = "LHD Wasp"
+art_offset_deg = 180.0
 
 [node name="Sprite2D" parent="." index="0"]
 texture = ExtResource("2")

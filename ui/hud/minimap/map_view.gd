@@ -164,6 +164,22 @@ signal refitted
 ## contra el borde, la flecha se alejaba y se acercaba según el rumbo y parecía
 ## que cambiaba de tamaño.
 @export_range(0, 6, 1) var heading_gap: int = 0
+## La flecha se apoya en el **borde** del símbolo en vez de nacer en su centro.
+##
+## No es una preferencia: son dos dibujos distintos. La flecha larga del mapa
+## grande lleva un punto en la cola que **es** la posición del contacto, así que
+## tiene que caer sobre el centro y el asta cruza el símbolo por debajo. La
+## corta del minimapa no lleva ese punto —no cabe en 6 px—, así que ahí quien
+## marca la posición es el propio símbolo y la flecha tiene que nacer fuera de
+## él o se ve medio enterrada.
+##
+## Con esto puesto, [member heading_gap] deja de medirse desde el centro y pasa
+## a ser el aire entre el borde y la cola. El precio es el que ya avisa
+## [member heading_gap]: la flecha se acerca y se aleja un píxel según el rumbo,
+## porque un rectángulo de 7×5 no mide lo mismo a lo alto que a lo ancho. Sobre
+## un símbolo de 7 px ese píxel no se nota; sobre la flecha de 15 del mapa
+## grande sí, y por eso allí se sigue midiendo desde el centro.
+@export var heading_at_edge: bool = false
 
 @export_subgroup("Selección")
 ## Las cuatro esquinas alrededor del contacto seleccionado. Van en la caja común
@@ -889,9 +905,10 @@ func _draw_domain(unit: Unit, frame: Rect2) -> float:
 ##
 ## Se coloca con [method CanvasItem.draw_set_transform] y no rotando un nodo: el
 ## dibujo es el mismo para todos los contactos y lo único que cambia es el
-## ángulo con el que se estampa. La cola queda a [member heading_gap] del borde
-## **de la caja medida en esa dirección**, que es lo que hace que un rectángulo
-## de 11×7 la lleve igual de separada mirando al norte que al este.
+## ángulo con el que se estampa. Dónde cae la cola lo decide
+## [member heading_at_edge]: sobre el centro del símbolo —el mapa grande, cuya
+## flecha lleva el punto de posición en la cola— o apoyada en su borde —el
+## minimapa, cuya flecha corta no lo lleva—.
 func _draw_heading(unit: Unit, frame: Rect2) -> float:
 	var art := _heading_for(unit.team)
 	if art == null:
@@ -908,10 +925,23 @@ func _draw_heading(unit: Unit, frame: Rect2) -> float:
 	# El dibujo apunta al norte y el ángulo cero mira al este: de ahí el cuarto
 	# de vuelta.
 	draw_set_transform(center, facing + PI * 0.5, Vector2.ONE)
+	var tail := float(heading_gap)
+	if heading_at_edge:
+		# Contra la caja **medida en la dirección del rumbo**, no contra media
+		# caja fija: un rectángulo de 7×5 mide 5 de alto mirando al norte y 7 de
+		# ancho mirando al este, y con una sola medida la flecha se hunde en el
+		# símbolo en un rumbo de cada dos. La caja es la del símbolo, que no gira;
+		# lo que gira es la dirección con la que se la mide.
+		# Y medio píxel más: `tail` mide hasta el **centro** del píxel de la cola
+		# —eso hace el `+ 0.5` de la línea de abajo—, mientras que media caja
+		# llega hasta su **borde**. Sin ese medio píxel el aire pedido se lo
+		# come el redondeo y la flecha nace pegada al símbolo.
+		tail += (absf(cos(facing)) * frame.size.x
+				+ absf(sin(facing)) * frame.size.y) * 0.5 + 0.5
 	# Por el **centro** del píxel de la cola, no por su borde: así se queda sobre
 	# el eje del giro y no se mueve mida lo que mida la flecha.
 	draw_texture(art, Vector2(-(floorf(size.x * 0.5) + 0.5),
-			-(float(heading_gap) + size.y) + 0.5))
+			-(tail + size.y) + 0.5))
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 	# Lo que se le reserva al contacto es **el círculo entero que barre la
 	# flecha**, no lo que ocupa con este rumbo. Es la misma regla que hace que
@@ -919,7 +949,7 @@ func _draw_heading(unit: Unit, frame: Rect2) -> float:
 	# cuenta, el nombre se movería doce píxeles cada vez que la unidad gira, y
 	# una formación entera bailaría al virar. Sale más aire del que pide un
 	# contacto mirando al norte; a cambio, nada se pisa nunca.
-	return ceilf(center.x + float(heading_gap) + size.y)
+	return ceilf(center.x + tail + size.y)
 
 
 ## Las cuatro esquinas del contacto seleccionado. Devuelve por dónde acaban, que

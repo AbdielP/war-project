@@ -93,6 +93,11 @@ func _ready() -> void:
 	# encima del terreno y ahí no se dispara nada. El resto del HUD se queda.
 	_tactical_map.opened.connect(_refresh_weapon_bar)
 	_tactical_map.closed.connect(_refresh_weapon_bar)
+	# Los botones de zoom mueven la cámara del mundo, y con el mapa delante el
+	# mundo no se ve: quedaban pulsables sin efecto visible. El mapa no tiene
+	# zoom propio, así que mientras esté abierto no hay nada que acercar.
+	_tactical_map.opened.connect(_zoom_controls.hide)
+	_tactical_map.closed.connect(_zoom_controls.show)
 	# El registro se aparta con el mapa abierto —cae justo encima del terreno— y
 	# vuelve al cerrarlo. Mientras el mapa está abierto lo manda su botón, que es
 	# el único sitio desde el que se puede pedir.
@@ -207,7 +212,11 @@ func show_selected_unit(unit: Unit) -> void:
 	unit.ammo_changed.connect(_on_ammo_changed)
 	_desel_btn.show()
 	_unit_tag.show_for(unit)
+	# A los **dos** mapas. De la unidad seleccionada cuelgan sus corchetes y la
+	# línea hasta su destino, así que el mapa que no se entera los dibuja para
+	# nadie y parece que ese arte no está puesto.
 	_tactical_map.set_selected_unit(unit)
+	_minimap.set_selected_unit(unit)
 	# El cuadrito del panel se marca desde aquí y no desde el propio panel: da
 	# igual cómo se haya elegido la unidad —clic en el mapa, en el panel, o la
 	# tecla— porque todas acaban pasando por esta llamada.
@@ -262,6 +271,7 @@ func clear_selected_unit() -> void:
 	_vessel_window.close()
 	_unit_tag.clear()
 	_tactical_map.set_selected_unit(null)
+	_minimap.set_selected_unit(null)
 	_deployed_panel.set_selected(null)
 
 

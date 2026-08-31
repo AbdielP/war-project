@@ -112,7 +112,16 @@ func has_free_slot() -> bool:
 	return false
 
 
+## Saca al siguiente de la cola de ese ascensor y lo lleva rodando a su punto.
+##
+## **Nadie pisa la pista hasta que el anterior ha despegado.** El taxi recorre
+## el mismo eje (`x=-22`) que la carrera de despegue, así que sacar a uno
+## mientras otro se lanza es meterlo en la pista. La cola espera; se reanuda al
+## terminar la tanda, desde el mismo sitio que vuelve a mirar si hay que lanzar
+## — ver [method _launch_next].
 func _process_queue(elev_idx: int) -> void:
+	if _launching:
+		return
 	if _taxiing[elev_idx] or _taxi_queues[elev_idx].is_empty():
 		return
 	var job: Dictionary = _taxi_queues[elev_idx].pop_front()
@@ -172,6 +181,12 @@ func _process_queue(elev_idx: int) -> void:
 	)
 
 
+## ¿Está la cubierta lista para soltar la tanda?
+##
+## De las tres puertas de salida, **dos se vuelven a abrir solas** —el que sigue
+## rodando llamará aquí al aparcar— y la de `_launching` no: mientras se suelta
+## una tanda no hay nadie esperando a que termine. Por eso el final de la tanda
+## vuelve a preguntar; ver [method _launch_next].
 func _check_ready_to_launch() -> void:
 	if _launching:
 		return
@@ -180,6 +195,16 @@ func _check_ready_to_launch() -> void:
 	for i in _occupied.size():
 		if _occupied[i] and _units[i] == null:
 			return
+	# Y que haya alguien a quien soltar. Sin esto, la repregunta del final de la
+	# tanda se contestaría a sí misma con la cubierta vacía y montaría una
+	# secuencia cada `launch_delay` para siempre.
+	var hay_alguien := false
+	for unidad in _units:
+		if is_instance_valid(unidad):
+			hay_alguien = true
+			break
+	if not hay_alguien:
+		return
 	_launching = true
 	get_tree().create_timer(launch_delay).timeout.connect(_start_launch_sequence)
 
@@ -195,6 +220,19 @@ func _start_launch_sequence() -> void:
 func _launch_next(order: Array) -> void:
 	if order.is_empty():
 		_launching = false
+		# La lista de a quién soltar se hizo al empezar la tanda, y soltarla lleva
+		# su tiempo: lo que haya aparcado por el camino no está en ella y su aviso
+		# —el final de su taxi— se topó con `_launching` puesto. Sin volver a
+		# preguntar aquí se queda en cubierta sin control, sordo a las órdenes,
+		# hasta que otra salida vuelva a abrir la puerta y lo arrastre de paso.
+		#
+		# Y lo mismo con los que esperan para rodar: la pista queda libre justo
+		# ahora, así que este es el sitio donde se les deja salir. Primero ellos
+		# y después la pregunta, porque uno que empieza a rodar es motivo para
+		# **no** lanzar todavía.
+		for i in _taxi_queues.size():
+			_process_queue(i)
+		_check_ready_to_launch()
 		return
 	var slot: int = order.pop_front()
 	var unit: Node2D = _units[slot]
@@ -212,8 +250,18 @@ func _launch_next(order: Array) -> void:
 	if _launch_speed_of(unit) <= 1.0:
 		# Se le cede el control igual —ya es suyo—, pero **posado**: despega
 		# cuando su piloto quiera y no cuando el barco diga.
-		_hand_over_control(unit)
-		_launch_next(order)
+		#
+		# Y hasta que se despegue **sigue en medio de la pista**, así que la
+		# tanda espera. Se engancha ANTES de cederle el control: si traía orden
+		# de cubierta, la subida arranca dentro de `_hand_over_control` y la
+		# señal saldría sin nadie escuchando.
+		var seguir := _seguir_una_vez(unit, order)
+		if unit.has_signal("took_off"):
+			unit.took_off.connect(seguir, CONNECT_ONE_SHOT)
+			_hand_over_control(unit)
+		else:
+			_hand_over_control(unit)
+			seguir.call()
 		return
 
 	_units[slot] = null
@@ -233,15 +281,44 @@ func _launch_next(order: Array) -> void:
 	tw.tween_property(unit, "global_position", _launch_point.global_position, runway_dur) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 
+	var seguir := _seguir_una_vez(unit, order)
 	tw.finished.connect(func() -> void:
 		var direction: Vector2 = unit.global_transform.y
 		var end_pos: Vector2 = unit.global_position + direction * post_bow_distance
 		var fly_tw := unit.create_tween()
 		fly_tw.tween_property(unit, "global_position", end_pos, post_duration)
-		fly_tw.finished.connect(func() -> void: _hand_over_control(unit))
+		fly_tw.finished.connect(func() -> void:
+			_hand_over_control(unit)
+			# El siguiente arranca al **rebasar** la proa, no al llegar a ella:
+			# hasta entonces el avión sigue sobre la pista.
+			seguir.call())
 		_scale_climb(unit)
-		_launch_next(order)
 	)
+
+
+## Sigue con la tanda, y **una sola vez**.
+##
+## Un despegue por vez: hasta que el aparato no ha dejado la pista, el que
+## viene detrás no arranca. Los cuatro puntos de despegue y el de proa están en
+## la misma línea (`x=-22`), así que el que corre le pasa por encima al que
+## sigue posado — medido: el Harrier cruzaba `y=-17` con el Cobra parado ahí.
+##
+## Va guardada porque a la continuación se llega por dos sitios —se fue, o se
+## murió por el camino— y llamar dos veces se saltaría un aparato de la lista.
+##
+## Se acepta que un helicóptero sin orden **pare la cola**: sigue en medio de la
+## pista y la cubierta está ocupada de verdad. En cuanto el jugador le dice a
+## dónde ir, la tanda continúa sola.
+func _seguir_una_vez(unit: Node2D, order: Array) -> Callable:
+	var hecho := [false]
+	var seguir := func() -> void:
+		if hecho[0]:
+			return
+		hecho[0] = true
+		_launch_next(order)
+	if is_instance_valid(unit):
+		unit.tree_exited.connect(seguir, CONNECT_ONE_SHOT)
+	return seguir
 
 
 ## La plaza de lo que despega en vertical **no queda libre al soltarlo**: se

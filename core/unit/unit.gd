@@ -21,6 +21,21 @@ const ALARM_SILENCE := 8.0
 ## su resistencia de verdad y sólo el que hayas puesto en el mapa para probar es
 ## indestructible. Un tipo entero invulnerable se acaba colando en una misión.
 @export var invulnerable: bool = false
+## Cuánto se aparta **el dibujo de esta unidad** de la convención del proyecto,
+## en grados. A cero —el caso normal— el arte apunta a +Y como todo lo demás y
+## no hay nada que declarar.
+##
+## Existe por el LHD, que está dibujado con la proa a −Y. No se deduce de la
+## silueta —mirándola se acierta a medias—: lo dice su cubierta, que taxia los
+## aviones desde `y=+94` hasta el punto de lanzamiento en `y=−85` y los suelta
+## `post_bow_distance` más allá. Se despega por la proa, así que la proa es ese
+## extremo. Sin declararlo, su flecha de rumbo salía media vuelta girada en los
+## dos mapas.
+##
+## **No se arregla girando el PNG**: los ascensores, los puntos de despegue y
+## el de lanzamiento están colocados contra ese dibujo, y girarlo obliga a
+## rehacer los siete.
+@export_range(-180.0, 180.0, 1.0, "suffix:°") var art_offset_deg: float = 0.0
 
 signal active_weapon_changed(weapon: WeaponType)
 ## Se gastó munición de un arma. `remaining` es lo que queda, -1 si es
@@ -214,8 +229,12 @@ func take_damage(amount: float, source: Unit = null) -> void:
 ## Sin esto, una unidad sin piloto ni torreta —el buque, el tanque— decía que
 ## miraba al este estando de proa al sur. Las que sí lo tienen ya devolvían el
 ## rumbo bueno y no se enteran de este cambio.
+##
+## Y la que no siga la convención lo declara en [member art_offset_deg]: la
+## corrección sigue siendo una sola y en un solo sitio, que es lo que hace que
+## el armamento, las bengalas y la flecha del mapa digan todos lo mismo.
 func get_facing() -> float:
-	return global_rotation + PI * 0.5
+	return global_rotation + PI * 0.5 + deg_to_rad(art_offset_deg)
 
 
 ## Lo que se lleva el armamento al soltarse. Una unidad quieta no le da nada.

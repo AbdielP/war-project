@@ -35,6 +35,7 @@ show_labels = false
 grid_border = false
 show_viewport_rect = true
 show_units = true
+sweep_interval = 1.0
 marker_px = 2
 contact_player = ExtResource("4")
 contact_ally = ExtResource("5")

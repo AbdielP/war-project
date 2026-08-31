@@ -11,4 +11,7 @@ has_interior = true
 tag_offset = Vector2(80, 0)
 portrait_icon = ExtResource("2")
 thumb_zoom = 2
+domain = 2
 price = 250000
+
+

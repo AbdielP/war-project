@@ -1,163 +1,234 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene format=3 uid="uid://cotpvjw1aoy7t"]
 
-[ext_resource type="Script" path="res://ui/hud/tactical_map/unit_detail.gd" id="1"]
-[ext_resource type="Texture2D" path="res://ui/hud/vessel_window/window_frame.png" id="2"]
-[ext_resource type="Texture2D" path="res://ui/hud/vessel_window/inner_frame.png" id="3"]
-[ext_resource type="Texture2D" path="res://ui/hud/vessel_window/content_frame.png" id="4"]
+[ext_resource type="Script" uid="uid://cyyb0ief3twwp" path="res://ui/hud/tactical_map/unit_detail.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://btjvrg8cyhnvf" path="res://ui/hud/vessel_window/window_frame.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://6l42umkhea3y" path="res://ui/hud/vessel_window/inner_frame.png" id="4"]
 [ext_resource type="PackedScene" path="res://ui/hud/vessel_window/unit_model.tscn" id="5"]
-[ext_resource type="FontFile" path="res://assets/fonts/MX611Plus/m6x11plus.ttf" id="6"]
-[ext_resource type="Texture2D" path="res://ui/hud/deployed_panel/health_bar.png" id="7"]
-[ext_resource type="FontFile" path="res://assets/fonts/M5X7/m5x7.ttf" id="8"]
+[ext_resource type="Texture2D" uid="uid://c1e6nc8kcyks1" path="res://ui/hud/deployed_panel/health_bar.png" id="7"]
+[ext_resource type="FontFile" uid="uid://e43eukj7ara3" path="res://assets/fonts/Yellow Pixel Font/Yellow_pixel_font.ttf" id="8"]
+[ext_resource type="Texture2D" uid="uid://cxrx42blgfgka" path="res://ui/hud/vessel_window/tab_top.png" id="9"]
+[ext_resource type="Texture2D" uid="uid://1d1e1byt3hnh" path="res://ui/hud/vessel_window/content_frame.png" id="10"]
 
-[node name="UnitDetail" type="Control"]
-offset_right = 144.0
-offset_bottom = 240.0
+[node name="UnitDetail" type="Control" unique_id=981358802]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 120.0
+offset_bottom = 224.0
 mouse_filter = 2
 script = ExtResource("1")
 
-[node name="Frame" type="NinePatchRect" parent="."]
+[node name="Frame" type="NinePatchRect" parent="." unique_id=691802649]
+layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 2
 texture = ExtResource("2")
-patch_margin_left = 3
-patch_margin_top = 3
+patch_margin_left = 4
+patch_margin_top = 4
 patch_margin_right = 4
 patch_margin_bottom = 4
 
-[node name="Portrait" type="NinePatchRect" parent="Frame"]
-anchors_preset = 10
+[node name="Portrait" type="NinePatchRect" parent="Frame" unique_id=500577428]
+layout_mode = 0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = 114.0
+offset_bottom = 80.0
+texture = ExtResource("4")
+patch_margin_left = 3
+patch_margin_top = 3
+patch_margin_right = 2
+patch_margin_bottom = 2
+
+[node name="ModelFrame" type="NinePatchRect" parent="Frame/Portrait" unique_id=1222148443]
+layout_mode = 1
+anchors_preset = 15
 anchor_right = 1.0
-offset_left = 4.0
-offset_top = 4.0
-offset_right = -4.0
-offset_bottom = 88.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
 grow_horizontal = 2
-mouse_filter = 2
-texture = ExtResource("3")
+grow_vertical = 2
+texture = ExtResource("10")
 patch_margin_left = 2
 patch_margin_top = 2
 patch_margin_right = 2
 patch_margin_bottom = 2
 
-[node name="Model" parent="Frame/Portrait" instance=ExtResource("5")]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 3.0
-offset_top = 3.0
-offset_right = -3.0
-offset_bottom = -3.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="Content" type="NinePatchRect" parent="Frame"]
+[node name="Model" parent="Frame/Portrait/ModelFrame" unique_id=100842002 instance=ExtResource("5")]
+layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 4.0
-offset_top = 92.0
+offset_top = 4.0
 offset_right = -4.0
 offset_bottom = -4.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 2
+
+[node name="Content" type="NinePatchRect" parent="Frame" unique_id=245169382]
+layout_mode = 0
+offset_left = 6.0
+offset_top = 83.0
+offset_right = 114.0
+offset_bottom = 218.0
 texture = ExtResource("4")
-patch_margin_left = 2
-patch_margin_top = 2
+patch_margin_left = 3
+patch_margin_top = 3
 patch_margin_right = 2
 patch_margin_bottom = 2
 
-[node name="Rows" type="VBoxContainer" parent="Frame/Content"]
-anchors_preset = 15
+[node name="Rows" type="VBoxContainer" parent="Frame/Content" unique_id=1147255115]
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 4.0
-offset_top = 3.0
-offset_right = -4.0
-offset_bottom = -3.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-theme_override_constants/separation = 0
+theme_override_constants/separation = 1
 
-[node name="UnitName" type="Label" parent="Frame/Content/Rows"]
+[node name="UnitName" type="Label" parent="Frame/Content/Rows" unique_id=1094332832]
 layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.56078434, 0.827451, 1, 1)
-theme_override_fonts/font = ExtResource("6")
-theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 8
 text = "AV-8B HARRIER II"
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="Team" type="Label" parent="Frame/Content/Rows"]
+[node name="GapName" type="Control" parent="Frame/Content/Rows" unique_id=518446373]
+custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+
+[node name="Team" type="Label" parent="Frame/Content/Rows" unique_id=1487303804]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("8")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 8
 text = "UNIDAD ALIADA"
 
-[node name="Heading" type="Label" parent="Frame/Content/Rows"]
+[node name="Heading" type="Label" parent="Frame/Content/Rows" unique_id=1993886051]
 layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("8")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 8
 text = "RUMBO: NORTE"
 
-[node name="Damage" type="Label" parent="Frame/Content/Rows"]
+[node name="Damage" type="HBoxContainer" parent="Frame/Content/Rows" unique_id=308530406]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
-theme_override_fonts/font = ExtResource("8")
-theme_override_font_sizes/font_size = 16
-text = "DAÑO: 0%"
+theme_override_constants/separation = 3
 
-[node name="Health" type="TextureProgressBar" parent="Frame/Content/Rows"]
-custom_minimum_size = Vector2(24, 7)
+[node name="Label" type="Label" parent="Frame/Content/Rows/Damage" unique_id=1116377907]
 layout_mode = 2
-size_flags_horizontal = 0
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 8
+text = "DAÑO:"
+
+[node name="Value" type="Label" parent="Frame/Content/Rows/Damage" unique_id=1335162272]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 8
+text = "0%"
+
+[node name="HealthRow" type="HBoxContainer" parent="Frame/Content/Rows" unique_id=1885313546]
+layout_mode = 2
 mouse_filter = 2
-value = 100.0
+alignment = 2
+
+[node name="Health" type="TextureProgressBar" parent="Frame/Content/Rows/HealthRow" unique_id=1236742076]
+custom_minimum_size = Vector2(24, 5)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
 step = 0.0
+value = 100.0
 texture_under = ExtResource("7")
 texture_progress = ExtResource("7")
 tint_under = Color(0.22, 0.22, 0.22, 1)
 
-[node name="StatusHead" type="Label" parent="Frame/Content/Rows"]
+[node name="GapStatus" type="Control" parent="Frame/Content/Rows" unique_id=980174549]
+custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+
+[node name="StatusHead" type="Label" parent="Frame/Content/Rows" unique_id=2059116277]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("8")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 8
 text = "ESTADO:"
 
-[node name="Status" type="Label" parent="Frame/Content/Rows"]
+[node name="Status" type="Label" parent="Frame/Content/Rows" unique_id=1647622403]
 layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.78039217, 0.8627451, 0.8156863, 1)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("8")
-theme_override_font_sizes/font_size = 16
-text = " MOVIÉNDOSE A F6"
+theme_override_font_sizes/font_size = 8
+text = "  MOVIÉNDOSE A: F6"
 autowrap_mode = 2
 
-[node name="ArmsHead" type="Label" parent="Frame/Content/Rows"]
+[node name="Objective" type="Label" parent="Frame/Content/Rows" unique_id=132607421]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 8
+text = "OBJETIVO: -"
+autowrap_mode = 2
+
+[node name="GapArms" type="Control" parent="Frame/Content/Rows" unique_id=1439193650]
+custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
+
+[node name="ArmsHead" type="Label" parent="Frame/Content/Rows" unique_id=923928675]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("8")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 8
 text = "ARMAMENTO:"
 
-[node name="Arm" type="Label" parent="Frame/Content/Rows"]
+[node name="Arm" type="Label" parent="Frame/Content/Rows" unique_id=2114722004]
 layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.78039217, 0.8627451, 0.8156863, 1)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("8")
-theme_override_font_sizes/font_size = 16
-text = " x2 AIM-9"
+theme_override_font_sizes/font_size = 8
+text = "  x2 AIM-9"
+
+[node name="Title" type="NinePatchRect" parent="." unique_id=2049836907]
+layout_mode = 0
+offset_left = 10.0
+offset_top = -6.0
+offset_right = 87.0
+offset_bottom = 6.0
+texture = ExtResource("9")
+patch_margin_left = 2
+patch_margin_top = 2
+patch_margin_right = 2
+
+[node name="Label" type="Label" parent="Title" unique_id=1292956673]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 2.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("8")
+theme_override_font_sizes/font_size = 8
+text = "DETALLES DE UNIDAD"
+horizontal_alignment = 1
+vertical_alignment = 1

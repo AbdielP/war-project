@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource type="Script" path="res://ui/hud/tactical_map/tactical_map.gd" id="1"]
 [ext_resource type="Script" path="res://ui/hud/minimap/map_view.gd" id="2"]
@@ -17,21 +17,14 @@
 [ext_resource type="Texture2D" path="res://ui/hud/minimap/bracket_enemy.png" id="15"]
 [ext_resource type="Texture2D" path="res://ui/hud/minimap/bracket_neutral.png" id="16"]
 [ext_resource type="Texture2D" path="res://ui/hud/minimap/destination_mark.png" id="17"]
-[ext_resource type="FontFile" path="res://assets/fonts/Public Pixel Font/PublicPixel.ttf" id="18"]
+[ext_resource type="FontFile" path="res://assets/fonts/Yellow Pixel Font/Yellow_pixel_font.ttf" id="18"]
 [ext_resource type="PackedScene" path="res://ui/hud/tactical_map/unit_detail.tscn" id="19"]
 [ext_resource type="PackedScene" path="res://ui/hud/tactical_map/objectives_panel.tscn" id="20"]
 [ext_resource type="Texture2D" path="res://ui/hud/tactical_map/log_button.png" id="21"]
 [ext_resource type="Texture2D" path="res://ui/hud/tactical_map/log_button_on.png" id="22"]
 [ext_resource type="Texture2D" path="res://ui/hud/tactical_map/objectives_button.png" id="23"]
 [ext_resource type="Texture2D" path="res://ui/hud/tactical_map/objectives_button_on.png" id="24"]
-[ext_resource type="FontFile" path="res://assets/fonts/M5X7/m5x7.ttf" id="25"]
 
-[sub_resource type="StyleBoxFlat" id="hint_bg"]
-content_margin_left = 4.0
-content_margin_top = 1.0
-content_margin_right = 4.0
-content_margin_bottom = 1.0
-bg_color = Color(0.19215686, 0.21176471, 0.21960784, 0.85)
 
 [node name="TacticalMap" type="Control"]
 visible = false
@@ -50,13 +43,17 @@ color = Color(0.19215686, 0.21176471, 0.21960784, 1)
 offset_right = 640.0
 offset_bottom = 384.0
 mouse_filter = 0
+clip_contents = true
 script = ExtResource("2")
 show_grid = true
-grid_style = 1
 show_labels = true
+label_font = ExtResource("18")
+fill_panel = true
+grid_border = false
 zone_cells = 8
 show_viewport_rect = true
 show_units = true
+sweep_interval = 1.0
 marker_px = 4
 contact_player = ExtResource("3")
 contact_ally = ExtResource("4")
@@ -76,13 +73,15 @@ destination_mark = ExtResource("17")
 show_contact_names = true
 contact_font = ExtResource("18")
 contact_font_size = 8
+selected_name_font = ExtResource("18")
+selected_name_font_size = 8
 alert_radius_px = 28.0
 
 [node name="Detail" parent="." instance=ExtResource("19")]
-offset_left = 488.0
+offset_left = 496.0
 offset_top = 24.0
-offset_right = 632.0
-offset_bottom = 264.0
+offset_right = 616.0
+offset_bottom = 248.0
 
 [node name="Objectives" parent="." instance=ExtResource("20")]
 anchors_preset = 3
@@ -90,10 +89,10 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -152.0
-offset_top = -136.0
-offset_right = -8.0
-offset_bottom = -48.0
+offset_left = -114.0
+offset_top = -132.0
+offset_right = -14.0
+offset_bottom = -53.0
 grow_horizontal = 0
 grow_vertical = 0
 
@@ -114,25 +113,6 @@ offset_bottom = 376.0
 toggle_mode = true
 texture_normal = ExtResource("23")
 texture_pressed = ExtResource("24")
-
-[node name="Hint" type="Label" parent="."]
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 56.0
-offset_top = -28.0
-offset_right = -56.0
-offset_bottom = -12.0
-grow_horizontal = 2
-grow_vertical = 0
-mouse_filter = 2
-theme_override_styles/normal = SubResource("hint_bg")
-horizontal_alignment = 1
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
-theme_override_fonts/font = ExtResource("25")
-theme_override_font_sizes/font_size = 16
 
 [node name="CloseButton" type="Button" parent="."]
 offset_left = 580.0

@@ -26,12 +26,30 @@ Decisiones que sostienen esa forma:
 - **Las mejoras no son un árbol de habilidades**, sino una lista corta en la ficha de cada unidad: una mejora se aplica a una unidad concreta y hay que estar mirándola.
 - El fondo es el puerto con los barcos fondeados; los menús se abren **encima** y no lo sustituyen.
 
+## Mapa táctico
+
+Tecla **M** sobre la misión. El terreno entero con su rejilla de sectores (A–H / 1–5), y encima
+un símbolo por contacto: forma y color por bando, barra de dominio por medio, flecha de rumbo y,
+al lado, el medio entre corchetes — `[AIR]`, `[SURFACE]`, `[NAVAL]`, `[SUBMERGED]`.
+
+Se pulsa un contacto **de cualquier bando** para abrir su ficha: retrato, bando, rumbo, daño,
+estado y carga de armamento. El seleccionado se marca con cuatro esquinas del color de su bando y
+enseña su nombre debajo. Si es propio y tiene destino, una línea lo une al punto al que va.
+
+Dos botones abajo: el registro de eventos y los objetivos de la misión, cada uno abre y cierra su
+panel.
+
 ## Plataformas objetivo
 PC, móvil, Nintendo Switch.
 
 ## Pendiente de definir
+
 (ir agregando acá temas abiertos: economía, progresión, tipos de unidades, diseño de niveles, etc.)
+- Sistema de misiones: no existe. Los objetivos del mapa táctico salen de un `@export` del
+  panel hasta que haya quien los mande.
+- La ficha de unidad del mapa táctico: montada, pendiente de rehacer su composición.
+- El icono pequeño de cada arma para las filas de armamento (`ui_icon` es de 32×32 y hace falta
+  a unos 12×5, dibujado aparte).
 - Minimapa: cómo funciona el zoom/navegación dentro del recuadro chico del HUD (no se centra en ninguna unidad, eso se descartó). Ver detalle técnico en `docs/decisions.md` (2026-07-26).
-- Mapa táctico grande: pantalla aparte, todavía no implementada. Se abriría al hacer click en el minimapa.
 - Puerto: cantidades de munición por barco (cuánta cabe, qué cuesta rellenar) y catálogo de mejoras por unidad. Los precios actuales son de relleno.
 - Puerto: arte del muelle. Hoy son bandas de color con el sprite del LHD amarrado — andamio a propósito, ver `docs/decisions.md` (2026-08-27).

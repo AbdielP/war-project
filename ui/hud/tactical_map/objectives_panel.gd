@@ -11,8 +11,10 @@ class_name ObjectivesPanel
 ## lleve llama a [method set_objectives] y estos valores se quedan de muestra
 ## para poder seguir componiendo la pantalla con F6.
 ##
-## Va sobre el panel de contenido y no suelto encima del terreno: el texto cruza
-## el mapa entero y sobre la selva un rótulo blanco sin fondo desaparece.
+## **Va suelto encima del terreno, sin marco.** El precio es que el texto
+## compite con el mapa: sin fondo ni borde, lo único que lo despega es el
+## color, y el mapa lleva de todo debajo. Si algún día no se lee, se arregla
+## por color —no acortando la línea ni poniéndole contorno a la fuente—.
 
 ## Lo que hay que hacer, en el orden en que se enseña. Se numeran solas.
 @export var objectives: PackedStringArray = []
@@ -23,13 +25,13 @@ class_name ObjectivesPanel
 
 ## Cada lista tiene su propia caja y su propia plantilla dentro. Así el orden lo
 ## lleva la escena y no hay que calcular en qué posición cae cada fila clonada.
-@onready var _rows: VBoxContainer = $Frame/Rows
-@onready var _pending_box: VBoxContainer = $Frame/Rows/Pending
-@onready var _pending_row: Label = $Frame/Rows/Pending/Row
-@onready var _rule: Control = $Frame/Rows/Rule
-@onready var _done_head: Label = $Frame/Rows/DoneHead
-@onready var _done_box: VBoxContainer = $Frame/Rows/Done
-@onready var _done_row: Label = $Frame/Rows/Done/Row
+@onready var _rows: VBoxContainer = $Rows
+@onready var _pending_box: VBoxContainer = $Rows/Pending
+@onready var _pending_row: Label = $Rows/Pending/Row
+@onready var _rule: Control = $Rows/Rule
+@onready var _done_head: Label = $Rows/DoneHead
+@onready var _done_box: VBoxContainer = $Rows/Done
+@onready var _done_row: Label = $Rows/Done/Row
 
 
 func _ready() -> void:
@@ -82,6 +84,9 @@ func _fill(box: VBoxContainer, template: Label, lines: PackedStringArray,
 		child.queue_free()
 	for i in lines.size():
 		var row := template.duplicate() as Label
-		row.text = ("%d. %s" % [i + 1, lines[i]]) if numbered else ("- " + lines[i])
+		# En mayúsculas: la fuente del mapa no tiene minúsculas y lo que le falte
+		# lo sacaría Godot de una del sistema, rompiendo el alto de línea.
+		var linea := lines[i].to_upper()
+		row.text = ("%d. %s" % [i + 1, linea]) if numbered else ("- " + linea)
 		row.show()
 		box.add_child(row)

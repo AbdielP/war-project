@@ -43,7 +43,6 @@ signal vessel_closed(instant: bool)
 const _IMPACT_OFFSET := Vector2(10.0, -14.0)
 
 ## Lo que dice el mapa mientras se elige a dónde mandar una salida del hangar.
-const _LAUNCH_HINT := "Pulsa un blanco o un punto — la salida despegará con esa orden"
 
 var _current_unit: Unit = null
 
@@ -105,8 +104,7 @@ func _ready() -> void:
 	# Cerrar el mapa sin pulsar nada cancela la elección de blanco. Sin esto, el
 	# siguiente click en el mapa —hecho para otra cosa— lanzaría la salida.
 	_tactical_map.closed.connect(func() -> void:
-		_picking_launch_target = false
-		_tactical_map.set_hint_override(""))
+		_picking_launch_target = false)
 
 
 ## El hangar pide que el jugador señale a dónde va la salida.
@@ -115,7 +113,6 @@ func _ready() -> void:
 ## y un mapa a pantalla completa por debajo de una ventana no se puede pulsar.
 func _on_launch_target_requested() -> void:
 	_picking_launch_target = true
-	_tactical_map.set_hint_override(_LAUNCH_HINT)
 	_tactical_map.open()
 	_tactical_map.move_to_front()
 
@@ -126,7 +123,6 @@ func _on_launch_target_requested() -> void:
 func _on_tactical_map_clicked(where: Vector2, unit: Unit) -> void:
 	if _picking_launch_target:
 		_picking_launch_target = false
-		_tactical_map.set_hint_override("")
 		_tactical_map.close()
 		_vessel_window.launch_at(where, unit)
 		return

@@ -31,7 +31,6 @@ signal log_visibility_requested(shown: bool)
 @export var shortcut_key: Key = KEY_M
 
 @onready var _view: MapView = $Map
-@onready var _hint: Label = $Hint
 @onready var _detail: UnitDetail = $Detail
 @onready var _objectives: ObjectivesPanel = $Objectives
 @onready var _log_button: TextureButton = $LogButton
@@ -41,12 +40,6 @@ signal log_visibility_requested(shown: bool)
 ## usa para decidir nada: el mismo click significa una cosa u otra según esto, y
 ## esa decisión es de quien lleva las órdenes, no de una vista.
 var _selected: Unit = null
-
-## Un rótulo puesto desde fuera, para cuando el mapa se abre a hacer otra cosa
-## —señalar el blanco de una salida del hangar— y el de siempre mentiría. Vacío =
-## manda la selección, que es lo normal.
-var _override_hint := ""
-
 
 func _ready() -> void:
 	hide()
@@ -58,7 +51,6 @@ func _ready() -> void:
 	_log_button.toggled.connect(func(on: bool) -> void: log_visibility_requested.emit(on))
 	_objectives_button.toggled.connect(_objectives.set_visible)
 	_objectives.visible = _objectives_button.button_pressed
-	_update_hint()
 
 
 func open() -> void:
@@ -85,7 +77,6 @@ func set_selected_unit(unit: Unit) -> void:
 	if _view != null:
 		_view.set_selected_unit(unit)
 	_show_detail(unit)
-	_update_hint()
 
 
 ## De quién se está enseñando la ficha. **No es lo mismo que la selección del
@@ -114,29 +105,6 @@ func toggle() -> void:
 		close()
 	else:
 		open()
-
-
-## El rótulo dice **qué va a hacer el siguiente click**, que es lo que cambia
-## según la selección. Sin él, el mismo gesto haría dos cosas distintas sin
-## avisar de cuál toca.
-## Cambia el rótulo mientras el mapa sirva para otra cosa. Cadena vacía lo
-## devuelve a lo que diga la selección.
-func set_hint_override(text: String) -> void:
-	_override_hint = text
-	_update_hint()
-
-
-func _update_hint() -> void:
-	if _hint == null:
-		return
-	if _override_hint != "":
-		_hint.text = _override_hint
-	elif is_instance_valid(_selected) and _selected.is_player_controlled():
-		_hint.text = "%s — pulsa un punto para dirigirla" % _selected.get_display_name()
-	elif is_instance_valid(_selected):
-		_hint.text = "%s — pulsa un punto para mirar" % _selected.get_display_name()
-	else:
-		_hint.text = "Pulsa un punto para mirar"
 
 
 ## **Pulsar no cierra el mapa.** Se dirige a la unidad, se ataca o se mira sin

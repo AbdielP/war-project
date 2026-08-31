@@ -202,11 +202,20 @@ func take_damage(amount: float, source: Unit = null) -> void:
 	health_changed.emit(health, get_max_health())
 
 
-## Hacia dónde mira, en radianes de mundo. Es de dónde sale el armamento y
-## hacia dónde apunta al lanzarlo. Por defecto la rotación del nodo; las
-## unidades cuyo arte no apunta hacia adelante lo corrigen aquí.
+## Hacia dónde mira, en radianes de mundo. Es de dónde sale el armamento, hacia
+## dónde apunta al lanzarlo y a dónde mira su flecha en el mapa táctico.
+##
+## **Todo el arte del proyecto está dibujado apuntando a +Y**, o sea hacia
+## abajo, y por eso la rotación del nodo va un cuarto de vuelta por detrás del
+## rumbo de verdad. Es la misma corrección que llevan declarada la torreta y los
+## dos pilotos en su `sprite_offset_deg`, sólo que allí se aplica al **poner** la
+## rotación y aquí al **leerla**.
+##
+## Sin esto, una unidad sin piloto ni torreta —el buque, el tanque— decía que
+## miraba al este estando de proa al sur. Las que sí lo tienen ya devolvían el
+## rumbo bueno y no se enteran de este cambio.
 func get_facing() -> float:
-	return global_rotation
+	return global_rotation + PI * 0.5
 
 
 ## Lo que se lleva el armamento al soltarse. Una unidad quieta no le da nada.
@@ -251,6 +260,23 @@ func get_display_name() -> String:
 ## nombre y el tipo, que es lo que la unidad sí sabe.
 func get_short_name() -> String:
 	return UnitType.short_label(get_display_name(), unit_type)
+
+
+## Cómo se anuncia en el mapa: `[AIR]`, `[SURFACE]`, `[NAVAL]`, `[SUBMERGED]`.
+##
+## **El medio y no el modelo.** Con doce contactos en pantalla lo que hace falta
+## de un vistazo es en qué medio se mueve cada uno, que es lo que dice contra
+## qué se le puede disparar. El nombre sale sólo del que estás mirando.
+const MAP_TAGS := {
+	UnitType.Domain.AIR: "AIR",
+	UnitType.Domain.SURFACE: "SURFACE",
+	UnitType.Domain.NAVAL: "NAVAL",
+	UnitType.Domain.SUBMERGED: "SUBMERGED",
+}
+
+
+func get_map_tag() -> String:
+	return MAP_TAGS.get(get_domain(), "SURFACE")
 
 
 func get_actions() -> PackedStringArray:

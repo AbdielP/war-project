@@ -2,6 +2,164 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-30 (tarde) — el mapa a pantalla completa: barrido de radar y coordenadas
+
+### La flecha de rumbo estaba 1 px descentrada, y sólo en tres rumbos de cada cuatro
+
+El punto de la cola caía justo en el centro del símbolo mirando al norte y 1 px fuera al este, al
+sur y al oeste. La causa: el pivote del giro se redondeaba (`frame.get_center().round()`) y los
+símbolos son todos de lado impar, así que su centro verdadero cae en un `.5` —el **centro del
+píxel central**— y redondearlo lo llevó a un **vértice** de la rejilla. La flecha se colocaba
+además medio píxel a la izquierda, así que los dos desvíos se cancelaban apuntando al norte y
+por eso nunca se vio. Arreglado sin redondear el pivote y colocando la flecha por el *centro* de
+su píxel de cola. Verificado renderizando los cuatro rumbos cardinales.
+
+### `sweep_interval`: el mapa se refresca cada tanto, no en directo
+
+Un mapa no es una cámara: lo que enseña es la última vez que se miró. Congelando la foto entre
+barridos los contactos saltan en vez de deslizarse, y el salto es el dato —dice cuánto se movió
+cada uno—. Puesto a **1 s** en el mapa táctico y en el minimapa; a 0 se va en directo.
+
+Congela **todo lo que se sabe por mirar** —posición y rumbo— y también qué se puede pulsar
+(`unit_at`): si el símbolo está donde estaba, el click tiene que acertarle ahí. Siguen en
+directo el recuadro de cámara, las ondas de aviso y la marca de destino: no son contactos.
+Un contacto nacido entre dos barridos sale en directo hasta el siguiente —aparecer tarde se
+leería como que el juego se lo tragó—. De propina, el mapa deja de repintarse cada fotograma.
+
+### Coordenadas: enteras, dentro del cuadro, y en blanco con borde
+
+Tres intentos hasta dar con ello, y merece la pena anotar los dos descartes.
+
+1. **Número a la izquierda y letra abajo, por separado.** No se lee: hay que juntar dos signos
+   que están en sitios distintos para sacar un nombre que nadie escribió.
+2. **`C4` entero sobre un plato oscuro opaco.** Legible y limpio, pero al usuario le pesó
+   demasiado en el mapa.
+3. **`C4` entero, blanco, con 1 px de borde negro a media tinta y sin fondo.** — lo que quedó.
+
+Va en la esquina superior izquierda de cada zona, y es **la misma cadena que ya usa el resto del
+HUD** (`MOVIÉNDOSE A: F6`, de `MapTerrain.label_at`), así que mapa y ficha dicen ahora lo mismo.
+Las zonas cuya esquina queda fuera de pantalla apoyan su coordenada en el filo del panel; si de
+una zona sólo asoma una tira más estrecha que la etiqueta, no se escribe.
+
+Esto **rompe a propósito** la regla de "a un pixel font no se le pone contorno" de `CLAUDE.md`.
+Se probó con el contorno a plena tinta y el negro tapa los huecos de los glífos —la `C` pierde
+la abertura, el `2` sus contadores—; a `0.55` el anillo ya no los come. Lo que **no** se apaga
+es la letra: el borde queda debajo de ella, así que una letra translúcida se mezcla con su
+propio borde y sale gris. Si hace falta apagarla, por color y no por alfa.
+
+### El panel de objetivos pierde el marco
+
+Se quedó sólo el texto, suelto encima del terreno. El precio, dicho: sin fondo ni borde lo
+único que lo despega del mapa es su color, y la rejilla le cruza por encima.
+
+## 2026-08-30 — el mapa táctico: símbolos, ficha de contacto y objetivos
+
+> **La ficha de unidad no está terminada.** Está montada y funciona, pero se rehace con el
+> usuario delante. Lo demás del mapa sí queda: los símbolos, el rumbo, los corchetes, la línea
+> de destino, las etiquetas, el panel de objetivos y los dos botones. Esto es lo que hay puesto
+> y por qué, para no volver a discutirlo desde cero.
+
+El mapa ya existía —`ui/hud/minimap/tactical_map.tscn`, la tecla M sobre la misión— y lo que se
+hizo fue rediseñarlo contra un boceto del usuario. De paso se mudó a `ui/hud/tactical_map/`, que
+es donde viven ahora también la ficha, el panel de objetivos y sus botones.
+
+### Qué dice cada contacto, y por qué no dice el modelo
+
+Cada símbolo lleva al lado **su medio** entre corchetes: `[AIR]`, `[SURFACE]`, `[NAVAL]`,
+`[SUBMERGED]`. No el modelo. Con doce contactos en pantalla lo que hace falta de un vistazo es
+en qué medio se mueve cada uno —que es lo que dice contra qué se le puede disparar—, y el nombre
+sale sólo del que estás mirando, debajo de su símbolo.
+
+Los corchetes no son adorno: el texto va encima del terreno y la forma es la segunda vía de
+lectura cuando el color falla.
+
+Además del medio, cada contacto lleva la **flecha de rumbo** de su bando, y el seleccionado los
+cuatro corchetes de esquina, también del color de su bando —en el mapa se pulsa un enemigo para
+mirarlo, y el corchete tiene que decir de quién es lo que se está mirando—.
+
+### El dominio tenía dos valores y hacían falta cuatro
+
+`UnitType.Domain` sólo separaba `AIR` de `SURFACE`, así que un tanque y un buque eran la misma
+cosa para el motor. Se añadieron `NAVAL` y `SUBMERGED` **al final del enum**: los valores se
+guardan como número en los `.tres` y colar uno en medio le habría cambiado el medio a las
+unidades ya escritas. El combate no se entera, porque pregunta siempre por `AIR` y nunca por el
+resto.
+
+Con eso, la barra de dominio dejó de estar esperando un dato que no existía: encima si vuela,
+debajo si navega, la T invertida si va sumergido, y **nada si va por el suelo** — que es
+justamente lo que lo distingue de un buque de un vistazo.
+
+### El rumbo salía torcido y el fallo no estaba en la flecha
+
+`Unit.get_facing()` devolvía `global_rotation` a secas, y **todo el arte del proyecto está
+dibujado apuntando a +Y**. Por eso el buque, con rotación cero y la proa al sur, decía "rumbo
+este". Los que llevan piloto o torreta ya lo corregían por su cuenta con su `sprite_offset_deg`;
+los que no —el buque, el tanque— iban un cuarto de vuelta desviados desde siempre.
+
+La corrección está ahora en la base, que es donde vive la convención. Los que ya devolvían el
+rumbo bueno no se enteran del cambio.
+
+### La línea de destino sale de dónde está la unidad ahora
+
+Se traza desde el contacto seleccionado hasta el punto al que va, con el aspa colgando **encima**
+del punto y no encima de sí misma —plantada justo en el destino taparía el terreno que señala—.
+Sale de la posición de ahora, así que se acorta sola conforme llega y desaparece cuando la unidad
+deja de tener destino, sin que nadie tenga que refrescarla.
+
+Sólo de lo nuestro: a dónde va un enemigo no es algo que se sepa por mirarlo. La flecha de rumbo
+dice hacia dónde apunta ahora, y ahí acaba lo que el mapa puede contar de él.
+
+### Los dos botones y lo que se aparta
+
+`Registro` y `Objetivos`, uno en cada esquina de abajo. El de objetivos arranca apagado. El del
+registro manda sobre el parte de eventos mientras el mapa está abierto, que es el único sitio
+desde el que se puede pedir.
+
+Y la **miniatura de la selección** no sale con el mapa abierto: es una cámara apuntando al mundo
+y el mundo está tapado, y encima caía justo encima del panel de objetivos. Apagarla al abrir el
+mapa no bastaba —pulsar una unidad dentro cambia la selección y la volvía a encender ella sola—,
+así que la puerta se cierra en `show_selected_unit`, que es donde se enciende.
+
+### El panel de objetivos no tiene de dónde sacar los objetivos
+
+No existe sistema de misiones: el briefing lleva un párrafo de texto y nadie apunta condiciones
+ni las da por cumplidas. Los objetivos vienen por `@export` del propio panel, con `set_objectives()`
+listo para el día que haya quien los mande. Puesto así, el panel es de verdad y el hueco que falta
+está declarado en un sitio en vez de repartido por el código.
+
+### Lo que salió mal, que es la parte que sirve
+
+Cinco cosas, cada una con la regla que deja:
+
+- **Dije que la fuente del boceto "no existe en el proyecto".** Era falsa: es la **Yellow Pixel a
+  8**, glifo de 3×5 y trazo de 1 px, y estaba usada ahí mismo en los retratos del panel de
+  desplegadas. La descarté sin rasterizarla porque `CLAUDE.md` la tiene fichada "para la cuenta
+  atrás de impacto" y leí eso como que era de dígitos. De ese error salió todo lo demás: elegí
+  Public Pixel a 8, que gasta el doble de ancho, y por eso la ficha se me fue a 144 px y las
+  etiquetas del mapa se pisaban entre sí. Con la fuente buena, `[SUBMERGED]` mide 44 px en vez de
+  88 y no hace falta acortar ninguna palabra.
+- **Le puse borde al texto del mapa.** Nadie lo pidió y en el boceto no hay ninguno. Un contorno
+  rasteriza el glifo otra vez, que es justo lo que no se le hace a un pixel font.
+- **Cambié `[PLANE]` por el nombre del modelo.** Se pidió la clase para simplificar el texto en
+  pantalla; puse `AV8`, `T14`, razonando que la forma del símbolo ya dice la clase. Razonar bien
+  no autoriza a cambiar lo pedido.
+- **Recorté cuatro nine-patch nuevos del sheet** para la ficha teniendo la familia entera ya
+  cortada en `ui/hud/vessel_window/`. La ficha se rehizo con `window_frame`, `inner_frame` y
+  `action_btn`, y los cuatro PNG nuevos se borraron.
+- **Se pidió quitar un panel del mapa y quité cuatro.** Los otros tres volvieron.
+
+Y una que sí se pidió y salió mal igual: se me invitó a inventar cómo integrar las coordenadas al
+diseño limpio y propuse una cruz en cada esquina de zona. Encima no dibujaba cruces sino esquinas,
+porque tracé los dos brazos desde el punto hacia un lado. Volvieron las líneas punteadas de
+sector, y el invento se quitó entero —enum, `@export` y función—, no se dejó apagado detrás de una
+casilla.
+
+### Pendiente
+
+La ficha de unidad, paso a paso y con el usuario delante. Y el icono pequeño de cada arma en las
+filas de armamento: `WeaponType.ui_icon` es de 32×32 y en el boceto miden unos 12×5, así que hace
+falta dibujarlo pequeño a propósito — bajarlo tira tres de cada cuatro píxeles.
+
 ## 2026-08-27 — el puerto: dos menús en vez de tres, y el fondo lo último que se dibuja
 
 > **El puerto está en hueso, como las demás pantallas.** Navega, cobra y enseña datos de verdad

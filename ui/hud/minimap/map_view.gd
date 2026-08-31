@@ -24,24 +24,41 @@ signal map_context_requested(world_position: Vector2, unit: Unit)
 ## arbitrario, y lo que sobra se ve como borde muerto.
 signal refitted
 
-## Ver [member grid_style].
-enum GridStyle {
-	DASHED, ## Líneas punteadas de lado a lado.
-	TICKS,  ## Una cruz de 3 px en cada esquina de zona, y nada más.
-}
-
 ## Rejilla de zonas de coordenadas. **No dibuja las celdas de terreno**: eran
 ## casi 2900 cuadritos de 7 px, y el tamaño del tile no le dice nada a nadie.
 @export var show_grid: bool = false
-## Cómo se traza esa rejilla.
+## La coordenada de cada zona, escrita **entera y de una pieza** en su esquina
+## superior izquierda: `C4`.
 ##
-## Las líneas enteras enjaulan el mapa: cuanto más grande se dibuja, más se
-## parece a una reja y menos a un terreno. Las crucecitas dicen lo mismo —dónde
-## empieza cada zona— dejando el terreno entero, que es lo que se viene a mirar.
-## Para seguir una coordenada basta con dos cruces y el borde.
-@export var grid_style: GridStyle = GridStyle.DASHED
-## Letras arriba y abajo, números a los lados.
+## Partida —la letra por un lado y el número por otro— no se lee: hay que
+## juntar dos signos que están en sitios distintos para sacar un nombre que
+## nadie ha escrito. Y es además la forma en la que el resto del HUD ya la dice
+## —"MOVIÉNDOSE A: F6"—, así que lo que se ve en el mapa y lo que se lee en la
+## ficha son ahora el mismo texto. Ver [method MapTerrain.label_at].
 @export var show_labels: bool = false
+## Con qué se escriben las coordenadas. Sin ponerla sale la del tema, que en
+## este proyecto es la de Godot: enorme y suavizada. Ver [member contact_font].
+@export var label_font: Font = null
+## Color de las coordenadas. Van encima del terreno y compiten con él, así que
+## se dejan a mano: sobre selva y sobre mar no hace falta el mismo tono.
+@export var label_color := Color(1.0, 1.0, 1.0, 1.0)
+## El borde de la coordenada, un píxel alrededor de la letra. Alfa 0 lo apaga.
+##
+## No hay un tono que valga para todo el mapa: el que se lee sobre el mar se
+## pierde sobre la selva. El borde despega la letra de lo que tenga debajo sea
+## lo que sea.
+##
+## **Va a media tinta a propósito:** la coordenada es una referencia que se
+## busca cuando hace falta, no un aviso, y con el borde a plena tinta se comía
+## el mapa. El que se apaga es el borde y no la letra: el borde queda **debajo**
+## de ella, así que una letra translúcida se mezcla con su propio borde y sale
+## gris. Si hace falta apagarla también, se hace por color —un blanco sucio— y
+## no por alfa.
+##
+## Ojo al bajar este número: el borde son ocho copias corridas y donde se
+## solapan la transparencia se acumula, así que el anillo sale moteado. A 0.55
+## el moteado no se ve a tamaño real; más abajo empieza a notarse.
+@export var label_outline := Color(0.0, 0.0, 0.0, 0.55)
 ## Cuántas celdas mide el lado de una zona de coordenadas. Con celdas de 32 px,
 ## 8 son zonas de 256 px de mundo. **Es el número a mover si las coordenadas
 ## salen demasiado gruesas o demasiado finas.** Es una petición, no una orden:
@@ -63,11 +80,31 @@ enum GridStyle {
 @export_range(0, 16, 1) var grid_gap: int = 3
 ## El recuadro alrededor del mapa. Sobra cuando el panel ya trae marco dibujado.
 @export var grid_border: bool = true
+## Llenar el panel entero en vez de que quepa el mapa completo.
+##
+## La escala es entera y el mapa casi nunca tiene la proporción de la pantalla,
+## así que **una de las dos cosas hay que perder**: o sobra fondo muerto
+## alrededor, o se sale por dos lados y se recorta. A pantalla completa manda lo
+## segundo; en un panel pequeño, donde lo que importa es ver el mapa entero,
+## manda lo primero. Requiere `clip_contents` en el nodo.
+@export var fill_panel: bool = false
 ## El recuadro de lo que se ve en pantalla ahora mismo. Sin él, el mapa a
 ## pantalla completa es un cuadro bonito en el que no sabes dónde estabas.
 @export var show_viewport_rect: bool = true
 ## Un punto por unidad, del color de su bando ([Team]).
 @export var show_units: bool = true
+## Cada cuánto se refresca la posición de los contactos, en segundos. A cero,
+## en directo.
+##
+## Un mapa no es una cámara: lo que enseña es **la última vez que se miró**, no
+## lo que está pasando ahora. Congelando la foto entre barridos los contactos
+## saltan en vez de deslizarse, y el salto es el dato: dice cuánto se movió cada
+## uno desde la vuelta anterior.
+##
+## Congela **todo lo que se sabe por mirar** —posición y rumbo— y también qué
+## se puede pulsar: si el símbolo está donde estaba, el click tiene que acertarle
+## ahí y no en el sitio de verdad, que no se ve. Ver [method unit_at].
+@export_range(0.0, 4.0, 0.1, "suffix:s") var sweep_interval: float = 0.0
 ## Lado del punto de una unidad, en píxeles de pantalla. **No escala con el
 ## mapa**: es un icono, no terreno — a 1 px por celda un punto a escala sería
 ## invisible, y en el mapa grande sería una mancha.
@@ -150,18 +187,30 @@ enum GridStyle {
 @export_range(0, 6, 1) var destination_gap: int = 1
 
 @export_group("Etiquetas de contacto")
-## El nombre corto al lado de cada símbolo.
+## La clase de cada contacto al lado de su símbolo: `[PLANE]`, `[SHIP]`,
+## `[TANK]`.
 ##
-## **No dice la clase, dice el modelo.** "PLANE" ya lo cuenta la forma del
-## símbolo y la barra de dominio; repetirlo gasta sitio sin añadir nada. "AV8"
-## en cambio no lo sabe nadie más.
+## **La clase y no el modelo.** Con doce contactos en pantalla lo que hace falta
+## de un vistazo es qué clase de cosa hay dónde; el nombre del que estás mirando
+## sale aparte, ver [member show_selected_name]. Los corchetes no son adorno: el
+## texto va encima del terreno y la forma es la segunda vía de lectura cuando el
+## color falla.
 @export var show_contact_names: bool = false
-## La de tres letras: monoespaciada, trazo de 2 px y legible sobre cualquier
-## terreno. Vacía = la del tema.
+## La de las etiquetas cortas: monoespaciada, trazo de 2 px y legible sobre
+## cualquier terreno. Vacía = la del tema.
 @export var contact_font: Font
 @export var contact_font_size: int = 8
 ## Aire entre el símbolo y la primera letra.
 @export_range(0, 8, 1) var contact_name_gap: int = 3
+## El nombre completo del contacto seleccionado, debajo de su símbolo. Sale sólo
+## de ése: escrito en todos, doce nombres largos taparían el mapa.
+@export var show_selected_name: bool = true
+## La misma que las etiquetas: "AV-8B HARRIER II" gasta 57 px con ella. Vacía =
+## la del tema.
+@export var selected_name_font: Font
+@export var selected_name_font_size: int = 8
+## Aire entre lo que dibuja el contacto y el nombre de abajo.
+@export_range(0, 8, 1) var selected_name_gap: int = 3
 ## Ondas donde nos han enganchado o nos están disparando. Ver [ThreatPulses].
 @export var show_alerts: bool = true
 ## Hasta dónde se abre cada onda, en píxeles de pantalla. **No escala con el
@@ -195,9 +244,13 @@ const _COLOR_DESTINATION := Color(0.24705882, 0.38039216, 0.5411765)
 ## único que no falla en ningún terreno.
 const _COLOR_CONTACT_NAME := Color(1.0, 1.0, 1.0)
 const _FONT_SIZE := 8
-## Brazo de la cruz de una esquina de zona, en píxeles. Uno: la cruz mide 3×3 y
-## se lee como marca de plano, no como el principio de una línea.
-const _TICK_ARM := 1.0
+## Lo que mide de alto una mayúscula o un dígito de la fuente del mapa a
+## [constant _FONT_SIZE]. Medido rasterizando, no leído de la ficha: el alto de
+## línea es mayor que el de la letra y un plato dibujado contra él saldría
+## desplazado hacia arriba.
+const _LABEL_INK := 5.0
+## El aire entre la coordenada y las dos líneas de rejilla de su esquina.
+const _LABEL_INSET := 2.0
 ## Sitio que se reserva fuera del mapa para las coordenadas.
 const _LABEL_MARGIN := 10
 ## Lo mínimo que puede medir una zona en pantalla. Por debajo, las zonas se
@@ -213,6 +266,14 @@ var _terrain: MapTerrain = null
 var _scale: int = 1
 var _origin: Vector2 = Vector2.ZERO
 var _last_transform := Transform2D()
+## La foto del último barrido. Vacías = se va en directo. Ver [member
+## sweep_interval].
+var _sweep_at: Dictionary[Unit, Vector2] = {}
+var _sweep_facing: Dictionary[Unit, float] = {}
+## Empieza en infinito para que el primer fotograma ya barra: si no, el mapa
+## recién abierto se queda con el dibujo de [method _refit] hasta que pase el
+## primer intervalo entero.
+var _since_sweep: float = INF
 ## Dónde se mandó ir a la unidad. Es el mismo marcador que se planta en el
 ## mundo, dibujado aquí: con el mapa abierto, el del mundo no se ve.
 var _order: Vector2 = Vector2.ZERO
@@ -344,9 +405,13 @@ func _refit() -> void:
 	if used.size == Vector2i.ZERO:
 		return
 
-	var margin := _LABEL_MARGIN * 2 if show_labels else 0
+	var margin := 0 if fill_panel or not show_labels else _LABEL_MARGIN * 2
 	var space := Vector2i(maxi(int(size.x) - margin, 1), maxi(int(size.y) - margin, 1))
-	var fit: int = mini(space.x / used.size.x, space.y / used.size.y)
+	# Cubrir pide la escala más pequeña que tapa los dos lados; caber, la más
+	# grande que no se sale por ninguno.
+	var fit: int = maxi(
+			ceili(float(space.x) / used.size.x),
+			ceili(float(space.y) / used.size.y)) if fill_panel 			else mini(space.x / used.size.x, space.y / used.size.y)
 
 	var reduction := 1
 	if fit >= 1:
@@ -383,14 +448,60 @@ func _find_layer() -> TileMapLayer:
 func _process(delta: float) -> void:
 	if _press.tick(delta):
 		_emit_at(_press.origin(), true)
+	# Con barrido, los contactos sólo cambian de sitio cuando toca: repintar
+	# cada fotograma sobra, se repinta en el barrido y ya.
+	var live := show_units and sweep_interval <= 0.0
+	var swept := false
+	if show_units and sweep_interval > 0.0:
+		_since_sweep += delta
+		if _since_sweep >= sweep_interval:
+			_since_sweep = 0.0
+			_sweep()
+			swept = true
+	elif not _sweep_at.is_empty():
+		# Se apagó el barrido en marcha: hay que soltar la foto o los contactos
+		# se quedan clavados donde estaban para siempre.
+		_sweep_at.clear()
+		_sweep_facing.clear()
+		_since_sweep = INF
 	var current := get_viewport().get_canvas_transform()
 	# Las ondas se mueven solas, así que hay que repintar mientras haya alguna
-	# viva aunque no se mueva nada más. Con los puntos encendidos ya se repinta
+	# viva aunque no se mueva nada más. Con los puntos en directo ya se repinta
 	# cada frame de todos modos.
-	if show_units or current != _last_transform \
+	if live or swept or current != _last_transform \
 			or (show_alerts and _alerts.any_active()):
 		_last_transform = current
 		queue_redraw()
+
+
+## Toma la foto de la vuelta: dónde está y hacia dónde mira cada contacto.
+##
+## Se rehace entera en vez de ir remendándola, y así los que murieron se caen
+## solos sin que nadie tenga que avisar. Misma razón por la que los contactos
+## se sacan del grupo y no de una lista propia —ver [method _draw_units].
+func _sweep() -> void:
+	_sweep_at.clear()
+	_sweep_facing.clear()
+	for node in get_tree().get_nodes_in_group(Unit.GROUP):
+		var unit := node as Unit
+		if unit == null:
+			continue
+		_sweep_at[unit] = unit.global_position
+		_sweep_facing[unit] = unit.get_facing()
+
+
+## Dónde está el contacto **para el mapa**: donde lo dejó el último barrido, o
+## donde está de verdad si se va en directo. Uno que nació entre dos barridos
+## sale en directo hasta el siguiente: aparecer tarde se leería como que el
+## juego se lo tragó.
+func _seen_at(unit: Unit) -> Vector2:
+	return _sweep_at.get(unit, unit.global_position)
+
+
+## Hacia dónde miraba en el último barrido. Va con la posición: una flecha que
+## gira sobre un símbolo quieto delata que la foto está vieja.
+func _seen_facing(unit: Unit) -> float:
+	return _sweep_facing.get(unit, unit.get_facing())
 
 
 func _draw() -> void:
@@ -482,7 +593,7 @@ func _draw_destination(drawn: Vector2) -> bool:
 	var to := world_to_local(going)
 	if not inside.has_point(to):
 		return false
-	var from := world_to_local(_selected.global_position)
+	var from := world_to_local(_seen_at(_selected))
 	# Ya llegó: una línea de dos píxeles no dice nada y el aspa se le monta
 	# encima al propio contacto.
 	if from.distance_to(to) < 4.0:
@@ -515,9 +626,6 @@ func _draw_order_marker(drawn: Vector2) -> void:
 ## un tamaño que no tiene por qué ser múltiplo de la celda.
 func _draw_grid(drawn: Vector2) -> void:
 	var paso := cell_px() * _zone_side()
-	if grid_style == GridStyle.TICKS:
-		_draw_ticks(drawn, paso, grid_color)
-		return
 	if not _tiles_cleanly(paso):
 		_draw_lines(drawn, paso, grid_color)
 		return
@@ -568,32 +676,6 @@ func _draw_lines(drawn: Vector2, step: float, color: Color) -> void:
 		draw_rect(Rect2(_origin, drawn), color, false, 1.0)
 
 
-## Las esquinas de zona, marcadas con una cruz en vez de encerradas entre
-## líneas. Dice exactamente lo mismo —dónde empieza cada zona de coordenadas—
-## gastando nueve píxeles por esquina en vez de dos líneas de lado a lado.
-##
-## La cruz va opaca aunque el color de la rejilla venga translúcido: son puntos
-## sueltos y a media tinta desaparecen contra el terreno, mientras que una línea
-## entera translúcida se sigue viendo por larga.
-func _draw_ticks(drawn: Vector2, step: float, color: Color) -> void:
-	if step < 1.0:
-		return
-	var solid := Color(color, 1.0)
-	var y := step
-	while y < drawn.y:
-		var x := step
-		while x < drawn.x:
-			var at := (_origin + Vector2(x, y)).round()
-			draw_line(at - Vector2(_TICK_ARM, 0.0), at + Vector2(_TICK_ARM + 1.0, 0.0),
-					solid, 1.0)
-			draw_line(at - Vector2(0.0, _TICK_ARM), at + Vector2(0.0, _TICK_ARM + 1.0),
-					solid, 1.0)
-			x += step
-		y += step
-	if grid_border:
-		draw_rect(Rect2(_origin, drawn), color, false, 1.0)
-
-
 ## Punteado horizontal o vertical. Sólo sirve para eso, que es lo único que
 ## dibuja la rejilla, y así el reparto de trazos cae en píxeles enteros.
 func _dashed(from: Vector2, to: Vector2, color: Color) -> void:
@@ -610,34 +692,70 @@ func _dashed(from: Vector2, to: Vector2, color: Color) -> void:
 		at += paso
 
 
-## Las coordenadas van FUERA del mapa, no encima: dentro no caben y taparían el
-## terreno. Letras arriba y abajo, números a los lados, repetidas en los dos
-## bordes para no tener que seguir la fila con el dedo hasta el otro extremo.
+## La coordenada de cada zona, escrita dentro de ella.
+##
+## Antes iban fuera, en los cuatro márgenes, y eso obligaba a seguir la fila con
+## el dedo hasta el borde para saber en qué cuadro estaba un contacto. Puestas
+## en cada zona la lectura es directa, y no estorban porque se apoyan en las
+## líneas de la rejilla, que es donde no hay nada dibujado.
+##
+## Se saltan las zonas que caen fuera del panel: a pantalla completa el mapa se
+## recorta y escribir contra un borde cortado deja medias letras.
 func _draw_labels(drawn: Vector2) -> void:
-	var font := get_theme_default_font()
+	var font := label_font if label_font != null else get_theme_default_font()
 	if font == null:
 		return
 	var side := _zone_side()
 	var zones := _terrain.zone_count(side)
 	var step := cell_px() * side
-
-	for i in range(zones.x):
-		var text := MapTerrain.column_label(i)
-		var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE).x
-		var x := _origin.x + step * (i + 0.5) - width * 0.5
-		draw_string(font, Vector2(x, _origin.y - 2.0), text,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE, _COLOR_TEXT)
-		draw_string(font, Vector2(x, _origin.y + drawn.y + _FONT_SIZE + 1.0), text,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE, _COLOR_TEXT)
+	if step < _FONT_SIZE * 2.0:
+		return
+	var panel := Rect2(Vector2.ZERO, size)
 
 	for j in range(zones.y):
-		var text := str(j + 1)
-		var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE).x
-		var y := _origin.y + step * (j + 0.5) + _FONT_SIZE * 0.5
-		draw_string(font, Vector2(_origin.x - width - 2.0, y), text,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE, _COLOR_TEXT)
-		draw_string(font, Vector2(_origin.x + drawn.x + 2.0, y), text,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE, _COLOR_TEXT)
+		var top := _origin.y + step * j
+		var alto := minf(step, _origin.y + drawn.y - top)
+		for i in range(zones.x):
+			var left := _origin.x + step * i
+			var ancho := minf(step, _origin.x + drawn.x - left)
+			# Contra el trozo **visible** de la zona y no contra la zona entera: a
+			# pantalla completa el mapa se sale por los cuatro lados y las de los
+			# bordes tienen la esquina fuera. Ahí la coordenada se apoya en el
+			# filo del panel, que es donde el cuadro empieza a verse.
+			var visto := Rect2(left, top, ancho, alto).intersection(panel)
+			var texto := "%s%d" % [MapTerrain.column_label(i), j + 1]
+			var w := font.get_string_size(
+				texto, HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE).x
+			# Si de la zona sólo asoma una tira, no se escribe: media coordenada
+			# recortada dice menos que ninguna.
+			if visto.size.x < w + _LABEL_INSET * 2.0 \
+				or visto.size.y < _LABEL_INK + _LABEL_INSET * 2.0:
+				continue
+			# La esquina de la tinta, no la de la caja de la fuente: el ascenso es
+			# mayor que la letra, así que anclando ahí la coordenada cae unos píxeles
+			# más abajo de donde se la colocó. Mayúsculas y dígitos se apoyan en la
+			# línea de base, y la línea de base es la tinta más su alto.
+			var tinta := (visto.position + Vector2(_LABEL_INSET, _LABEL_INSET)).round()
+			_draw_outlined(font, tinta + Vector2(0.0, _LABEL_INK), texto)
+
+
+## La coordenada con un píxel de negro alrededor.
+##
+## Se dibuja ocho veces corrida y una encima, porque
+## [method CanvasItem.draw_string_outline] no saca nada con esta fuente: el
+## contorno de un grado no llega a generar glífo. Ocho y no cuatro para que
+## las esquinas cierren —con las cuatro rectas el borde queda abierto en
+## diagonal y la letra se sigue pegando al fondo por ahí.
+func _draw_outlined(font: Font, base: Vector2, texto: String) -> void:
+	if label_outline.a > 0.0:
+		for dx in [-1.0, 0.0, 1.0]:
+			for dy in [-1.0, 0.0, 1.0]:
+				if dx == 0.0 and dy == 0.0:
+					continue
+				draw_string(font, base + Vector2(dx, dy), texto,
+					HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE, label_outline)
+	draw_string(font, base, texto,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE, label_color)
 
 
 ## Qué trozo del mundo se está viendo. Se saca de la transformación del lienzo y
@@ -665,19 +783,20 @@ func _draw_units(drawn: Vector2) -> void:
 		var unit := node as Unit
 		if unit == null:
 			continue
-		var center := world_to_local(unit.global_position)
+		var center := world_to_local(_seen_at(unit))
 		# Una unidad fuera del mapa no se pinta en el borde: se pintaría encima
 		# de las coordenadas y mentiría sobre dónde está.
 		if not inside.has_point(center):
 			continue
 		var symbol := _symbol_for(unit.team)
 		var rect: Rect2
-		# Por dónde acaba TODO lo que dibuja este contacto, que es contra lo que
-		# se coloca su nombre.
+		# Por dónde acaba TODO lo que dibuja este contacto: contra el borde
+		# derecho se coloca la etiqueta de medio y contra el de abajo, el nombre.
 		var edge := 0.0
+		var bottom := 0.0
 		if symbol != null:
 			rect = _draw_symbol(symbol, center)
-			_draw_domain(unit, rect)
+			bottom = _draw_domain(unit, rect)
 			edge = _draw_heading(unit, rect)
 		else:
 			rect = Rect2((center - Vector2(half, half)).round(),
@@ -687,10 +806,14 @@ func _draw_units(drawn: Vector2) -> void:
 		# La seleccionada lleva su propio recuadro, separado del punto para que
 		# no se coma el color del bando. Esto sustituye al recuadro de cámara.
 		edge = maxf(edge, rect.end.x)
+		bottom = maxf(bottom, rect.end.y)
 		if unit == _selected:
 			edge = maxf(edge, _draw_bracket(unit.team, center))
+			bottom = maxf(bottom, center.y + _bracket_reach(unit.team))
 		if show_contact_names:
-			_draw_contact_name(unit, rect, edge)
+			_draw_contact_tag(unit, rect, edge)
+		if show_selected_name and unit == _selected:
+			_draw_selected_name(unit, center, bottom)
 
 
 ## El marco que le toca a ese bando, o `null` si este mapa no lleva símbolos.
@@ -733,20 +856,32 @@ func _draw_symbol(symbol: Texture2D, center: Vector2) -> Rect2:
 	return Rect2(at, size)
 
 
-## La marca de dominio, pegada al marco. Arriba si vuela, abajo si navega.
+## La marca de dominio, pegada al marco: arriba si vuela, abajo si navega, y la
+## T invertida debajo si va sumergida.
 ##
-## **Hoy sólo sale la de aire.** `UnitType.Domain` sólo separa lo que vuela de lo
-## que no, así que un buque y un tanque son la misma cosa para esto y pintarle la
-## barra de superficie a los dos sería mentir sobre el tanque. La pieza está
-## puesta y el sitio calculado; falta el dato.
-func _draw_domain(unit: Unit, frame: Rect2) -> void:
-	if domain_bar == null or unit.get_domain() != UnitType.Domain.AIR:
-		return
-	var size := domain_bar.get_size()
-	# Centrada a lo ancho del marco y separada por arriba.
-	var at := Vector2(frame.position.x + (frame.size.x - size.x) * 0.5,
-			frame.position.y - size.y - float(domain_gap))
-	draw_texture(domain_bar, at.round())
+## **Lo que va por el suelo no lleva ninguna.** No es un olvido: la marca dice
+## en qué medio se mueve el contacto *además* de estar en el mapa, y para algo
+## que va por el suelo eso no añade nada. Que no la lleve ya lo distingue de un
+## buque, que es el caso con el que se confundía.
+func _draw_domain(unit: Unit, frame: Rect2) -> float:
+	var domain := unit.get_domain()
+	var art := domain_bar
+	if domain == UnitType.Domain.SUBMERGED:
+		art = domain_subsurface
+	elif domain == UnitType.Domain.SURFACE:
+		return frame.end.y
+	if art == null:
+		return frame.end.y
+	var size := art.get_size()
+	# Centrada a lo ancho del marco y separada por el lado que le toca.
+	var top := frame.end.y + float(domain_gap)
+	if domain == UnitType.Domain.AIR:
+		top = frame.position.y - size.y - float(domain_gap)
+	var at := Vector2(frame.position.x + (frame.size.x - size.x) * 0.5, top)
+	draw_texture(art, at.round())
+	# Por dónde acaba: el nombre del seleccionado va debajo de todo, y con la
+	# barra colgando de un buque se le montaba encima.
+	return maxf(frame.end.y, top + size.y)
 
 
 ## La flecha de rumbo, apoyada en el borde del símbolo y apuntando a donde mira
@@ -762,12 +897,21 @@ func _draw_heading(unit: Unit, frame: Rect2) -> float:
 	if art == null:
 		return frame.end.x
 	var size := art.get_size()
-	var center := frame.get_center().round()
-	var facing := unit.get_facing()
+	# El giro se hace sobre el **centro del píxel central** del símbolo, que en
+	# uno de lado impar cae en un `.5`. Redondearlo lo llevaba a un vértice de la
+	# rejilla, y como la flecha se colocaba además medio píxel a la izquierda los
+	# dos desvíos se cancelaban **sólo mirando al norte**: en cuanto giraba, ese
+	# medio píxel daba la vuelta al vértice y el punto de la cola aterrizaba en
+	# un píxel vecino distinto según el cuadrante.
+	var center := frame.get_center()
+	var facing := _seen_facing(unit)
 	# El dibujo apunta al norte y el ángulo cero mira al este: de ahí el cuarto
 	# de vuelta.
 	draw_set_transform(center, facing + PI * 0.5, Vector2.ONE)
-	draw_texture(art, Vector2(-roundf(size.x * 0.5), -(float(heading_gap) + size.y)))
+	# Por el **centro** del píxel de la cola, no por su borde: así se queda sobre
+	# el eje del giro y no se mueve mida lo que mida la flecha.
+	draw_texture(art, Vector2(-(floorf(size.x * 0.5) + 0.5),
+			-(float(heading_gap) + size.y) + 0.5))
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 	# Lo que se le reserva al contacto es **el círculo entero que barre la
 	# flecha**, no lo que ocupa con este rumbo. Es la misma regla que hace que
@@ -775,7 +919,7 @@ func _draw_heading(unit: Unit, frame: Rect2) -> float:
 	# cuenta, el nombre se movería doce píxeles cada vez que la unidad gira, y
 	# una formación entera bailaría al virar. Sale más aire del que pide un
 	# contacto mirando al norte; a cambio, nada se pisa nunca.
-	return center.x + float(heading_gap) + size.y
+	return ceilf(center.x + float(heading_gap) + size.y)
 
 
 ## Las cuatro esquinas del contacto seleccionado. Devuelve por dónde acaban, que
@@ -794,28 +938,53 @@ func _draw_bracket(team: Team.Side, center: Vector2) -> float:
 	return center.x + size.x * 0.5
 
 
-## El nombre corto al lado del símbolo.
+## La clase del contacto, al lado de su símbolo.
 ##
-## Va **blanco con filo oscuro por los cuatro costados** y no del color del
-## bando: el texto se dibuja encima del terreno y tiene que ganarle al mar, a la
-## selva y a la arena, que es más de lo que puede un color solo. El bando ya lo
-## dicen la forma y el color del símbolo.
-func _draw_contact_name(unit: Unit, frame: Rect2, edge: float) -> void:
+## Va blanca y no del color del bando: el bando ya lo dicen la forma y el color
+## del símbolo, y el blanco es lo que mejor se despega de todos los terrenos.
+func _draw_contact_tag(unit: Unit, frame: Rect2, edge: float) -> void:
 	var font := contact_font if contact_font != null else get_theme_default_font()
 	if font == null:
 		return
-	var text := unit.get_short_name()
-	if text.is_empty():
-		return
+	var text := "[%s]" % unit.get_map_tag()
 	var ascent := font.get_ascent(contact_font_size)
 	var descent := font.get_descent(contact_font_size)
 	var at := Vector2(edge + contact_name_gap,
 			frame.get_center().y + (ascent - descent) * 0.5).round()
-	for around: Vector2 in [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]:
-		draw_string(font, at + around, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
-				contact_font_size, _COLOR_MARKER_EDGE)
+	_draw_plain(font, at, text, contact_font_size)
+
+
+## El nombre del contacto seleccionado, centrado bajo todo lo que dibuja.
+##
+## Se centra contra el **centro del contacto** y no contra su caja de texto
+## anterior: la caja cambia de ancho con cada nombre y el símbolo no se mueve.
+func _draw_selected_name(unit: Unit, center: Vector2, bottom: float) -> void:
+	var font := selected_name_font if selected_name_font != null 			else get_theme_default_font()
+	if font == null:
+		return
+	var text := unit.get_display_name().to_upper()
+	if text.is_empty():
+		return
+	var size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			selected_name_font_size)
+	var at := Vector2(center.x - size.x * 0.5,
+			bottom + selected_name_gap + font.get_ascent(selected_name_font_size)).round()
+	_draw_plain(font, at, text, selected_name_font_size)
+
+
+## Una sola pasada, sin filo. El contorno lo pedía el blanco sobre la selva,
+## pero rasterizar dos veces un pixel font es justo lo que no se le hace: engorda
+## el trazo de 1 px y deja de ser el dibujo que es.
+func _draw_plain(font: Font, at: Vector2, text: String, size: int) -> void:
 	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
-			contact_font_size, _COLOR_CONTACT_NAME)
+			size, _COLOR_CONTACT_NAME)
+
+
+## Cuánto baja el corchete desde el centro del contacto, para que el nombre no
+## se le meta dentro.
+func _bracket_reach(team: Team.Side) -> float:
+	var art := _bracket_for(team)
+	return art.get_size().y * 0.5 if art != null else 0.0
 
 
 ## Qué unidad hay bajo un punto del panel, o `null` si sólo hay terreno. Se
@@ -833,7 +1002,7 @@ func unit_at(local_position: Vector2) -> Unit:
 		var unit := node as Unit
 		if unit == null:
 			continue
-		var center := world_to_local(unit.global_position)
+		var center := world_to_local(_seen_at(unit))
 		if not inside.has_point(center):
 			continue
 		var distance := center.distance_to(local_position)

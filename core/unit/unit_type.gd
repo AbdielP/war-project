@@ -1,9 +1,23 @@
 extends Resource
 class_name UnitType
 
-## En qué medio se mueve. Es lo que decide qué armas pueden atacarla: un
-## Sidewinder busca aviones, un Maverick busca blancos de superficie.
-enum Domain { AIR, SURFACE }
+## En qué medio se mueve. Decide dos cosas: qué armas pueden atacarla —un
+## Sidewinder busca aviones, un Maverick busca blancos de superficie— y cómo se
+## anuncia en el mapa táctico.
+##
+## **Los valores nuevos van al final.** Se guardan como número en los `.tres`, y
+## colar uno en medio le cambiaría el medio a las unidades ya escritas. Por eso
+## `SURFACE` sigue valiendo 1 aunque ahora signifique sólo "por el suelo": lo
+## que era un buque se marca a mano como `NAVAL`.
+##
+## Todo lo que no vuela sigue contando igual para el combate, que pregunta
+## siempre por `AIR` y nunca por el resto.
+enum Domain {
+	AIR,       ## Vuela.
+	SURFACE,   ## Va por el suelo.
+	NAVAL,     ## Navega.
+	SUBMERGED, ## Bajo el agua.
+}
 
 ## Las escalas a las que puede verse una unidad en la cámara en vivo de la caja
 ## de selección. **Es un enum y no un número suelto** para que sólo quepan

@@ -1,71 +1,53 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://ui/hud/tactical_map/objectives_panel.gd" id="1"]
-[ext_resource type="Texture2D" path="res://ui/hud/vessel_window/window_frame.png" id="2"]
-[ext_resource type="FontFile" path="res://assets/fonts/M5X7/m5x7.ttf" id="3"]
+[ext_resource type="FontFile" path="res://assets/fonts/Yellow Pixel Font/Yellow_pixel_font.ttf" id="3"]
 
 [node name="ObjectivesPanel" type="Control"]
-offset_right = 144.0
-offset_bottom = 104.0
+offset_right = 100.0
+offset_bottom = 95.0
 mouse_filter = 2
 script = ExtResource("1")
 objectives = PackedStringArray("DEFENDER LA FLOTA.", "DESTRUIR LOS BOMBARDEROS ENEMIGOS.")
 completed = PackedStringArray("LLEGAR A LA ZONA.")
 
-[node name="Frame" type="NinePatchRect" parent="."]
+[node name="Rows" type="VBoxContainer" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-texture = ExtResource("2")
-patch_margin_left = 3
-patch_margin_top = 3
-patch_margin_right = 4
-patch_margin_bottom = 4
-
-[node name="Rows" type="VBoxContainer" parent="Frame"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 6.0
-offset_top = 4.0
-offset_right = -6.0
-offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 theme_override_constants/separation = 0
 
-[node name="MissionHead" type="Label" parent="Frame/Rows"]
+[node name="MissionHead" type="Label" parent="Rows"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 8
 text = "MISIÓN:"
 
-[node name="Pending" type="VBoxContainer" parent="Frame/Rows"]
+[node name="Pending" type="VBoxContainer" parent="Rows"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 0
 
-[node name="Row" type="Label" parent="Frame/Rows/Pending"]
+[node name="Row" type="Label" parent="Rows/Pending"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.78039217, 0.8627451, 0.8156863, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 8
 text = "1. DEFENDER LA FLOTA."
 autowrap_mode = 2
 
-[node name="Rule" type="Control" parent="Frame/Rows"]
+[node name="Rule" type="Control" parent="Rows"]
 custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="Line" type="ColorRect" parent="Frame/Rows/Rule"]
+[node name="Line" type="ColorRect" parent="Rows/Rule"]
 anchors_preset = 10
 anchor_right = 1.0
 offset_top = 2.0
@@ -74,24 +56,24 @@ grow_horizontal = 2
 mouse_filter = 2
 color = Color(0.6705882, 0.5803922, 0.4784314, 0.35)
 
-[node name="DoneHead" type="Label" parent="Frame/Rows"]
+[node name="DoneHead" type="Label" parent="Rows"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 8
 text = "COMPLETADOS:"
 
-[node name="Done" type="VBoxContainer" parent="Frame/Rows"]
+[node name="Done" type="VBoxContainer" parent="Rows"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 0
 
-[node name="Row" type="Label" parent="Frame/Rows/Done"]
+[node name="Row" type="Label" parent="Rows/Done"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.6705882, 0.5803922, 0.4784314, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 8
 text = "- LLEGAR A LA ZONA."
 autowrap_mode = 2

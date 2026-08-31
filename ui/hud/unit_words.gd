@@ -59,7 +59,9 @@ static func heading(unit: Unit) -> String:
 	return _COMPASS[posmod(eighth, _COMPASS.size())]
 
 
-## El bando, para la ficha. Va en femenino porque acompaña a "unidad".
+## El bando, para la ficha. La frase entera y sin rótulo delante: "UNIDAD
+## ALIADA" se entiende sola, y un "FILIACIÓN:" delante gasta media línea para
+## nombrar algo que el propio valor ya dice.
 static func team_of(unit: Unit) -> String:
 	if unit == null:
 		return ""
@@ -71,4 +73,4 @@ static func team_of(unit: Unit) -> String:
 		Team.Side.ENEMY:
 			return "UNIDAD ENEMIGA"
 		_:
-			return "SIN BANDO"
+			return "UNIDAD NEUTRAL"

@@ -369,11 +369,21 @@ Resource `.tres` compartido entre todas las instancias del mismo tipo (ej. `lhd_
 | `domain` | `Domain` (AIR / SURFACE) — en qué medio se mueve. Decide qué armas pueden atacarla |
 | `max_health` | float — Harrier 60, T-14 100. Un AGM-65 pega 120 |
 | `ecm_evasion` | 0–1 — lo que se libra de un misil guiado **sin gastar nada**. 0,20 en el Harrier |
+| `deck_slots` | int — cuántas plazas ocupa dentro de una lancha de desembarco. Abrams 4, Amtrac 2, LAV-25 1. 0 = no se embarca |
+| `cargo_slots` | int — cuántas plazas tiene si **es** una lancha. LCAC 4. 0 = no lo es |
+| `amphibious` | bool — llega a la playa por su cuenta, sin ocupar lancha. Sólo el Amtrac |
 
 **`ecm_evasion` va aquí y no en la instancia**, como `max_health` y `portrait_icon`: es lo que
 trae el modelo de fábrica, así que el menú de progresión lo subirá para todos los de ese modelo
 de una vez, y dos Harrier se dibujan igual. Lo que sí es de cada unidad es el bando, porque el
 mismo avión puede cambiarlo entre misiones.
+
+**Las tres de desembarco son un reparto, no una cuenta.** Lo que la pantalla de tropas pregunta no
+es "cuántos mando" sino "qué cabe": un Abrams gasta la lancha entera y con lo mismo van cuatro
+LAV. Es la misma forma que el armamento —estaciones y qué cuelga de cada una—, y por eso el tamaño
+vive en el tipo y no en una tabla de la pantalla: el tamaño es del modelo, y así no hay un segundo
+sitio que se quede viejo. `amphibious` no es un `deck_slots = 0`: un cero se leería como "no ocupa
+nada dentro de la lancha", y lo que dice es que **no necesita lancha**.
 
 **`has_interior` va aparte de `actions` a propósito.** Una acción es una orden que se le da a la
 unidad y se resuelve sola, y por eso cabe en una lista de textos que el panel convierte en botones
@@ -3057,6 +3067,52 @@ ventana, o se verá `6/6` con aviones en el aire.
 
 ---
 
+### `TroopsPage` — `ui/hud/vessel_window/troops_page.gd`
+```
+extends Control   class_name TroopsPage
+```
+La fuerza de desembarco del buque y la lancha que la lleva. **El mismo mueble que el hangar** —
+rejilla a la izquierda, ficha a la derecha, `AircraftSlot` sin tocar, `UnitModel`, la misma barra
+de potencia— y a propósito: son la misma pregunta hecha sobre otra cosa, y dos ventanas parecidas
+pero distintas se leen como dos juegos.
+
+**Lo que cambia es la decisión.** El hangar pregunta *cuántos mando*; aquí, *qué cabe*.
+
+| Bloque | Qué hace |
+|---|---|
+| `Content/Slots` | Las tres unidades de `PlayerFleet.get_troops()`, con `disponibles/total` |
+| `Content/Detail` | Nombre, maqueta, `POWER`, `SLOTS` y cuánto embarcar (`[<] n [>] MAX m`) |
+| `Craft` | La lancha: cuántas quedan, los cuadraditos de capacidad, el manifiesto y las acciones |
+
+**Los cuadraditos contestan "¿me cabe esto?" mirando.** Blanco lo que ya va dentro, **amarillo lo
+que se metería al pulsar `LOAD`**, apagado lo que sobra. Enseñar lo pendiente en su propio color es
+lo que convierte la barra en una respuesta en vez de en un dato: no hay que restar de cabeza.
+
+**El tope de la cantidad son dos cosas a la vez**: lo que queda sin desplegar y lo que cabe en la
+lancha (`_max_amount()`). Con la lancha llena el tope es cero **y la cantidad también** — dejarla
+en 1 al lado de un `MAX 0` es el panel contradiciéndose.
+
+`SLOTS: SWIMS` para el Amtrac, en amarillo. Es la unidad que hace que la pantalla sea una decisión:
+puede ir sola —lenta y expuesta, sin arriesgar lancha— o embarcada, rápida y jugándose toda la
+carga si la hunden.
+
+`LOAD` comprueba, descuenta de la flota y apunta **en una sola llamada**, como la compra del
+puerto: repartido en pasos, quien carga puede quedarse a medias si falla el de en medio. `UNLOAD`
+lo devuelve todo.
+
+> **`SELECT BEACH` está apagado a propósito: es un andamio.** El dique inundable no existe, así que
+> no hay de dónde salir. Se deja a la vista porque su presencia ya dice que esto acaba en un
+> desembarco, y apagado porque un botón que se pulsa y no hace nada se lee como que el juego se
+> colgó. Es lo primero que hay que sustituir.
+
+> **Todo el arte de esta sección es provisional y está *generado*, no dibujado**: siluetas planas
+> sacadas de la paleta del propio T-14 para que no desentonen. Las maquetas del mundo
+> (`assets/art/sprites/*_placeholder.png`) y las miniaturas de casilla
+> (`ui/hud/vessel_window/thumb_*.png`) son **dibujos distintos**, no el mismo achicado — la casilla
+> mide 32×32 y `AircraftSlot` coloca la textura a su tamaño real.
+
+---
+
 ### `WeaponCard` — `ui/hud/vessel_window/weapon_card.gd`
 ```
 extends Control   class_name WeaponCard
@@ -3868,6 +3924,20 @@ _loadouts = {
     ]
 }
 ```
+
+Y la fuerza de desembarco, con la misma forma y en dos diccionarios más:
+
+```gdscript
+_troops = { "LHD Wasp": [ M1A1 Abrams ×2, LAV-25 ×6, AAV-7 Amtrac ×4 ] }
+_craft  = { "LHD Wasp": [ LCAC ×2 ] }
+```
+
+Lo leen `get_troops(ship)` y `get_craft(ship)`. **Sin `weapon_loadouts`**: un carro sale con lo que
+tiene puesto y no se le cuelga nada. Y **sin cuántas plazas ocupa cada uno**, que vive en su
+`UnitType` (`deck_slots`): es propiedad del modelo, no de este buque.
+
+Las lanchas van aparte de las tropas porque no son tropa: son el vehículo que las lleva, y la
+pantalla las trata distinto — no se eligen de la rejilla, se llenan.
 
 Los cañones (`gau12_cannon`, `m197_cannon`) **no están en la lista**: no se compran ni se
 cuelgan, van con el aparato (`UnitType.cannon`).

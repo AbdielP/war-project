@@ -2,6 +2,102 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-31 (noche) — la sección de tropas: la lancha convierte "cuántos" en "qué cabe"
+
+> **En hueso y sin aprobar.** La pestaña se ve y se usa, pero **todo su arte está generado, no
+> dibujado** —siluetas planas sacadas de la paleta del T-14— y `SELECT BEACH` está apagado porque
+> el dique inundable no existe. Documentado a petición, antes de que el usuario lo mire.
+
+### Las tropas no salen nadando por la popa: las lleva una lancha, y ahí está el juego
+
+De partida no había nada —ni UI, ni unidades, ni sprites más allá de algún blindado enemigo— y la
+idea del usuario fue que las unidades de tierra no pueden salir del buque por su cuenta, que hace
+falta una lancha de desembarco con capacidad. Es lo correcto y además es lo que da juego, porque
+convierte la pantalla en una decisión que el hangar no tiene:
+
+- **La lancha es un contenedor que vuelve, no la unidad que sale.** El Harrier despega y ya es la
+  unidad; la lancha lleva, descarga y regresa. Perderla en el trayecto cuesta la carga entera.
+- **La decisión no es "cuántos" sino "qué cabe".** Un Abrams gasta la lancha entera y con lo mismo
+  van cuatro LAV. Es la misma forma que `WeaponLoadout` —estaciones y qué cuelga de cada una—, así
+  que no hubo que inventar una manera nueva de decir esto.
+- **El destino no es un punto, es una orilla.** Es el único requisito nuevo de verdad, y el dato ya
+  existe: la capa `tipo` del TileSet distingue el terreno. Pendiente.
+
+### Se descartó pedir un objetivo en tierra antes de construir nada
+
+Lo planteé como paso previo —algo que tomar o sostener, o desembarcar es logística sin premio— y el
+usuario lo rechazó: el objetivo es desembarcar y destruir lo que se vea. Tenía razón en lo
+técnico, y conviene dejarlo escrito porque no es obvio: **el comportamiento ya existe**. El T-14 y
+el 2S6 disparan a lo que ven sin que nadie se lo diga, así que "destruir lo que aparezca" es el
+estado por defecto de lo ya construido, no algo que haya que programar. Era una petición de diseño
+disfrazada de dependencia técnica.
+
+### El Amtrac es la unidad que justifica la pantalla
+
+Tres desplegables, cada una contestando algo que las otras no: **M1A1 Abrams** (4 plazas, mata
+cualquier cosa), **LAV-25** (1 plaza, barre lo blando y muere ante un carro), **AAV-7 Amtrac**
+(2 plazas… o ninguna, porque **nada solo**).
+
+Ese tercero es el que hace que el reparto sea una decisión y no una cuenta: puede ir por su cuenta
+—lento y expuesto, sin arriesgar lancha— o embarcado, rápido y jugándose toda la carga. Sin él,
+todo lo que desembarca sería lo mismo con distinto número de plazas.
+
+Y por eso `amphibious` es un `bool` y **no un `deck_slots = 0`**: el cero se leería como "no ocupa
+nada dentro de la lancha", y lo que dice es que no la necesita. En la ficha sale como `SWIMS`, no
+como una cifra.
+
+**El material sale solo del buque.** El enemigo que ya existe es ruso —T-14, 2S6— y el barco es un
+Wasp, así que la fuerza de desembarco es un MEU de marines y los nombres no hubo que elegirlos.
+
+### El nombre se midió antes de escribirlo, y esta vez sobraba sitio
+
+`Detail` mide 100 px y la fuente es Yellow Pixel a 8. El nombre más largo que ya existía —`AH-1W
+SUPERCOBRA`— gasta 65 px, y el mayor de los candidatos 55. Aquí el nombre no es la restricción, al
+revés que en las fichas de armamento, donde `ZUNI-127MM` no cabía. **Medirlo igual cuesta un
+minuto**, y lo que se aprende es cuánto margen hay, no sólo si pasa.
+
+### Los cuadraditos de capacidad contestan mirando
+
+Blanco lo que ya va dentro, **amarillo lo que se metería al pulsar `LOAD`**, apagado lo que sobra.
+Pintar lo pendiente en su propio color es lo que convierte la barra en una respuesta a "¿me cabe
+esto?" en vez de en un dato que hay que restar de cabeza. Es el mismo recurso que el precio en rojo
+del puerto: el estado futuro dibujado sobre el actual.
+
+Y el tope de la cantidad son **dos cosas a la vez** —lo que queda sin desplegar y lo que cabe—, así
+que con la lancha llena el tope es cero **y la cantidad también**: dejarla en 1 al lado de un
+`MAX 0` es el panel contradiciéndose, diciendo que va a meter uno y que no cabe ninguno.
+
+### La ventana ahora mide lo que pide cada sección
+
+Antes sólo el hangar decidía la altura, porque era el único con contenido. Ahora cada página que
+sepa contestar `wanted_height()` la fija al abrirse, y la que no —munición— deja la ventana como
+estaba, que es mejor que encogerla a nada y enseñar un marco vacío. El cambio va **de golpe y no
+animado**: al cambiar de solapa cambia todo el contenido a la vez, y una ventana estirándose encima
+de eso es ruido. Lo animado es desplegar algo *dentro* de una sección, que es otra cosa.
+
+### El arte provisional se generó, no se dibujó
+
+Bloques planos con los colores sacados del propio T-14, para que no desentonen con lo que ya hay y
+para poder juzgar los huecos. Dos juegos **distintos**, no uno achicado del otro: las maquetas del
+mundo (Abrams 30×44, LAV 22×34, Amtrac 26×38, LCAC 48×72) y las miniaturas de casilla (15×22,
+12×18, 13×19), porque `AircraftSlot` coloca la textura a su tamaño real dentro de 32×32.
+
+Las tres miniaturas se parecen mucho entre sí, que es lo que pasa con cajas planas. Sirven para
+juzgar el hueco y para nada más.
+
+### Sabido y sin resolver
+
+- **El dique inundable no existe**, y es lo primero. `SELECT BEACH` está puesto y apagado.
+- **Ojo con la salida por popa**: un avión despega hacia adelante y se separa; una lancha sale por
+  donde el buque acaba de pasar. Es el mismo problema de franja que la pista, con la geometría al
+  revés.
+- **Las orillas válidas** salen de la capa `tipo`, y hay que marcarlas en el mapa o el jugador está
+  adivinando dónde puede desembarcar.
+- **La lancha no se pilota.** Se elige carga y playa, y ella va, descarga y vuelve — llevarla de la
+  mano son diez clics para una sola decisión, y esto es un juego de órdenes.
+- Segunda tanda: **M1097 Avenger** (la AA del jugador; la patrulla Su-33 ya vuela) y **LCU**, más
+  carga y más lento, que es lo que hace de la capacidad una elección entre dos lanchas.
+
 ## 2026-08-31 (tarde) — la cubierta: qué se protege, y de quién es el aparato mientras está encima
 
 Tres arreglos encadenados sobre `FlightDeck`, y el hilo es el mismo: **la cubierta estaba

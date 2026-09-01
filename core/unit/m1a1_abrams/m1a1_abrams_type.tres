@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="UnitType" format=3]
+
+[ext_resource type="Script" path="res://core/unit/unit_type.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://beadjqhgjya1b" path="res://ui/hud/vessel_window/thumb_m1a1.png" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "M1A1 Abrams"
+short_name = "M1A"
+actions = []
+domain = 1
+max_health = 160.0
+power = 8
+deck_slots = 4
+portrait_icon = ExtResource("2")

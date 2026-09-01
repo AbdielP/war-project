@@ -53,6 +53,7 @@ const _TITLE_PADDING := 8.0
 @onready var _pages: Control = $Frame/InnerFrame/Pages
 @onready var _side_tabs: Control = $SideTabs
 @onready var _hangar: HangarPage = $Frame/InnerFrame/Pages/HangarPage
+@onready var _troops: TroopsPage = $Frame/InnerFrame/Pages/TroopsPage
 
 ## El buque cuyo interior se está mirando. Todavía no lo usa nadie: lo guardará
 ## el hangar cuando exista, para saber a quién le pide los aviones.
@@ -99,10 +100,11 @@ func _ready() -> void:
 	# lista entera de títulos.
 	_fit_top_tab()
 	show_section(0)
-	# El hangar es quien decide la medida, porque es el único que se despliega. Se
-	# le pregunta al arrancar y luego avisa él cuando cambia.
+	# Cada página decide su medida y avisa cuando cambia. La ventana no sabe qué
+	# lleva dentro ninguna: sólo cuánto marco hay que añadirle por fuera.
 	_hangar.size_wanted.connect(_resize_to)
 	_hangar.target_requested.connect(target_requested.emit)
+	_troops.size_wanted.connect(_resize_to)
 	_resize_to(0.0, _hangar.wanted_height(), 0.0)
 	hide()
 
@@ -144,6 +146,7 @@ func launch_at(where: Vector2, target: Unit) -> void:
 func open(vessel: Node2D) -> void:
 	ship = vessel
 	_hangar.show_for(vessel)
+	_troops.show_for(vessel)
 	show_section(0)
 	show()
 	move_to_front()
@@ -176,10 +179,22 @@ func show_section(index: int) -> void:
 		# caras las que se diferencian en 4 px, no una medida de la ventana.
 		tab.size.x = art.get_width()
 	_title.text = section_titles[index] if index < section_titles.size() else ""
+	var abierta: Control = null
 	for i in _pages.get_child_count():
 		var page := _pages.get_child(i) as Control
 		if page != null:
 			page.visible = i == index
+			if i == index:
+				abierta = page
+	# Cada sección mide lo suyo, así que la ventana se ajusta al cambiar de
+	# solapa. **De golpe y no animado**: al cambiar de pestaña cambia todo el
+	# contenido a la vez, y una ventana estirándose encima de eso es ruido. Lo
+	# animado es desplegar algo *dentro* de una sección, que es otra cosa.
+	#
+	# La página que todavía no tiene contenido no contesta, y entonces la ventana
+	# se queda como estaba: es mejor que encogerla a nada y dejar el marco vacío.
+	if abierta != null and abierta.has_method("wanted_height"):
+		_resize_to(0.0, abierta.wanted_height(), 0.0)
 
 
 ## Ajusta la ventana al alto que pide la página abierta.

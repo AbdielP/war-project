@@ -49,10 +49,68 @@ var _loadouts: Dictionary = {
 	]
 }
 
+# La fuerza de desembarco embarcada, con la misma forma que `_loadouts` — el
+# panel de tropas es el mismo mueble que el del hangar y lee lo mismo. Lo que no
+# lleva es `weapon_loadouts`: un carro sale con lo que tiene puesto y no se le
+# cuelga nada.
+#
+# **Cuántas plazas ocupa cada uno no está aquí**, está en su `UnitType`
+# (`deck_slots`): es propiedad del modelo, no de este buque, y teniéndolo en el
+# tipo no hay un segundo sitio que se quede viejo.
+#
+# Provisional, igual que el resto de este archivo: lo llenará el puerto.
+var _troops: Dictionary = {
+	"LHD Wasp": [
+		{
+			"display_name": "M1A1 Abrams",
+			"scene": preload("res://core/unit/m1a1_abrams/m1a1_abrams.tscn"),
+			"total": 2,
+			"deployed": 0,
+		},
+		{
+			"display_name": "LAV-25",
+			"scene": preload("res://core/unit/lav25/lav25.tscn"),
+			"total": 6,
+			"deployed": 0,
+		},
+		{
+			"display_name": "AAV-7 Amtrac",
+			"scene": preload("res://core/unit/aav7_amtrac/aav7_amtrac.tscn"),
+			"total": 4,
+			"deployed": 0,
+		},
+	]
+}
+
+# Las lanchas de desembarco de cada buque. Van aparte de las tropas porque no son
+# tropa: son el vehículo que las lleva, y la pantalla las trata distinto — no se
+# eligen de la rejilla, se llenan.
+var _craft: Dictionary = {
+	"LHD Wasp": [
+		{
+			"display_name": "LCAC",
+			"scene": preload("res://core/unit/lcac/lcac.tscn"),
+			"total": 2,
+			"deployed": 0,
+		},
+	]
+}
+
+
 ## El armamento que el jugador tiene hoy. Lo lee el puerto para enseñar el pañol;
 ## el hangar sigue filtrando configuraciones por su cuenta con la misma lista.
 func available_weapons() -> Array:
 	return _available_weapons
+
+
+## Lo que ese buque lleva embarcado para desembarcar.
+func get_troops(ship_name: String) -> Array:
+	return _troops.get(ship_name, [])
+
+
+## Las lanchas de desembarco de ese buque.
+func get_craft(ship_name: String) -> Array:
+	return _craft.get(ship_name, [])
 
 
 ## Los barcos de la flota, por nombre. Sale de las claves del inventario y no de

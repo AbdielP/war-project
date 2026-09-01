@@ -135,6 +135,25 @@ const THUMB_SCALES: PackedFloat32Array = [1.0, 0.5, 0.25, 0.125]
 ## el mismo avión puede cambiarlo.
 @export_range(0.0, 1.0, 0.05) var ecm_evasion: float = 0.0
 
+@export_group("Desembarco")
+## Cuántas plazas ocupa dentro de una lancha. 0 = no se embarca.
+##
+## **Es un reparto, no una cuenta.** Lo que la pantalla de tropas pregunta no es
+## "cuántos mando" sino "qué cabe": un Abrams gasta la lancha entera y con lo
+## mismo van tres LAV. Es la misma forma que el armamento —estaciones y qué
+## cuelga de cada una—, y por eso vive aquí y no en una tabla de la pantalla: el
+## tamaño es del modelo, y así no hay un segundo sitio que se quede viejo.
+@export var deck_slots: int = 0
+## Cuántas plazas tiene si **es** una lancha de desembarco. 0 = no lo es.
+@export var cargo_slots: int = 0
+## Llega a la playa por su cuenta, nadando, sin ocupar lancha.
+##
+## Es de una sola unidad —el Amtrac— y es justo lo que la hace distinta: puede ir
+## sola, lenta y expuesta, o embarcada, rápida pero jugándose la carga entera si
+## hunden la lancha. Sin esto, todo lo que desembarca sería lo mismo con otro
+## número de plazas.
+@export var amphibious: bool = false
+
 @export_group("Puerto")
 ## Lo que cuesta comprarla en el arsenal. **Va en el tipo y no en una lista del
 ## puerto** porque el precio es del modelo: teniéndolo aquí, el arsenal enseña lo

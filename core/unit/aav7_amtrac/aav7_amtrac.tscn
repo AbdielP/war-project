@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
+[ext_resource type="Texture2D" uid="uid://csd2ex6468ro4" path="res://assets/art/sprites/AAV7_Amtrac_placeholder.png" id="2"]
+[ext_resource type="Resource" path="res://core/unit/aav7_amtrac/aav7_amtrac_type.tres" id="3"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(26, 38)
+
+[node name="Aav7Amtrac" groups=["unit_ground"] instance=ExtResource("1")]
+unit_type = ExtResource("3")
+unit_name = "AAV-7 Amtrac"
+team = 0
+
+[node name="Sprite2D" parent="." index="0"]
+texture = ExtResource("2")
+
+[node name="CollisionShape2D" parent="." index="1"]
+shape = SubResource("RectangleShape2D_1")
+
+[node name="SelectionIndicator" parent="." index="2"]
+size = Vector2(26, 38)

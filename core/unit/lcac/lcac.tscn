@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
+[ext_resource type="Texture2D" uid="uid://d4ho8dpu63hay" path="res://assets/art/sprites/LCAC_placeholder.png" id="2"]
+[ext_resource type="Resource" path="res://core/unit/lcac/lcac_type.tres" id="3"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(48, 72)
+
+[node name="Lcac" groups=["unit_maritime"] instance=ExtResource("1")]
+unit_type = ExtResource("3")
+unit_name = "LCAC"
+team = 0
+
+[node name="Sprite2D" parent="." index="0"]
+texture = ExtResource("2")
+
+[node name="CollisionShape2D" parent="." index="1"]
+shape = SubResource("RectangleShape2D_1")
+
+[node name="SelectionIndicator" parent="." index="2"]
+size = Vector2(48, 72)

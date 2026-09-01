@@ -2,6 +2,102 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-08-31 (tarde) — la cubierta: qué se protege, y de quién es el aparato mientras está encima
+
+Tres arreglos encadenados sobre `FlightDeck`, y el hilo es el mismo: **la cubierta estaba
+contestando preguntas parecidas a las que le hacían.** Cerraba el ascensor cuando lo que había
+que cerrar era la pista; hacía viajar al aparato por el mundo cuando viaja sobre el barco; y
+preguntaba qué plazas estaban ocupadas cuando lo que importa es quién está encima de la pista.
+
+### La tanda y la carrera no duran lo mismo, así que no pueden compartir bandera
+
+`_process_queue` se cerraba con `_launching`. Pero una **tanda** dura lo que el jugador tarde en
+sacar de cubierta a un helicóptero posado —o sea: puede no terminar nunca—, mientras que una
+**carrera de pista** dura los pocos segundos que se tarda en rebasar la proa y termina siempre.
+
+Con la bandera equivocada, un solo helicóptero esperando órdenes dejaba el ascensor parado: se
+pedía un aparato, `PlayerFleet` lo descontaba, se reservaba su plaza y **no llegaba a existir**.
+Medido: cuatro helicópteros pedidos de uno en uno dejaban **uno solo** en cubierta, tres atrapados
+en la cola con la plaza reservada y el quinto rechazado. Y sin ningún aviso en pantalla.
+
+Ahora la puerta la cierra `_runway_busy`, que se levanta al empezar la carrera y se baja al
+rebasar la proa. Medido después: cuatro de cuatro, los cuatro operables.
+
+### Aparcar **es** el despegue terminado de lo que sube en vertical
+
+Lo que no usa pista recibe el control **al aparcar**, en el final de su taxi, y no cuando le llega
+el turno en la tanda. Antes, el aparato que llegaba mientras otro corría se quedaba posado y
+sordo — y como el que tiene que darle la orden para desatascarlo es el jugador, sin control no
+había forma de sacarlo.
+
+### El estorbo se pregunta por plaza, no por cubierta
+
+Que un helicóptero esté posado sólo afecta a quien tenga **detrás**, no a la cubierta entera.
+`_runway_blocker_from(slot)` mira sólo la franja que va de su punto de despegue a la proa; lo que
+quede a popa no lo va a alcanzar. Se mide contra el punto de lanzamiento y no por el número de
+plaza: el orden de los marcadores es cosa de la escena y puede cambiar, cuál está más cerca de la
+proa no. Medido: un avión en plaza de proa sale sin esperar al helicóptero de popa; uno de popa
+espera y sale solo en cuanto el helicóptero se va.
+
+### Mientras está en cubierta, el aparato es carga del barco y cuelga de él
+
+El aparato nace colgado de `FlightDeck`, no del mundo, y todo el recorrido —ascensor, rodaje,
+carrera— va en `position`, coordenadas de cubierta. **Un tween apunta a un valor fijo capturado al
+empezar**: en coordenadas de mundo ese valor deja de ser el punto de despegue en cuanto el buque
+avanza, y el aparato rodaría hacia donde la cubierta estaba. Es un fallo que todavía no se veía
+porque el LHD no se mueve, y que iba a aparecer entero el día que lo hiciera.
+
+Se suelta al mundo cuando deja de ser carga: el avión al rebasar la proa, el helicóptero en su
+`took_off`. Con `reparent` conservando transform, así que el relevo no se ve. El destino es el
+padre del buque y no `current_scene`, que bajo la carcasa de pantallas es el envoltorio.
+
+Antes de tocarlo se comprobó quién da por hecho que las unidades cuelgan de la raíz: **nadie**. El
+HUD, la selección, el registro, el armamento, los señuelos y los dos mapas buscan por grupo
+(`get_nodes_in_group`). Sólo había dos `current_scene.add_child`: el marcador de movimiento y el
+propio spawn de la cubierta.
+
+Medido con el buque navegando a 40 px/s y girando 3°/s: el helicóptero en cubierta deriva
+**0,00 px** en ocho segundos, y el avión se desvía **0,00 px** del eje de pista durante el rodaje
+y la carrera completos.
+
+**Y con el reparentado, `tree_exited` deja de significar «se murió»** — soltar al mundo también es
+salir de este árbol. La muerte pasó a `died`, que es la única señal que distingue las dos cosas.
+Con `tree_exited`, la tanda arrancaba al *llegar* a la proa en vez de al rebasarla.
+
+### El helicóptero que acaba de despegar sigue encima de la pista un buen rato
+
+El síntoma: un Harrier corriendo por dentro de un Cobra suspendido sobre la cubierta. Medido,
+**0,2 px de separación**.
+
+Lo que engañaba es que parecía un problema de orden de dibujo, y no lo era: medido, el que vuela
+queda por encima (orden de recorrido 292 contra 15, los dos a `z` efectiva 10). Dos sprites
+exactamente superpuestos se leen como «uno tapa al otro» gane quien gane el orden.
+
+La causa es que se preguntaba por **plazas ocupadas**, y un helicóptero que despega libera la suya
+en el acto mientras sigue suspendido justo encima durante toda la subida. Para la cubierta ya no
+existía. Ahora `_runway_blocker_from` recorre el grupo `unit_air` y mira quién cae dentro de la
+franja de pista, con `runway_clearance` de holgura (30 px). Medido después: 75,0 px, no se cruzan.
+
+**Y lo que vuela no es de la cubierta y no le debe ningún aviso al apartarse**, así que hace falta
+mirar por cuenta propia: `_retry_later` vuelve a preguntar cada `retry_delay` (0,5 s), una espera a
+la vez, y **sólo** mientras el estorbo esté en el aire. Lo que está posado sigue avisando con su
+`took_off`, que ya funcionaba. Comprobado: el avión sale solo en cuanto el helicóptero se aparta.
+
+No se cuenta el tramo de más allá de la proa: ahí el avión ya está subiendo, y contarlo dejaría el
+barco sin lanzar cada vez que un helicóptero se parase a la salida.
+
+### Sabido y sin resolver
+
+**Los helicópteros aparcan en la pista, y no deberían.** Los cuatro puntos de despegue están en la
+misma línea (`x=-22`) porque se dibujaron para aviones, que necesitan carrera. Un helicóptero sube
+en vertical desde donde esté y no la necesita: en un LHD real ocupa *spots* fuera del eje axial, y
+el buque tiene 160 px de manga. Con plazas propias fuera de la pista, todo lo de arriba —esperar
+al de delante, la segunda mirada, el bloqueo por estorbo— **sobra por construcción** para él.
+
+Mientras tanto, un helicóptero posado o suspendido sobre la pista para los despegues de quien
+tenga detrás. Es correcto y se resuelve solo en cuanto se mueve, pero es el argumento de por qué
+hay que sacarlos del eje.
+
 ## 2026-08-31 — el minimapa que informa, el rumbo del LHD y los turnos de cubierta
 
 Tres frentes en el mismo día, y el hilo entre ellos es el mismo: **antes de añadir un dibujo,
@@ -152,6 +248,11 @@ helicóptero espera su orden en `y=94` sin que nadie le pase por encima.
 cubierta está ocupada de verdad; en cuanto se le dice a dónde ir, la tanda continúa sola. La
 alternativa —sacarlo del eje— es mover los marcadores de la escena, y eso es decisión de quien
 dibujó la cubierta.
+
+> **Corregido el mismo día**, ver la entrada de la tarde. La consecuencia no era aceptable: parar
+> la cola dejaba los aparatos siguientes sin llegar a existir, con la plaza reservada y
+> descontados de la flota. Lo que se cierra ahora es la carrera, no la tanda, y el estorbo se
+> pregunta por plaza y no por cubierta.
 
 La continuación va guardada para no dispararse dos veces: se llega a ella por dos caminos —se fue,
 o se murió por el camino— y llamarla dos veces se saltaría un aparato de la lista.

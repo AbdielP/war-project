@@ -758,6 +758,19 @@ Gestiona el ciclo de cubierta: Elevador → Taxi → Despegue → entrega de con
 **Exports clave:**
 - `taxi_speed`, `elevator_cycle_time`, `launch_delay`
 - `post_bow_distance`, `climb_duration`
+- `runway_clearance` — cuánto hay que apartarse del eje de pista para no estorbar (30 px)
+- `retry_delay` — cada cuánto se vuelve a mirar si la pista quedó despejada (0,5 s)
+
+**Lo que está en cubierta cuelga de la cubierta.** El aparato nace como hijo de `FlightDeck` y
+todo su recorrido —ascensor, rodaje, carrera— va en `position`, coordenadas de cubierta, no en
+`global_position`. Mientras está ahí no vuela: es carga, y la carga viaja con el barco. Se suelta
+al mundo (`_detach`, con `reparent` conservando transform) cuando deja de serlo: el avión al
+rebasar la proa, el helicóptero en su `took_off`. El destino es el padre del buque, no
+`current_scene` — bajo la carcasa de pantallas ésa es el envoltorio. Nada más se entera: todo lo
+demás busca a las unidades por grupo.
+
+Consecuencia: **`tree_exited` ya no significa «se murió»**, porque soltar al mundo también es
+salir de este árbol. La muerte va por `Unit.died`.
 
 **La cubierta no tiene velocidad de despegue propia.** Se la pregunta al avión
 (`Unit.get_takeoff_speed()`, que el Harrier resuelve como su `min_speed`) y con ella
@@ -774,6 +787,13 @@ lineal, no un número a ojo.
 **Estado interno:**
 - `_occupied[4]`, `_units[4]` — slots de cubierta
 - `_taxi_queues[2]` — cola por elevador
+- `_launching` — hay una tanda abierta. Dura lo que el jugador tarde en sacar un helicóptero
+  posado: **puede no terminar nunca**
+- `_runway_busy` — hay alguien **corriendo por la pista**. Dura segundos y termina siempre; es lo
+  que cierra el ascensor (`_process_queue`). Confundir los dos dejaba la cubierta sin sacar nada
+- `_handed` — a quién se le cedió ya el control, por id de instancia. Se llega ahí por dos caminos
+  (al aparcar si no usa pista, o al llegarle el turno) y `start_flight` no admite dos llamadas
+- `_retry_pending` — hay una segunda mirada programada
 
 **API pública:**
 - `request_deploy(scene: PackedScene, squad: Squad = null) → bool` — inicia ciclo de despliegue; si se pasa `squad`, el avión se suma a ese `Squad` al spawnear (ver `Squad` más arriba)
@@ -782,10 +802,26 @@ lineal, no un número a ojo.
 **`_hand_over_control(unit)`:** Si la unidad tiene `start_flight()`, se la llama pasándole el barco como centro de órbita. El piloto arranca a su `min_speed`, que es justo la velocidad a la que la cubierta lo soltó: el relevo no se nota. A partir de ahí el avión se pilota solo.
 
 **Lo que no despega por pista** (`get_takeoff_speed()` a 0) se salta la carrera de proa pero
-**también recibe el control**, sólo que posado en su punto. Su plaza no se da por libre ahí:
-`_free_slot_when_airborne()` la mantiene ocupada hasta que el aparato avise con `took_off`, o el
-siguiente taxiaría hasta el mismo sitio y se le montaría encima. La conexión se hace **al crearlo**,
-no al soltarlo, porque la orden de salir puede llegar mientras todavía lo están colocando.
+**también recibe el control**, y lo recibe **al aparcar** —en el final de su taxi— y no cuando le
+llega el turno en la tanda: aparcar *es* su despegue terminado. Esperar al turno lo dejaba posado
+y sordo mientras otro corría, y como quien tiene que darle la orden es el jugador, sin control no
+había forma de desatascarlo. Su plaza no se da por libre ahí: `_free_slot_when_airborne()` la
+mantiene ocupada hasta que el aparato avise con `took_off`, o el siguiente taxiaría hasta el mismo
+sitio y se le montaría encima. La conexión se hace **al crearlo**, no al soltarlo, porque la orden
+de salir puede llegar mientras todavía lo están colocando.
+
+**`_runway_blocker_from(slot) → Node2D`:** quién estorba la carrera del de esa plaza, o `null`.
+Pregunta por **quién está encima de la pista**, no por qué plazas están ocupadas: un helicóptero
+que despega libera la suya en el acto y sigue suspendido justo encima toda la subida, así que
+contando plazas el avión de detrás le pasaba por dentro (medido, 0,2 px). Recorre el grupo
+`unit_air` y mira quién cae en la franja que va del punto de despegue a la proa, con
+`runway_clearance` de holgura; sólo cuenta lo que tenga **delante**. No incluye el tramo de más
+allá de la proa: ahí el avión ya está subiendo, y contarlo dejaría el barco sin lanzar cada vez
+que un helicóptero se parase a la salida.
+
+**Quién vuelve a abrir la puerta.** El que estorba posado avisa con su `took_off`. El que estorba
+**volando** no es de la cubierta y no le debe ningún aviso, así que `_retry_later()` vuelve a
+mirar cada `retry_delay`, una espera a la vez, y sólo mientras el estorbo esté en el aire.
 
 ---
 

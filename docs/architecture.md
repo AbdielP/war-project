@@ -614,6 +614,7 @@ mapa táctico          → HUD.map_clicked   → _on_map_clicked(pos, unit)
 _handle_click(pos, unit)
   └─ unidad bajo el punto:
        └─ puedo atacarla (propia seleccionada + hostil) → _issue_attack_order(unit)
+       └─ puedo subir a ella (lancha seleccionada + tiene dique) → _issue_return_order(...)
        └─ es la ya seleccionada → _select(null)
        └─ si no → _select(unit)
   └─ sin unidad + hay propia seleccionada → _issue_move_order(pos)
@@ -625,12 +626,21 @@ _handle_context(pos, unit)
   └─ unidad ajena bajo el punto → _hud.open_target_menu(unit, can_attack)
   └─ si no, y hay propia seleccionada → _issue_move_order(pos)
 
-HUD.attack_requested (del menú) → _issue_attack_order(target)
+HUD.attack_requested (del menú)  → _issue_attack_order(target)
+HUD.return_requested (acción)    → _issue_return_order(craft)   # sin dique = a su casa
 ESC → cierra el menú + _select(null)
 HUD.deselect_requested → _select(null)
 HUD.zoom_change_requested(step) → PanCamera.step_zoom(step)
 PanCamera.zoom_changed(level, count) → HUD.set_zoom_state(...)
 ```
+
+**Volver a bordo se pide por dos caminos y son la misma orden.** El botón `RETURN` del panel de
+acciones es **el que siempre funciona**, porque la lancha suele estar en la playa con el buque fuera
+de pantalla; pulsar el buque es el atajo para cuando se ven los dos. `_can_board` pregunta tres
+cosas y ninguna sobra: que lo nuestro sepa volver, que lo de debajo tenga dique, y que no sea de
+otro bando — abordar el buque enemigo es otra cosa muy distinta. Consecuencia aceptada: **con una
+lancha seleccionada ya no se puede seleccionar el propio buque pulsándolo**, igual que con algo
+armado no se puede seleccionar un hostil. Para llegar al buque, Esc.
 
 **El significado del gesto está separado de quién lo trae.** `_handle_click` y
 `_handle_context` reciben ya resuelto qué hay debajo; el mundo lo averigua con
@@ -834,6 +844,113 @@ que un helicóptero se parase a la salida.
 mirar cada `retry_delay`, una espera a la vez, y sólo mientras el estorbo esté en el aire.
 
 ---
+---
+
+### `WellDeck` — `core/unit/lhd_wasp/well_deck.gd`
+
+El dique inundable: por donde sale y vuelve la fuerza de desembarco. Cuelga del LHD como hermano
+de `FlightDeck` y **hace por popa lo mismo que aquél por proa**, heredando sus tres lecciones —
+mientras está dentro la lancha es carga y viaja en coordenadas del buque; se reserva el camino y no
+la plaza; y quien dice "ahora no" tiene que decir después "ya puedes".
+
+**La geometría es la de la pista al revés, y eso la hace peor.** Un avión despega hacia proa y se
+separa solo; una lancha sale hacia popa, por el agua que el barco acaba de cruzar. Avanzando juega
+a favor —la popa se aleja—, pero ciando y virando juega en contra.
+
+| Marcador | Sitio (local) | Para qué |
+|---|---|---|
+| `Ramp` | (−5, 100) | Dentro del casco. Donde nace y donde acaba al volver. |
+| `ExitPoint` | (−5, 190) | El muelle: 54 px por detrás de la popa (que está en y=136). |
+| `ApproachPoint` | (−5, 380) | Donde se pone en franquía antes de entrar. |
+
+**`launch(craft_entry, cargo, beach) → bool`** — se le pasa la **casilla de la flota** y no la
+escena: de ahí sale la escena, y además es lo que la lancha guarda para poder devolverse sola.
+Devuelve si se aceptó el encargo, que no es si ya salió: con la popa ocupada se guarda una salida
+pendiente y sale al despejarse.
+
+**`_stern_blocker()`** — quién estorba la salida, en coordenadas del buque, sobre el grupo
+`unit_maritime`. Sólo puede estorbar algo que flote: lo que vuela pasa por encima.
+
+**`lineup_point()` / `dock_point()` / `is_lined_up(where)`** — los dos tramos de la vuelta. Se
+piden **cada fotograma** y salen en coordenadas de mundo desde las del buque, así que la maniobra
+entera gira con él: es justo lo que un punto fijo del agua no hace.
+
+**`_craft_arriving()`** — a quién recoger. Pregunta por `is_docking_at(self)`, o sea **intención y
+tramo final**, no cercanía. Ver el bloque de abajo.
+
+**`stowed_z_index`** — lo estibado se dibuja por debajo del casco. Con su orden normal la lancha se
+veía deslizándose por encima de la cubierta de vuelo. Se le devuelve el suyo al soltarla, leído de
+su escena y no escrito aquí.
+
+> **Recoger por intención, no por cercanía.** El primer intento absorbía a la lancha que *se paraba
+> cerca* del muelle. Pasó la verificación en sonda y era inusable: el punto es invisible, está a 54
+> px por detrás del casco y el radio era de 45 — pulsar sobre el barco quedaba fuera y no ocurría
+> nada, sin aviso. **El fallo de método fue probarlo con la coordenada exacta en la mano, que es lo
+> que el jugador no tiene.** Eso prueba que la función existe, no que se pueda usar.
+
+---
+
+### `BoatController` — `core/unit/naval/boat_controller.gd`
+
+El patrón de una embarcación. Decide **cómo** se mueve; a dónde va lo dice quien llame a
+`set_target()`. Mueve al nodo padre.
+
+**No reusa ninguno de los otros dos pilotos**, por lo mismo que ésos no se reusan entre sí: cada uno
+está construido sobre lo que su aparato *no* puede hacer. El avión no puede parar y de ahí sale su
+radio de giro; el helicóptero no tiene radio de giro y de ahí salen sus tres ejes. Una lancha ni
+pivota parada ni deja de poder frenar. Es el más simple de los tres — **un solo eje de marcha**, a
+propósito: una lancha no navega de costado.
+
+| Campo | Qué decide |
+|---|---|
+| `cruise_speed` / `acceleration` / `deceleration` | La marcha. La frenada **también** decide cuándo empieza a frenar: la distancia de parada sale de ella (`v²/2a`), y así no hay dos números que se despeguen. |
+| `turn_speed_deg` | Es un **radio de giro disfrazado**: como sólo empuja hacia donde mira, girar despacio a velocidad de crucero *es* virar ancho. |
+| `steerage_fraction` | Qué marcha conserva con el rumbo del revés. **No puede ser cero**: sin arrancada el timón no muerde, y de este suelo sale la curva de salida del buque en vez de un pivote. |
+| `aground` | Está varada. Anula el suelo anterior: en seco no hace falta arrancada para virar. |
+| `speed_limit` | Tope puntual. **El radio de giro es `v/ω`**, así que la curva se cierra bajando la marcha, no tocando el gobierno. |
+
+> **De aquí sale su gesto y no está programado:** como sólo empuja hacia donde mira y tarda en
+> girar, sale del barco describiendo una curva en vez de partir en línea recta. Es lo que queda
+> cuando el único eje es la proa.
+
+---
+
+### `LandingCraft` — `core/unit/lcac/lcac.gd`
+
+Qué **es** una lancha de desembarco: lleva carga, cruza y la deja en la arena. No navega.
+
+**Es un contenedor que vuelve, no la unidad que sale.** El Harrier despega y ya es la unidad; ésta
+lleva, descarga y regresa. Y si la hunden se pierde todo lo que iba dentro **sin programar nada**:
+la tropa no existe como nodo hasta que toca la arena, así que hundirla es que no llegue a existir.
+La flota ya la descontó al embarcarla.
+
+**Descarga por estar en la arena, no por haber llegado a su destino.** Atado al destino, redirigirla
+a mitad de travesía la dejaría con la tropa dentro y sin forma de soltarla — haría falta otra
+pantalla para reelegir playa. Atado al terreno, la regla es una frase y redirigir funciona sin nada
+más: si el sitio nuevo es playa desembarca allí, si es agua se queda con la carga puesta.
+
+**`_dry_spot(ahead, index)`** — dónde sale cada uno. **En columna por el rumbo de la lancha**, que
+es lo que hace una rampa y además lo único que cae siempre en tierra: llegó apuntando a la playa,
+así que su rumbo señala tierra adentro. En línea de frente dos de cada tres desembarcaban nadando,
+porque una celda de playa mide 32 px y la fila medía el triple. Aun así cada uno comprueba que pisa
+seco y retrocede **hasta la lancha**, que ha varado en la arena y es lo único seco con seguridad.
+
+**La vuelta, en dos tramos con pestillo.** `_lined_up` es un pestillo y no una comparación por
+fotograma **a propósito**: con una condición viva —"¿estoy por detrás de tal línea?"— la lancha la
+cruzaba de camino al punto de franquía, se re-apuntaba al muelle que ya tenía al lado y frenaba de
+través a media eslora. Una vez en franquía se entra; no se vuelve a discutir. Y `docking_speed`
+(22 px/s) cierra la curva: a crucero el radio son 76 px y entraba de costado.
+
+**`load_cargo` copia en superficial a propósito.** En profundidad se copiarían también las casillas
+de la flota que van dentro de cada fila, y devolver la carga al volver le sumaría las plazas a una
+copia que no lee nadie — la lancha atracaba, la interfaz decía que todo estaba en su sitio y los
+carros seguían contados como desembarcados.
+
+**`get_actions()`** devuelve las del tipo sólo si tiene `home_deck`: una lancha puesta a mano en una
+escena de prueba no enseña un botón que no puede cumplir. Es la primera unidad del proyecto con una
+acción — el `ActionsPanel` se estrena aquí, y su hueco da para unos **8 caracteres** (`RETURN TO
+SHIP` se salía de la pantalla; un `PanelContainer` crece con el contenido en vez de recortarlo).
+
 
 ### Vuelo — `core/unit/flight/`
 
@@ -2340,6 +2457,27 @@ hasta que tenga comportamiento**.
 
 ---
 
+### La fuerza de desembarco — `core/unit/{m1a1_abrams,lav25,aav7_amtrac,lcac}/`
+
+Tres desplegables y la lancha que las lleva. Las tres primeras siguen el patrón del T-14: **sin
+script**, porque todavía no tienen comportamiento. La lancha sí lo tiene ([`LandingCraft`](#landingcraft--coreunitlcaclcacgd)).
+
+| | Plazas | Vida | Potencia | Notas |
+|---|---|---|---|---|
+| M1A1 Abrams | 4 | 160 | 8 | gasta la lancha entera |
+| LAV-25 | 1 | 70 | 4 | cuatro por lo que cuesta un Abrams |
+| AAV-7 Amtrac | `SWIMS` | 90 | 2 | `amphibious`: llega solo, lento y expuesto |
+| LCAC | lleva 4 | 110 | 1 | `cargo_slots`, dominio `NAVAL`, desarmada |
+
+> **Hoy no se mueven ni disparan, y eso condiciona lo que se puede construir encima.** No hay piloto
+> de tierra, así que "manda el tanque a la lancha" no existe porque "manda el tanque" no existe — el
+> reembarque cuelga de eso. Y **nada dispara a nada que flote o ruede**: el único enemigo armado es
+> el 2S6, cuya torreta busca en un grupo fijo (`unit_air`), y el T-14 no tiene sistema de armas.
+
+> **Todo su arte está generado, no dibujado.** Bloques planos con la paleta del propio T-14.
+
+---
+
 ### `2S6 Tunguska` — `core/unit/2s6_tunguska/`
 
 Batería antiaérea enemiga. Primera unidad hostil **con** comportamiento, y el contraejemplo del
@@ -2631,6 +2769,16 @@ API:
 - `show_order_marker(world_position)` / `clear_order_marker()` — el destino de la orden en curso, para que se vea en los dos mapas. Se lo dice `SelectionManager`: el HUD no conoce el mundo
 - `report_move_order(unit, where)` — una orden dada, para el `EventLog`. Igual que el marcador: lo cuenta quien la da, porque nadie más se entera de que ha habido una
 - `set_zoom_state(level, count)` — hasta dónde puede seguir acercándose o alejándose. Se lo dice `SelectionManager`, que sí tiene la cámara delante
+
+**El mapa se abre a veces a hacer una pregunta, y entonces el siguiente click significa otra cosa y
+no sale del HUD.** Hay dos: a dónde va una salida del hangar, y por qué orilla desembarca una
+lancha. Van en un enum `Picking` y no en un booleano por pregunta porque son **excluyentes**: con
+dos banderas existiría el estado imposible de preguntar las dos a la vez, que alguien tendría que
+acordarse de evitar a mano. `_stop_picking()` es uno solo para los cinco sitios desde los que se
+cancela — cerrar el mapa, contestar, Esc.
+
+Y **fallar la playa no cierra el mapa**: la pregunta sigue en pie. Cerrarlo obligaría a reabrir la
+ventana y volver a pulsar el botón por haber pinchado dos celdas más allá.
 
 **`_refresh_weapon_bar()` junta las tres condiciones que esconden la barra de armas:** que no
 haya selección, que la unidad no sea del jugador, o que el mapa táctico esté abierto. Las tres
@@ -2935,10 +3083,19 @@ signal action_pressed(action_name: String)
 `show_actions(PackedStringArray)` — crea un `Button` por acción dinámicamente.
 `clear()` — oculta el panel.
 
-> **Hoy no lo usa nadie.** Su único inquilino era el "Hangar" del LHD, que dejó de ser una acción
-> y pasó a ser el botón "Comandar" de `UnitTag` (ver `UnitType.has_interior`). El panel se queda
-> para las acciones que vengan: con `actions` vacío en todos los tipos, `show_actions([])` lo
-> oculta y no estorba.
+**Su primer inquilino es el `RETURN` del LCAC.** Antes de eso estuvo vacío una temporada: el
+"Hangar" del LHD dejó de ser una acción y pasó a ser el botón "Comandar" de `UnitTag` (ver
+`UnitType.has_interior`).
+
+**Y el hueco da para unos 8 caracteres.** El panel está colocado en x=544 con `offset_right` 637 —93
+px de ancho, 81 de texto quitando márgenes— pero es un `PanelContainer`: **crece con su contenido en
+vez de recortarlo**. Con `RETURN TO SHIP` se estiró a 141 px y se salió de los 640 del lienzo, así
+que se leía `RETURN TO` y el resto fuera de la pantalla. El rótulo tiene que caber por sí solo;
+acortarlo es la salida, no encoger la fuente.
+
+**Qué acciones se ofrecen lo decide la unidad, no su tipo.** `Unit.get_actions()` devuelve las de
+`UnitType.actions`, pero se puede sobrescribir: el LCAC no enseña `RETURN` si no tiene dique al que
+volver — un botón que no puede cumplir lo que ofrece es peor que no tenerlo.
 
 ---
 
@@ -3100,10 +3257,20 @@ carga si la hunden.
 puerto: repartido en pasos, quien carga puede quedarse a medias si falla el de en medio. `UNLOAD`
 lo devuelve todo.
 
-> **`SELECT BEACH` está apagado a propósito: es un andamio.** El dique inundable no existe, así que
-> no hay de dónde salir. Se deja a la vista porque su presencia ya dice que esto acaba en un
-> desembarco, y apagado porque un botón que se pulsa y no hace nada se lee como que el juego se
-> colgó. Es lo primero que hay que sustituir.
+**`SELECT BEACH` ya no es un andamio: es la salida.** Abre el mapa a elegir orilla y, con la
+respuesta, la lancha zarpa. **Elegir playa *es* zarpar**, no apuntar un destino para pulsar otro
+botón después: carga y destino son una sola decisión, igual que en el hangar se le apunta el blanco
+al avión antes de soltarlo.
+
+El botón se apaga por tres motivos distintos y ninguno sobra: sin carga —una lancha vacía cruzando
+el mapa no es una orden—, sin lancha disponible, y **sin orilla a la que llegar en este mapa**, que
+se lo dice el HUD al abrir la ventana porque el terreno no es cosa de la ficha. Elegida la playa, el
+propio botón pasa a decir la coordenada (`BEACH D2`): es el sitio donde vive esa decisión, así que
+ahí se enseña la respuesta. Lleva `custom_minimum_size.x = 60` para que cambiar de texto no
+recoloque a `LOAD` y `UNLOAD` — medido, `SELECT BEACH` pide 60 px y `BEACH D2` sólo 44.
+
+La página escucha `PlayerFleet.changed` y repinta las casillas **sin rehacer la rejilla**:
+reconstruirla soltaría la unidad que el jugador tiene elegida mientras la mira.
 
 > **Todo el arte de esta sección es provisional y está *generado*, no dibujado**: siluetas planas
 > sacadas de la paleta del propio T-14 para que no desentonen. Las maquetas del mundo
@@ -3594,6 +3761,26 @@ coordenadas. No es un nodo: es el dato que dibujan los dos mapas.
 | `cells_per_px` | cuántas celdas resume cada píxel. 1 salvo mapas enormes |
 | `zone_count(n)` / `zone_at(world, n)` / `zone_center(zone, n)` / `label_at(world, n)` | coordenadas |
 | `column_label(i)` | estático. `A`…`Z`, `AA`, `AB`… |
+| `shorelines` | las celdas de playa **que dan al mar**, calculadas una vez al construir |
+| `cell_at(world)` / `cell_center(cell)` | de mundo a celda y al revés. El **centro**, no la esquina |
+| `nearest_shoreline(world, reach_cells)` | la orilla más cercana, o `null` |
+| `kind_at(layer, cell)` / `kind_under(layer, world)` | estáticos. El tipo suelto, sin construir el mapa |
+| `find_layer(tree)` | estático. El `TileMapLayer` de la misión puesta |
+
+**No toda la arena es orilla.** Lo que hace atracable a una celda no es su dibujo sino tener un
+vecino de agua por el que llegar: en el mapa de hoy hay 34 celdas de arena y sólo **21** valen —7 en
+la isla pequeña, 14 en la del Tunguska—, porque las otras 13 están tierra adentro. Se calculan al
+construir, en **celdas y no en píxeles de la imagen**: lo que se dibuja se puede resumir, dónde se
+puede atracar no.
+
+**`nearest_shoreline` perdona la puntería, dos celdas por defecto.** Una celda mide 32 px de mundo
+y en el mapa a pantalla completa son unos pocos de pantalla; exigir el impacto exacto convertiría
+elegir playa en un juego de precisión, que no es la decisión que se está pidiendo. Devuelve el
+**centro de la celda**, así que dos clicks dentro de la misma dan el mismo destino.
+
+**`find_layer` vive aquí** y no en cada uno de los que lo buscan porque es la misma suposición
+repetida —que hay una capa de tiles y sólo una—, y el día que una misión traiga dos hay un solo
+sitio donde enterarse.
 
 **El tamaño sale del `TileMapLayer`, nunca de una constante.** El mapa cambia por misión;
 apuntarlo en algún sitio sería tener dos verdades y que una envejezca. Misma fuente de la
@@ -3627,7 +3814,23 @@ contactos** (ver `ThreatPulses`).
 | `map_context_requested(world_position: Vector2, unit: Unit)` | Ídem con el derecho |
 
 API además de los exportados: `set_order_marker(world)` / `clear_order_marker()`,
-`set_selected_unit(unit)`, `unit_at(local_position)`, `world_to_local()` / `local_to_world()`.
+`set_selected_unit(unit)`, `unit_at(local_position)`, `world_to_local()` / `local_to_world()`,
+`set_picking_beach(bool)`, `has_beaches()`, `beach_at(world)`.
+
+**Las orillas por las que se puede desembarcar se marcan sólo mientras se eligen.** Marcadas siempre
+serían un adorno permanente diciendo "esto importa" cuando no importa; salidas al pulsar el botón,
+son la respuesta a la pregunta que el jugador acaba de hacer. Como el minimapa es este mismo control
+y nunca entra en ese modo, no las dibuja jamás.
+
+Se traza el **contorno de la mancha** —sólo los lados que no dan a otra orilla— así que catorce
+celdas contiguas salen como una playa y no como catorce cuadritos. Y va como borde y no como
+relleno porque la arena ya tiene su color en el terreno. La celda bajo el ratón sí se rellena: es la
+respuesta a la **misma pregunta que decide el click**, holgura incluida — si se enciende apuntando
+al agua, desde ahí también acierta.
+
+`has_beaches()` construye el terreno si hace falta: se pregunta con el mapa **todavía cerrado** —lo
+construye al abrirlo— y sin eso la respuesta sería "no hay playas" hasta que el jugador lo abriera
+una vez, dejando el botón de desembarco apagado sin motivo.
 
 | Exportado | Minimapa | Táctico | Qué hace |
 |-----------|----------|---------|----------|
@@ -3877,6 +4080,10 @@ API: `open()` / `close()` / `toggle()`, `set_selected_unit(unit)`, `set_order_ma
 `clear_order_marker()`, y `marker_position(unit)` — dónde cae el punto de una unidad en la
 pantalla, que es lo que el HUD usa para colocar el menú contextual.
 
+Y el paso de la elección de playa: `set_picking_beach(bool)`, `has_beaches()`, `beach_at(world)` y
+`label_at(world)` — la coordenada ya escrita, que sale de aquí y no de quien la enseña para que el
+mapa y la ficha digan lo mismo con la misma cadena.
+
 Tapa la pantalla y **se come los clicks a propósito**: con el mapa abierto, una pulsación no
 puede colarse hasta el mundo y dar una orden de movimiento sin querer. Funciona en pausa sin
 hacer nada, porque cuelga del HUD y el HUD ya es `process_mode = Always`.
@@ -3950,7 +4157,21 @@ El armamento vive aquí y no en un autoload aparte a propósito: es "lo que el j
 tiene", igual que las aeronaves, y como todo esto lo reemplaza la pantalla de puerto,
 partirlo en dos duplicaría esa migración.
 
-API: `get_loadout(ship_name)`, `try_deploy(entry) → bool`, `recall(entry)`.
+API: `get_loadout(ship_name)`, `try_deploy(entry) → bool`, `recall(entry)`, señal `changed`.
+
+**`recall` la llama quien recoge, no quien sacó.** Hoy el `WellDeck` cuando una lancha atraca, y la
+propia lancha por lo que llevara dentro sin desembarcar: traerte a casa lo que no soltaste no puede
+costarte perderlo.
+
+**No hay campo de bajas, y no hace falta.** Una unidad destruida nunca llama a `recall`, así que se
+queda contada como fuera para siempre — que es exactamente lo que hay que hacer con algo que no va a
+volver, y el número de disponibles sale bien sin el campo. Se llegó a plantear partir `deployed` en
+fuera/perdido y se descartó: obligaba a tocar los **seis** sitios que calculan `total − deployed`
+para alimentar algo que todavía no lee nadie. Cuando exista el parte de misión, ahí sí.
+
+**`changed` existe desde que hay unidades que vuelven.** Mientras salir era un viaje de ida, quien
+pulsaba el botón sabía que el número acababa de cambiar y se refrescaba solo; una lancha que atraca
+lo cambia sin que la interfaz haya tocado nada, y el panel se quedaba con el de antes.
 
 ---
 
@@ -4399,6 +4620,11 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Cámara con foco desplazable** (`PanCamera.focus_offset` / `pan_focus`): al abrir la ventana del buque, la unidad se aparta a un lado con una transición y vuelve al centro —de golpe si se cambia de unidad, animado si sólo se suelta— al cerrarla
 
 ### Pendiente
+- [ ] **Las unidades de tierra no se mueven ni disparan.** Es el trabajo grande, y del que cuelga el resto del desembarco: sin piloto de tierra no hay reembarque, y sin armas "destruir lo que se vea" no ocurre
+- [ ] **Nada dispara a nada que flote.** El 2S6 busca sólo en `unit_air`; el combate de superficie no existe
+- [ ] **La maniobra de aproximación al dique se va demasiado lejos.** Entra derecha, pero el rodeo es exagerado: `WellDeck/ApproachPoint` (380 px por popa) y `LandingCraft.docking_speed` (22 px/s), los dos en el inspector
+- [ ] **Reembarcar tropa desembarcada.** El gesto será el de siempre —seleccionar el carro y pulsar la lancha— y las plazas se comprueban al subir, no al pulsar
+- [ ] **Sólo la lancha volviendo persigue a una unidad.** Cualquier otra orden "cerca del barco" sigue siendo un punto muerto del agua
 - [ ] **Contenido del Puerto**: economía, mejoras y desbloqueos. Hoy es un panel con un rótulo
 - [ ] **Las misiones son texto escrito a mano** en `CampaignScreen.missions`; falta un recurso de misión del que salgan nombre, briefing y escena
 - [ ] **La misión no sabe terminarse sola**: sin condiciones de victoria, la salida al debriefing es F10 y es un andamio

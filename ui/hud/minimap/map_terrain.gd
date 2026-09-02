@@ -30,6 +30,12 @@ const COLORS := {
 ## Tipo que existe en el mapa pero no en [constant COLORS]. Rojo a propósito.
 const UNKNOWN_COLOR := Color("ff0044")
 
+## El terreno por el que se desembarca, y el que hay que tener delante para
+## poder llegar a él. Son nombres de la capa `tipo`, los mismos de los colores:
+## no hay una segunda lista que mantener.
+const BEACH_KIND := "arena"
+const WATER_KIND := "agua"
+
 ## Un píxel por celda, con el color del terreno. Sin filtrar: se dibuja a escala
 ## entera y con Nearest, como todo lo demás del juego.
 var texture: ImageTexture
@@ -44,6 +50,16 @@ var tile_px: Vector2i
 var cells_per_px: int = 1
 ## El mapa en coordenadas de mundo.
 var world_rect: Rect2
+## Las celdas de playa **que dan al mar**, en coordenadas de celda.
+##
+## No toda la arena vale. En el mapa de hoy hay 34 celdas de arena y 13 están
+## tierra adentro: playa de adorno, sin agua por la que llegar hasta ella. Lo
+## que hace atracable a una celda no es su dibujo sino tener un vecino de agua,
+## así que se pregunta por la vecindad y no por el tipo a secas.
+##
+## Se calculan una vez, al construir: el terreno de una misión no cambia, y
+## recorrer el mapa entero en cada click sería pagar mil veces por lo mismo.
+var shorelines: Array[Vector2i] = []
 
 
 ## Construye la imagen. `cells_per_pixel` mayor que 1 resume bloques de celdas
@@ -74,7 +90,96 @@ static func build(layer: TileMapLayer, cells_per_pixel: int = 1) -> MapTerrain:
 		for x in range(size.x):
 			img.set_pixel(x, y, _block_color(layer, used, map.cells_per_px, x, y))
 	map.texture = ImageTexture.create_from_image(img)
+	map._find_shorelines(layer)
 	return map
+
+
+## Recorre el mapa una vez y se queda con las playas que tienen mar delante.
+##
+## En **celdas**, no en píxeles de la imagen: si el mapa fuera tan grande que
+## cada píxel resumiera un bloque, la orilla seguiría siendo del tamaño que es y
+## no del que se pinta. Lo que se dibuja se puede resumir; dónde se puede atracar
+## no.
+func _find_shorelines(layer: TileMapLayer) -> void:
+	shorelines.clear()
+	for cell: Vector2i in layer.get_used_cells():
+		if kind_at(layer, cell) != BEACH_KIND:
+			continue
+		for side in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP]:
+			if kind_at(layer, cell + side) == WATER_KIND:
+				shorelines.append(cell)
+				break
+
+
+## El tipo de una celda, o cadena vacía si ahí no hay nada pintado. Un hueco no
+## es agua: preguntar por el tipo de una celda vacía tiene que dar "nada", o el
+## borde del mapa se leería como mar y las playas del canto saldrían atracables.
+static func kind_at(layer: TileMapLayer, cell: Vector2i) -> String:
+	var data: TileData = layer.get_cell_tile_data(cell)
+	return "" if data == null else str(data.get_custom_data(DATA_LAYER))
+
+
+## Sobre qué terreno cae un punto del mundo. Es la consulta suelta, para quien
+## necesita saberlo sin construir el mapa entero — una lancha preguntando si ya
+## ha tocado arena, por ejemplo.
+static func kind_under(layer: TileMapLayer, world: Vector2) -> String:
+	if layer == null:
+		return ""
+	return kind_at(layer, layer.local_to_map(layer.to_local(world)))
+
+
+## El terreno de la misión que está puesta.
+##
+## Vive aquí y no en cada uno de los que lo buscan porque es **la misma
+## suposición repetida** —que hay una capa de tiles y sólo una—, y el día que una
+## misión traiga dos hay un solo sitio donde enterarse.
+static func find_layer(tree: SceneTree) -> TileMapLayer:
+	if tree == null:
+		return null
+	var found := tree.root.find_children("*", "TileMapLayer", true, false)
+	return found[0] as TileMapLayer if not found.is_empty() else null
+
+
+## En qué celda cae un punto del mundo.
+func cell_at(world: Vector2) -> Vector2i:
+	var local := world - world_rect.position
+	return origin_cell + Vector2i(
+		int(floor(local.x / tile_px.x)),
+		int(floor(local.y / tile_px.y)))
+
+
+## El centro de una celda, en mundo. **El centro y no la esquina**: es el punto
+## al que se manda algo, y una esquina cae sobre la celda de al lado.
+func cell_center(cell: Vector2i) -> Vector2:
+	return world_rect.position + Vector2(cell - origin_cell) * Vector2(tile_px) \
+			+ Vector2(tile_px) * 0.5
+
+
+## La orilla más cercana a un punto, o `null` si no hay ninguna a tiro.
+##
+## Se perdona la puntería a propósito. Una celda mide 32 px de mundo y en el mapa
+## a pantalla completa eso son unos pocos píxeles de pantalla: exigir el impacto
+## exacto convertiría elegir playa en un juego de precisión, que no es la
+## decisión que se está pidiendo. `reach_cells` es cuánto se perdona, y es el
+## mismo recurso que [method MapView.unit_at] usa para pulsar contactos.
+##
+## Devuelve el **centro de la celda**, no el punto pulsado: lo que se elige es
+## una celda de playa, así que dos clicks en la misma celda tienen que dar el
+## mismo destino.
+func nearest_shoreline(world: Vector2, reach_cells: float = 2.0) -> Variant:
+	if shorelines.is_empty():
+		return null
+	var reach: float = reach_cells * maxf(tile_px.x, tile_px.y)
+	var best: Variant = null
+	var best_distance := INF
+	for cell: Vector2i in shorelines:
+		var center := cell_center(cell)
+		var distance := center.distance_to(world)
+		if distance > reach or distance >= best_distance:
+			continue
+		best_distance = distance
+		best = center
+	return best
 
 
 ## Color de un píxel de la imagen: el tipo más repetido entre las celdas que

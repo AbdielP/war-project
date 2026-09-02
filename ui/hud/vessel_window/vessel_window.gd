@@ -20,6 +20,11 @@ signal closed(instant: bool)
 ## cara pública de lo que hay dentro.
 signal target_requested
 
+## Las tropas quieren que el jugador señale por qué orilla desembarca la lancha.
+## Se reenvía igual que [signal target_requested]: son la misma clase de aviso
+## —"pregúntale al jugador en el mapa"— hecha por dos páginas distintas.
+signal beach_requested
+
 ## Se ha empezado o terminado de arrastrar la ventana.
 ##
 ## Lo tiene que decir ella: desde fuera, arrastrar no se distingue de tener el
@@ -105,6 +110,7 @@ func _ready() -> void:
 	_hangar.size_wanted.connect(_resize_to)
 	_hangar.target_requested.connect(target_requested.emit)
 	_troops.size_wanted.connect(_resize_to)
+	_troops.beach_requested.connect(beach_requested.emit)
 	_resize_to(0.0, _hangar.wanted_height(), 0.0)
 	hide()
 
@@ -141,6 +147,18 @@ func _gui_input(event: InputEvent) -> void:
 func launch_at(where: Vector2, target: Unit) -> void:
 	var order := {"target": target} if is_instance_valid(target) else {"where": where}
 	_hangar.launch(order)
+
+
+## Desembarca por la orilla que el jugador acaba de señalar. `label` es la
+## coordenada ya escrita por el mapa — la ventana no la arma, sólo la pasa.
+func land_at(where: Vector2, label: String) -> void:
+	_troops.land_at(where, label)
+
+
+## Si en este mapa hay alguna playa a la que llegar. Se lo dice el HUD al abrir,
+## porque el terreno no es cosa de la ventana.
+func set_landing_possible(value: bool) -> void:
+	_troops.set_landing_possible(value)
 
 
 func open(vessel: Node2D) -> void:

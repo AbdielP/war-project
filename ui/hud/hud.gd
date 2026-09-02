@@ -5,6 +5,9 @@ signal deselect_requested
 signal unit_focus_requested(unit: Unit)
 ## El jugador eligió "Atacar" en el menú de una unidad ajena.
 signal attack_requested(target: Unit)
+## Pulsó la acción de volver a bordo. Sale como aviso por lo mismo que la de
+## atacar: es una orden a una unidad, y quien las da es quien lleva la selección.
+signal return_requested(unit: Unit)
 ## Pidió acercar (+1) o alejar (−1). El HUD no conoce la cámara: reenvía y ya.
 signal zoom_change_requested(step: int)
 ## Pulsó el mapa táctico, con la unidad que hubiera bajo el punto o `null`.
@@ -42,13 +45,22 @@ signal vessel_closed(instant: bool)
 ## arriba y un poco a la derecha, para no taparlo ni pisar su recuadro.
 const _IMPACT_OFFSET := Vector2(10.0, -14.0)
 
-## Lo que dice el mapa mientras se elige a dónde mandar una salida del hangar.
+## Qué está preguntando el mapa mientras está abierto.
+##
+## Un mapa abierto casi siempre sirve para dar órdenes, pero a veces se abre
+## **para contestar algo** y entonces el siguiente click significa otra cosa y no
+## sale del HUD. Van en un enum y no en un booleano por pregunta porque son
+## excluyentes: con dos banderas habría un estado imposible —el mapa preguntando
+## dos cosas a la vez— que alguien tendría que acordarse de evitar a mano.
+enum Picking {
+	NONE,           ## El click es una orden, como siempre.
+	LAUNCH_TARGET,  ## A dónde va la salida del hangar.
+	BEACH,          ## Por qué orilla desembarca la lancha.
+}
 
 var _current_unit: Unit = null
 
-## El mapa está abierto para señalar el blanco de una salida del hangar, no para
-## dar órdenes. El siguiente click significa otra cosa mientras esto esté puesto.
-var _picking_launch_target := false
+var _picking: Picking = Picking.NONE
 
 
 func _ready() -> void:
@@ -76,6 +88,10 @@ func _ready() -> void:
 	# "Comandar" abre la pantalla del buque. La etiqueta no sabe cuál es: sólo
 	# dice que quieren entrar, y aquí se decide qué se abre.
 	_unit_tag.boarding_requested.connect(func(unit: Unit) -> void:
+		# Si en este mapa no hay orilla a la que llegar, la ventana tiene que
+		# saberlo **antes** de enseñar su botón de desembarco. El terreno lo
+		# conoce el mapa, no ella: se lo cuenta quien conoce a los dos.
+		_vessel_window.set_landing_possible(_tactical_map.has_beaches())
 		_vessel_window.open(unit)
 		vessel_opened.emit(unit))
 	_vessel_window.closed.connect(
@@ -86,6 +102,7 @@ func _ready() -> void:
 	_push_event_log_above_minimap()
 	_minimap.expand_requested.connect(_tactical_map.open)
 	_vessel_window.target_requested.connect(_on_launch_target_requested)
+	_vessel_window.beach_requested.connect(_on_beach_requested)
 	_tactical_map.clicked.connect(_on_tactical_map_clicked)
 	_tactical_map.context_requested.connect(
 			func(where: Vector2, unit: Unit) -> void: map_context_requested.emit(where, unit))
@@ -106,32 +123,72 @@ func _ready() -> void:
 	_tactical_map.closed.connect(func() -> void: _event_log.show())
 	_tactical_map.opened.connect(_selection_panel.clear)
 	_tactical_map.closed.connect(_restore_selection_panel)
-	# Cerrar el mapa sin pulsar nada cancela la elección de blanco. Sin esto, el
-	# siguiente click en el mapa —hecho para otra cosa— lanzaría la salida.
-	_tactical_map.closed.connect(func() -> void:
-		_picking_launch_target = false)
+	# Cerrar el mapa sin pulsar nada cancela la pregunta que tuviera puesta. Sin
+	# esto, el siguiente click en el mapa —hecho para otra cosa— lanzaría la
+	# salida o desembarcaría la lancha.
+	_tactical_map.closed.connect(_stop_picking)
 
 
 ## El hangar pide que el jugador señale a dónde va la salida.
-##
-## El mapa sube al frente porque la ventana del buque se puso encima al abrirse,
-## y un mapa a pantalla completa por debajo de una ventana no se puede pulsar.
 func _on_launch_target_requested() -> void:
-	_picking_launch_target = true
+	_ask_on_map(Picking.LAUNCH_TARGET)
+
+
+## La página de tropas pide que señale por qué orilla desembarca.
+func _on_beach_requested() -> void:
+	_ask_on_map(Picking.BEACH)
+
+
+## Abre el mapa a hacer una pregunta. El mapa sube al frente porque la ventana
+## del buque se puso encima al abrirse, y un mapa a pantalla completa por debajo
+## de una ventana no se puede pulsar.
+func _ask_on_map(what: Picking) -> void:
+	_picking = what
+	_tactical_map.set_picking_beach(what == Picking.BEACH)
 	_tactical_map.open()
 	_tactical_map.move_to_front()
 
 
+## Deja de preguntar. Uno solo y no una línea por pregunta: el día que haya una
+## tercera, quien la añada no tiene que acordarse de apagarla en los cinco sitios
+## desde los que se cancela.
+func _stop_picking() -> void:
+	_picking = Picking.NONE
+	_tactical_map.set_picking_beach(false)
+
+
 ## Un click en el mapa. Casi siempre es una orden para lo que esté seleccionado
-## —y de eso sabe quien lleva la selección, no el HUD—, pero mientras se está
-## eligiendo el blanco de una salida significa otra cosa y no debe salir de aquí.
+## —y de eso sabe quien lleva la selección, no el HUD—, pero mientras el mapa
+## está preguntando algo significa otra cosa y no debe salir de aquí.
 func _on_tactical_map_clicked(where: Vector2, unit: Unit) -> void:
-	if _picking_launch_target:
-		_picking_launch_target = false
-		_tactical_map.close()
-		_vessel_window.launch_at(where, unit)
+	match _picking:
+		Picking.LAUNCH_TARGET:
+			_stop_picking()
+			_tactical_map.close()
+			_vessel_window.launch_at(where, unit)
+		Picking.BEACH:
+			_pick_beach(where)
+		_:
+			map_clicked.emit(where, unit)
+
+
+## El click mientras se elige playa. **Fallar no cierra el mapa**: la pregunta
+## sigue en pie y el jugador vuelve a intentarlo, que es lo que espera de un
+## click que no acertó nada. Cerrarlo le obligaría a volver a abrir la ventana y
+## a pulsar el botón otra vez por haber pinchado dos celdas más allá.
+##
+## Y no vale cualquier punto del mar: lo que se elige es una celda de orilla, la
+## misma que el mapa estaba resaltando bajo el ratón.
+func _pick_beach(where: Vector2) -> void:
+	var beach: Variant = _tactical_map.beach_at(where)
+	if beach == null:
 		return
-	map_clicked.emit(where, unit)
+	var at: Vector2 = beach
+	_stop_picking()
+	_tactical_map.close()
+	# La coordenada se la da el mapa ya escrita, no la arma quien la enseña: así
+	# la ficha y el mapa dicen lo mismo con la misma cadena.
+	_vessel_window.land_at(at, _tactical_map.label_at(at))
 
 
 ## La miniatura de la selección vuelve al cerrar el mapa, si sigue habiendo a
@@ -315,6 +372,12 @@ func _on_action_pressed(action_name: String) -> void:
 	match action_name.to_lower():
 		"hangar":
 			_hangar_window.open(_current_unit)
+		"return":
+			# Sale como aviso y no se resuelve aquí: es una **orden a una
+			# unidad**, y de eso sabe quien lleva la selección. El HUD no da
+			# órdenes, las pide — igual que con atacar.
+			if is_instance_valid(_current_unit):
+				return_requested.emit(_current_unit)
 
 
 func _on_weapon_selected(weapon: WeaponType) -> void:

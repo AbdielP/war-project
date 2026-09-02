@@ -2,6 +2,166 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-09-01 — el desembarco entero: elegir playa, cruzar, y volver
+
+Se cerró el ciclo que la pestaña de tropas dejaba abierto. Ahora se elige una
+orilla en el mapa, sale una lancha por popa, cruza, descarga la tropa en la arena
+y regresa al buque. Cuatro sistemas nuevos y **tres lecciones de método** que
+costaron más que el código.
+
+### La orilla se elige en el mapa, y sale del dato que ya existía
+
+`MapTerrain` era el único sitio del proyecto que lee la capa `tipo` del TileSet,
+así que la pregunta "¿esto es orilla?" es suya. Calcula las playas atracables una
+vez al construir el mapa, y **no toda la arena vale**: hace falta un vecino de
+agua por el que llegar. En el mapa de hoy hay 34 celdas de arena y sólo **21**
+sirven —7 en la isla pequeña, 14 en la del Tunguska—; las otras 13 son playa
+tierra adentro, sin mar por el que llegar hasta ellas.
+
+El gesto reusa el mueble del hangar: la página avisa, el HUD abre el mapa
+marcando las orillas, y vuelve con la coordenada. Dos detalles que sí son nuevos:
+
+- **Se perdona la puntería, dos celdas.** Una celda mide 32 px de mundo y en el
+  mapa a pantalla completa son unos pocos de pantalla: exigir el impacto exacto
+  convertiría elegir playa en un juego de precisión, que no es la decisión que se
+  está pidiendo. Y devuelve el **centro de la celda**, así que dos clicks dentro
+  de la misma dan el mismo destino.
+- **Fallar no cierra el mapa.** La pregunta sigue en pie. Cerrarlo obligaría a
+  reabrir la ventana y volver a pulsar por haber pinchado dos celdas más allá.
+
+El contorno de las orillas se dibuja **sólo mientras se elige** —marcado siempre
+sería un adorno permanente diciendo "esto importa" cuando no importa— y la celda
+bajo el ratón se rellena: es la respuesta a la misma pregunta que decide el
+click, holgura incluida. Se traza el contorno de la mancha y no una caja por
+celda, así que catorce celdas contiguas salen como una playa.
+
+`_picking_launch_target` pasó a un enum `Picking`. Eran dos preguntas excluyentes
+del mismo tipo —"el mapa está abierto preguntando algo"— y con dos booleanos
+existe el estado imposible de preguntar las dos cosas a la vez.
+
+### Elegir playa **es** la salida, no apuntar un destino para zarpar después
+
+Carga y destino son una sola decisión, igual que en el hangar se le apunta el
+blanco al avión antes de soltarlo. Partirlo en dos pasos obligaría a volver a la
+pantalla para pulsar un segundo botón que no diría nada nuevo.
+
+### La lancha descarga por estar en la arena, no por haber llegado a su destino
+
+Parece lo mismo y no lo es. **Atado al destino**, redirigirla a mitad de travesía
+la dejaría con la tropa dentro y sin forma de volver a soltarla: haría falta otra
+pantalla para reelegir playa. **Atado al terreno**, la regla es una frase —*una
+lancha parada en la arena, descarga*— y redirigir funciona sin nada más. Medido:
+desviada a mar abierto para y conserva la carga; reenviada a la playa, descarga.
+
+Y la tropa sale **en columna por el rumbo de la lancha**, que es lo que hace una
+rampa y además lo único que cae siempre en tierra: llegó apuntando a la playa, así
+que su rumbo señala tierra adentro. En línea de frente, dos de cada tres
+desembarcaban nadando — una celda de playa mide 32 px y la fila medía el triple.
+Aun así cada uno comprueba que pisa seco y retrocede hasta la lancha si no, porque
+una isla se acaba y la columna puede pasarse de largo.
+
+### El dique es la cubierta de vuelo al revés, y hereda sus tres lecciones
+
+Mientras está dentro la lancha es **carga**: viaja en coordenadas del buque, no
+del mundo. Se reserva **el camino y no la plaza**. Y un portero que dice "ahora
+no" dice también "ya puedes". Medido con el buque navegando a 40 px/s y virando a
+3°/s: la rampa recorre 90,0 px exactos y suelta por detrás de la popa; dos lanchas
+por la misma popa salen con 4,1 s de separación.
+
+**Y lo estibado se dibuja por debajo del casco.** Con su orden normal se veía
+deslizándose por encima de la cubierta de vuelo, como si navegara sobre el buque,
+tanto al salir como al entrar.
+
+### Volver es una **intención**, no una casualidad — y esto fue el error grande
+
+El primer intento recogía a la lancha que **se paraba cerca** de la popa. Pasó la
+verificación en sonda y era **inusable**: el punto está a 54 px por detrás del
+casco, invisible, con 45 px de radio. Pulsar sobre el barco —que es lo natural—
+quedaba fuera de radio y no ocurría nada, sin un solo aviso.
+
+El fallo de método está en cómo lo probé: **con la coordenada exacta en la mano,
+que es justo lo que el jugador no tiene**. La sonda decía "atraca" porque yo le
+pasaba el punto. Eso prueba que la función existe, no que se pueda usar.
+
+Ahora se **pide**, por dos caminos que van a la misma orden:
+
+- **Botón `RETURN`** en el panel de acciones — es el que siempre funciona, porque
+  la lancha suele estar en la playa con el buque fuera de pantalla. Es la primera
+  unidad del proyecto con una acción: el panel se estrena aquí.
+- **Pulsar el buque** con la lancha seleccionada, que es la regla de siempre: lo
+  que hay debajo decide qué significa el click. Es el atajo, no el mecanismo.
+
+Y el destino pasó a ser **el buque y no un punto del agua**: se recalcula cada
+fotograma contra la popa, así que la orden sigue valiendo con el barco navegando.
+Medido: atraca con el buque en marcha, y una orden a un punto cancela la vuelta.
+
+Consecuencia aceptada: con una lancha seleccionada ya no se puede seleccionar el
+propio buque pulsándolo. Es lo mismo que ya pasaba con atacar, y para llegar al
+buque está Esc.
+
+### La maniobra de atraque: tres fallos encadenados
+
+Entró bien a la tercera, y ninguno de los tres se veía en los números del sistema:
+
+1. **Daba una vuelta de campana de 360°.** El tween de rotación iba de −π a +π.
+   Son el mismo ángulo, pero un tween interpola el **número**, no la dirección.
+2. **Nunca llegaba a ponerse a popa.** La condición para pasar al tramo final era
+   cruzar una línea, y la lancha la cruzaba **de camino** al punto de franquía: se
+   re-apuntaba al muelle que ya tenía al lado y frenaba de través a media eslora.
+3. **Llegaba a 60 px/s.** Este piloto sólo empuja hacia donde mira, así que su
+   radio de giro es `v/ω`: a crucero, **76 px**. Media vuelta para encarar el
+   dique la abría más de medio buque y entraba de costado.
+
+Medido antes y después: desvío del eje al atracar **65 px → 1 px**, giro del tween
+**360° → 13°**, y cero fotogramas dentro del casco en los dos casos — antes de
+todo esto sí lo atravesaba, en diagonal y a toda máquina.
+
+### Y salir de la playa tampoco era navegar
+
+Al piloto le puse un suelo de arrancada porque una lancha no vira sin marcha.
+Varada, eso es **trepar por la arena**: 29 px tierra adentro mientras caía a
+rumbo. Encallada pivota, que es lo que hace un aerodeslizador de verdad.
+
+### La flota tuvo que aprender a recibir
+
+`deployed` subía y no bajaba nunca, así que ni la lancha vacía podía volver. Ahora
+el dique la devuelve al pañol, y **con la carga que no llegara a desembarcar**:
+traerte a casa lo que no soltaste no puede costarte perderlo.
+
+**No se partió `deployed` en fuera/perdido**, aunque se llegó a plantear. Una
+unidad destruida nunca llama a `recall`, así que se queda contada como fuera para
+siempre — que es exactamente lo que hay que hacer con algo que no va a volver, y
+el número sale bien sin el campo. Partirlo obligaba a tocar los **seis** sitios
+que calculan `total − deployed` para alimentar algo que todavía no lee nadie.
+Cuando exista el parte de misión, ahí sí.
+
+Y `PlayerFleet` emite `changed`: el inventario ya no cambia sólo cuando se pulsa
+un botón, y con la ventana abierta el panel se quedaba con el número de antes.
+
+### Sabido y sin resolver
+
+- **La maniobra de aproximación se va demasiado lejos.** Funciona y entra
+  derecha, pero el rodeo es exagerado. Son dos números del inspector:
+  `ApproachPoint` del `WellDeck` (hoy a 380 px por popa) y `docking_speed` de la
+  lancha (22 px/s). Sin tocar código.
+- **Volver cuesta 38 s** contra los 20 de la ida, y la mitad es la maniobra.
+- **Reembarcar tropa desembarcada no existe**, y cuelga de que las unidades de
+  tierra se muevan: el Abrams y el LAV son maniquíes sin piloto, igual que los
+  T-14 enemigos. El gesto será el mismo que el resto —seleccionar el carro y
+  pulsar la lancha— y las plazas se comprobarán al subir, no al pulsar.
+- **Nada dispara a nada que flote.** El único enemigo armado es el 2S6 y su
+  torreta busca en un grupo fijo, `unit_air`; el T-14 no tiene sistema de armas.
+  No es que la lancha esté exenta: el combate de superficie no existe.
+- **La coordenada del botón es de zona, no de celda.** Dos puntos distintos de la
+  misma playa pueden decir los dos `E2`. Es la cadena que usa el resto del HUD y
+  el punto exacto se ve dibujado en el mapa; si algún día hace falta distinguir,
+  hay que salirse de esa cadena.
+- **Nada persigue a un buque que se mueva salvo la lancha volviendo.** Ordenar
+  cualquier otra cosa "cerca del barco" seguirá siendo un punto muerto del agua
+  hasta que existan órdenes contra unidades.
+- **Sigue todo con arte generado.** La lancha y los carros son bloques planos.
+- Segunda tanda pendiente: **M1097 Avenger** y **LCU**.
+
 ## 2026-08-31 (noche) — la sección de tropas: la lancha convierte "cuántos" en "qué cabe"
 
 > **En hueso y sin aprobar.** La pestaña se ve y se usa, pero **todo su arte está generado, no

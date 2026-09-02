@@ -1,5 +1,13 @@
 extends Node
 
+## Ha cambiado el inventario: algo salió, algo volvió.
+##
+## Hace falta desde que hay unidades que **regresan**. Mientras salir era un
+## viaje de ida, quien pulsaba el botón sabía que el número acababa de cambiar y
+## se refrescaba solo; una lancha que atraca cambia el número sin que nadie de la
+## interfaz haya tocado nada, y el panel se quedaba enseñando el de antes.
+signal changed
+
 const _HarrierLoadouts := preload("res://core/unit/av8b_harrier/av8b_harrier_loadouts.gd")
 const _CobraLoadouts := preload("res://core/unit/ah1w_supercobra/ah1w_supercobra_loadouts.gd")
 
@@ -127,8 +135,17 @@ func try_deploy(entry: Dictionary) -> bool:
 	if entry["deployed"] >= entry["total"]:
 		return false
 	entry["deployed"] += 1
+	changed.emit()
 	return true
 
 
+## Vuelve al pañol. Lo llama quien la recoge —el dique cuando una lancha
+## atraca—, no quien la sacó.
+##
+## **Una unidad destruida no pasa por aquí**, y por eso el número sigue estando
+## bien sin llevar la cuenta de las bajas aparte: lo que se perdió se queda
+## contado como fuera para siempre, que es exactamente lo que hay que hacer con
+## algo que no va a volver.
 func recall(entry: Dictionary) -> void:
 	entry["deployed"] = max(0, entry["deployed"] - 1)
+	changed.emit()

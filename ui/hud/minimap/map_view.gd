@@ -202,6 +202,26 @@ signal refitted
 ## Cuánto aire queda entre el aspa y la punta de la línea.
 @export_range(0, 6, 1) var destination_gap: int = 1
 
+@export_subgroup("Desembarco")
+## El color de las orillas por las que se puede desembarcar.
+##
+## **Va como borde y no como relleno.** La arena ya tiene su color en el terreno
+## —un amarillo casi blanco— y pintarla encima taparía el dato que hace
+## reconocible la playa. El borde deja ver el terreno debajo y encima agrupa: las
+## celdas contiguas salen como una sola forma en vez de como una rejilla de
+## cuadritos, que es lo que la playa es.
+@export var beach_color := Color(0.5372549, 0.9411765, 0.8352941)
+## La celda que el click se llevaría ahora mismo, rellena.
+##
+## Es la respuesta a la misma pregunta que decide el click, incluida la holgura
+## de [member beach_reach_cells]: si esto se enciende apuntando al agua, el click
+## desde ahí también acierta. Sin el relleno el jugador tendría que adivinar
+## adónde se va a pegar su puntería.
+@export var beach_hover_color := Color(1.0, 1.0, 1.0)
+## Cuánto se perdona la puntería al elegir playa, en celdas. Ver
+## [method MapTerrain.nearest_shoreline].
+@export_range(0.0, 6.0, 0.5) var beach_reach_cells: float = 2.0
+
 @export_group("Etiquetas de contacto")
 ## La clase de cada contacto al lado de su símbolo: `[PLANE]`, `[SHIP]`,
 ## `[TANK]`.
@@ -300,6 +320,14 @@ var _has_order: bool = false
 var _selected: Unit = null
 ## Mantener pulsado equivale al click derecho, igual que en el mundo. Sin esto,
 ## en móvil no habría forma de abrir el menú de una unidad desde el mapa.
+## Se está eligiendo playa: el mapa marca las orillas y el click de fuera
+## significa otra cosa. Apagado por defecto, así que el minimapa —que es este
+## mismo control— nunca las dibuja: no se pide playa desde ahí.
+var _picking_beach := false
+## La orilla que se llevaría el click, o `null`. Se recalcula al mover el ratón
+## y sólo mientras se está eligiendo.
+var _beach_hover: Variant = null
+
 var _press := LongPress.new()
 ## Los contactos que hay que señalar. Cada mapa lleva los suyos: el grande está
 ## oculto casi siempre pero sigue apuntándolos, así que al abrirlo se ve lo que
@@ -309,6 +337,13 @@ var _alerts := ThreatPulses.new()
 
 func _ready() -> void:
 	resized.connect(_refit)
+	# Al salir del panel no hay celda bajo el ratón, y el resaltado se quedaría
+	# encendido en la última: diría que el click va a acertar ahí cuando el ratón
+	# ya no está encima del mapa.
+	mouse_exited.connect(func() -> void:
+		if _beach_hover != null:
+			_beach_hover = null
+			queue_redraw())
 	_refit()
 	if show_alerts:
 		_alerts.attach(self)
@@ -339,6 +374,39 @@ func clear_order_marker() -> void:
 func set_selected_unit(unit: Unit) -> void:
 	_selected = unit
 	queue_redraw()
+
+
+## Entra o sale del modo de elegir playa. Sólo cambia lo que el mapa **enseña**;
+## qué significa el click lo decide quien escucha [signal map_clicked], que es
+## quien sabe para qué se abrió el mapa.
+func set_picking_beach(value: bool) -> void:
+	if _picking_beach == value:
+		return
+	_picking_beach = value
+	_beach_hover = null
+	queue_redraw()
+
+
+## Hay alguna playa a la que se pueda llegar en este mapa. Lo pregunta el HUD
+## antes de encender el botón: un botón que abre el mapa para elegir algo que no
+## existe promete lo que no puede cumplir.
+func has_beaches() -> bool:
+	# Se pregunta con el mapa todavía cerrado —el terreno se construye al
+	# abrirlo—, así que aquí hay que construirlo si no está. Sin esto la
+	# respuesta sería "no hay playas" hasta que el jugador abriera el mapa una
+	# vez, y el botón de desembarco saldría apagado sin motivo.
+	if _terrain == null:
+		_refit()
+	return _terrain != null and not _terrain.shorelines.is_empty()
+
+
+## Qué orilla se lleva un click en un punto del mundo, o `null` si ninguna.
+## Trabaja en coordenadas de mundo y no de panel para que la conteste igual el
+## mapa grande, el minimapa y cualquier prueba sin ratón de por medio.
+func beach_at(world: Vector2) -> Variant:
+	if _terrain == null:
+		return null
+	return _terrain.nearest_shoreline(world, beach_reach_cells)
 
 
 ## Píxeles de pantalla por celda de terreno, ya contando el resumen. Sale
@@ -453,8 +521,7 @@ func _refit() -> void:
 ## Misma búsqueda que hace `PanCamera` para sus límites: el mapa no se le pasa a
 ## nadie por el inspector, se encuentra.
 func _find_layer() -> TileMapLayer:
-	var found := get_tree().root.find_children("*", "TileMapLayer", true, false)
-	return found[0] as TileMapLayer if not found.is_empty() else null
+	return MapTerrain.find_layer(get_tree())
 
 
 ## El recuadro de la cámara y las unidades se mueven sin que nadie avise, así
@@ -529,6 +596,10 @@ func _draw() -> void:
 		_draw_grid(drawn)
 	if show_labels:
 		_draw_labels(drawn)
+	# Debajo de los contactos: es terreno, no un aviso. Encima de la rejilla
+	# porque mientras se elige playa es lo único que hay que mirar.
+	if _picking_beach:
+		_draw_beaches()
 	if show_viewport_rect and not is_instance_valid(_selected):
 		_draw_viewport_rect()
 	# Antes que los símbolos, para que la línea salga de detrás del contacto en
@@ -542,6 +613,51 @@ func _draw() -> void:
 	# encima de las unidades y no debajo.
 	if show_alerts:
 		_draw_alerts(drawn)
+
+
+## Las orillas por las que se puede desembarcar, mientras se está eligiendo una.
+##
+## **Sólo mientras se elige.** Marcadas siempre serían un adorno permanente
+## diciendo "esto importa" cuando no importa; salidas al pulsar el botón, son la
+## respuesta a la pregunta que el jugador acaba de hacer.
+##
+## Se traza el **contorno** de la mancha, no una caja por celda: se dibujan sólo
+## los lados que no dan a otra orilla, así que catorce celdas contiguas salen
+## como una playa y no como catorce cuadritos. Y se traza con rectángulos de 1 px
+## en vez de con [method CanvasItem.draw_line], que con anchura 1 se reparte
+## entre dos filas cuando el borde no cae en píxel entero.
+func _draw_beaches() -> void:
+	if _terrain == null or _terrain.shorelines.is_empty():
+		return
+	var px := cell_px()
+	var hay := {}
+	for cell: Vector2i in _terrain.shorelines:
+		hay[cell] = true
+	for cell: Vector2i in _terrain.shorelines:
+		var caja := _cell_rect(cell, px)
+		if not hay.has(cell + Vector2i.UP):
+			draw_rect(Rect2(caja.position, Vector2(caja.size.x, 1.0)), beach_color)
+		if not hay.has(cell + Vector2i.DOWN):
+			draw_rect(Rect2(caja.position + Vector2(0.0, caja.size.y - 1.0),
+					Vector2(caja.size.x, 1.0)), beach_color)
+		if not hay.has(cell + Vector2i.LEFT):
+			draw_rect(Rect2(caja.position, Vector2(1.0, caja.size.y)), beach_color)
+		if not hay.has(cell + Vector2i.RIGHT):
+			draw_rect(Rect2(caja.position + Vector2(caja.size.x - 1.0, 0.0),
+					Vector2(1.0, caja.size.y)), beach_color)
+	if _beach_hover != null:
+		var bajo_el_raton: Vector2 = _beach_hover
+		draw_rect(_cell_rect(_terrain.cell_at(bajo_el_raton), px), beach_hover_color)
+
+
+## La caja de una celda en el panel, cuadrada a píxel entero. Se redondean las
+## **dos esquinas** y se resta, en vez de redondear el tamaño: así dos celdas
+## vecinas comparten su borde exacto y la mancha no sale con costuras.
+func _cell_rect(cell: Vector2i, px: float) -> Rect2:
+	var offset := Vector2(cell - _terrain.origin_cell)
+	var tl := (_origin + offset * px).round()
+	var br := (_origin + (offset + Vector2.ONE) * px).round()
+	return Rect2(tl, br - tl)
 
 
 ## Las ondas de los contactos. Cada una nace en el punto y se abre hacia afuera
@@ -1053,6 +1169,8 @@ func _gui_input(event: InputEvent) -> void:
 	var motion := event as InputEventMouseMotion
 	if motion != null:
 		_press.moved(motion.position)
+		if _picking_beach:
+			_hover_beach(motion.position)
 		return
 	var button := event as InputEventMouseButton
 	if button == null:
@@ -1068,6 +1186,16 @@ func _gui_input(event: InputEvent) -> void:
 	elif _press.release():
 		_emit_at(button.position, false)
 	accept_event()
+
+
+## Qué orilla hay bajo el ratón. Se redibuja **sólo si cambió de celda**: esto
+## corre en cada movimiento del ratón, y pedir un redibujado por píxel recorrido
+## sería repintar el mapa entero para dejarlo igual.
+func _hover_beach(local_position: Vector2) -> void:
+	var antes: Variant = _beach_hover
+	_beach_hover = beach_at(local_to_world(local_position))
+	if antes != _beach_hover:
+		queue_redraw()
 
 
 func _emit_at(local_position: Vector2, context: bool) -> void:

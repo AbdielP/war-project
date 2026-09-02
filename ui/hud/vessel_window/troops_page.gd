@@ -26,7 +26,18 @@ signal size_wanted(width: float, height: float, seconds: float)
 ## tenga que enterarse, no ella quien se lo diga.
 signal manifest_changed
 
+## El jugador quiere señalar la orilla en el mapa. La página no conoce el mapa
+## —ni tiene por qué—: avisa, y quien sabe abrirlo lo abre y vuelve con la
+## respuesta por [method land_at].
+signal beach_requested
+
 const _SLOT := preload("res://ui/hud/vessel_window/aircraft_slot.tscn")
+
+## Lo que dice el botón de salida antes de haber elegido orilla. Después dice la
+## coordenada: el botón **es** el sitio donde vive esa decisión, así que enseñar
+## ahí la respuesta ahorra un rótulo y no deja dudas de a qué se refiere.
+const _LAND_ASK := "SELECT BEACH"
+const _LAND_CHOSEN := "BEACH %s"
 
 ## Lo que dice el hueco de la ficha cuando no hay nada elegido.
 const _PROMPT_PICK := "SELECT A UNIT"
@@ -82,6 +93,15 @@ var _cargo_manifest: Array = []
 ## La entrada de la lancha en uso. Hoy sólo hay una clase; el día que haya LCU
 ## esto pasa a ser una elección más.
 var _craft_entry: Dictionary = {}
+## La orilla elegida, o `null`. Se guarda el punto **y** su coordenada escrita:
+## el punto es para la lancha y el texto para el botón, y volver a deducir el
+## segundo del primero daría dos formas de nombrar el mismo sitio.
+var _beach: Variant = null
+var _beach_label: String = ""
+## Si en este mapa hay alguna playa a la que llegar. Lo dice el HUD al abrir la
+## ventana; arranca en `true` para que la página abierta a pelo con F6 —sin mapa
+## que la prepare— enseñe el botón vivo y se pueda ajustar en el editor.
+var _can_land := true
 
 
 func _ready() -> void:
@@ -92,12 +112,25 @@ func _ready() -> void:
 	_more.pressed.connect(func() -> void: _set_amount(_amount + 1))
 	_load_btn.pressed.connect(_on_load)
 	_clear_btn.pressed.connect(_on_clear)
-	# El botón de salida está puesto y **apagado a propósito**: el dique inundable
-	# todavía no existe, así que no hay de dónde salir. Se deja a la vista porque
-	# su presencia ya dice que esto acaba en un desembarco, y apagado porque un
-	# botón que se pulsa y no hace nada se lee como que el juego se colgó.
-	_land_btn.disabled = true
+	_land_btn.pressed.connect(beach_requested.emit)
+	# El inventario ya no cambia sólo cuando se pulsa aquí: una lancha que atraca
+	# devuelve su plaza sin que la interfaz haya hecho nada, y con la ventana
+	# abierta el panel se quedaba enseñando el número de antes.
+	PlayerFleet.changed.connect(_on_fleet_changed)
 	_hide_detail()
+
+
+## Algo salió o volvió. Se repintan las casillas y el panel de la lancha, no se
+## rehace la rejilla: reconstruirla soltaría la unidad que el jugador tiene
+## elegida en mitad de estar mirándola.
+func _on_fleet_changed() -> void:
+	if _ship == null:
+		return
+	for child in _slots.get_children():
+		var slot := child as AircraftSlot
+		if slot != null:
+			slot.refresh()
+	_refresh_craft()
 
 
 func show_for(vessel: Node2D) -> void:
@@ -107,6 +140,8 @@ func show_for(vessel: Node2D) -> void:
 	if not craft.is_empty():
 		_craft_entry = craft[0]
 	_cargo_manifest.clear()
+	_beach = null
+	_beach_label = ""
 	_fill_slots()
 	_refresh_craft()
 
@@ -296,7 +331,7 @@ func _refresh_craft() -> void:
 	_craft.show()
 	var type := _type_of(_craft_entry)
 	_craft_name.text = type.display_name.to_upper() if type != null else "?"
-	var quedan: int = int(_craft_entry.get("total", 0)) - int(_craft_entry.get("deployed", 0))
+	var quedan := _craft_available()
 	_craft_left.text = "%d/%d" % [quedan, int(_craft_entry.get("total", 0))]
 	_refresh_pips()
 	_refresh_manifest()
@@ -306,6 +341,17 @@ func _refresh_craft() -> void:
 func _refresh_actions() -> void:
 	_load_btn.disabled = _max_amount() <= 0
 	_clear_btn.disabled = _cargo_manifest.is_empty()
+	# **Salir es una decisión completa**: se elige carga y destino y la lancha se
+	# va. Por eso la puerta es llevar algo dentro — una lancha vacía cruzando el
+	# mapa no es una orden, es un paseo—, y también que haya orilla a la que ir:
+	# un botón que abre el mapa para elegir algo que no existe promete lo que no
+	# puede cumplir.
+	# Y que quede lancha: el manifiesto se llena aunque no haya ninguna, porque
+	# elegir qué embarcar sigue teniendo sentido con la última en el agua.
+	_land_btn.disabled = _cargo_manifest.is_empty() or not _can_land \
+			or _craft_available() <= 0
+	_land_btn.text = _LAND_ASK if _beach == null \
+			else _LAND_CHOSEN % _beach_label
 
 
 ## Embarca lo elegido. Comprobar, descontar y apuntar en una sola llamada, como
@@ -353,6 +399,11 @@ func _on_clear() -> void:
 		for i in int(line["count"]):
 			PlayerFleet.recall(line["entry"])
 	_cargo_manifest.clear()
+	# Con la lancha vacía ya no hay salida que hacer, así que la orilla elegida
+	# tampoco: dejarla puesta sería el botón anunciando el destino de un viaje
+	# que se acaba de deshacer.
+	_beach = null
+	_beach_label = ""
 	for child in _slots.get_children():
 		var slot := child as AircraftSlot
 		if slot != null:
@@ -360,6 +411,89 @@ func _on_clear() -> void:
 	_set_amount(1)
 	_refresh_craft()
 	manifest_changed.emit()
+
+
+## Si en este mapa hay orilla a la que desembarcar. Se lo dice el HUD, que es
+## quien conoce el terreno; la página sólo lo enseña.
+func set_landing_possible(value: bool) -> void:
+	_can_land = value
+	_refresh_actions()
+
+
+## El jugador señaló la orilla en el mapa: la lancha sale.
+##
+## **Elegir playa ES la salida**, no apuntar un destino para zarpar después.
+## Carga y destino son una sola decisión, igual que en el hangar se le apunta el
+## blanco al avión antes de soltarlo; partirlo en dos pasos obligaría a volver a
+## esta pantalla para pulsar un segundo botón que no diría nada nuevo.
+##
+## Quien manda la lancha es el dique, no esta página: aquí sólo se sabe qué se
+## eligió. Y la carga sale de la ficha con la escena de cada modelo, porque quien
+## la va a crear es el buque y no le toca averiguar de qué eran esas filas.
+func land_at(where: Vector2, label: String) -> void:
+	_beach = where
+	_beach_label = label
+	var dique: WellDeck = _well_deck()
+	var carga := _cargo_for_launch()
+	if dique == null or _craft_scene() == null or carga.is_empty():
+		_refresh_actions()
+		return
+	# Se descuenta la lancha **antes** de mandarla y se devuelve si el dique no
+	# la acepta. Al revés —mandarla y descontarla después— una salida rechazada
+	# dejaría navegando una lancha que la flota sigue teniendo en el pañol.
+	if not PlayerFleet.try_deploy(_craft_entry):
+		_refresh_actions()
+		return
+	if not dique.launch(_craft_entry, carga, where):
+		PlayerFleet.recall(_craft_entry)
+		_refresh_actions()
+		return
+	# Ya no está en el buque: el manifiesto se vacía y la ficha vuelve a su
+	# estado de partida. Lo que iba dentro se descontó al embarcarlo.
+	_cargo_manifest.clear()
+	_beach = null
+	_beach_label = ""
+	_set_amount(1)
+	_refresh_craft()
+	manifest_changed.emit()
+
+
+## El dique del buque que se está mirando, o `null` si no tiene. Se pregunta por
+## el método y no por la clase: un buque que no sepa desembarcar simplemente no
+## lo tiene, y eso no es un error que haya que tratar.
+func _well_deck() -> WellDeck:
+	if _ship == null:
+		return null
+	return _ship.get("well_deck") as WellDeck
+
+
+## Cuántas lanchas quedan en el buque. Es el mismo número que enseña el rótulo
+## de arriba a la derecha de su panel.
+func _craft_available() -> int:
+	if _craft_entry.is_empty():
+		return 0
+	return int(_craft_entry.get("total", 0)) - int(_craft_entry.get("deployed", 0))
+
+
+func _craft_scene() -> PackedScene:
+	return _craft_entry.get("scene") if not _craft_entry.is_empty() else null
+
+
+## El manifiesto tal como lo necesita quien va a crear la tropa: la escena de
+## cada modelo y cuántos van. Se traduce aquí, en la ficha, porque es donde se
+## sabe que una fila del manifiesto guarda la entrada de la flota.
+func _cargo_for_launch() -> Array:
+	var carga: Array = []
+	for line: Dictionary in _cargo_manifest:
+		var entry: Dictionary = line["entry"]
+		# La casilla de la flota viaja con la carga: si la lancha vuelve sin
+		# haber desembarcado, es lo que le permite devolver cada carro a su sitio.
+		carga.append({
+			"entry": entry,
+			"scene": entry.get("scene"),
+			"count": int(line["count"]),
+		})
+	return carga
 
 
 ## Lo que mide la página: hasta donde acaba el panel de la lancha. Sale de los

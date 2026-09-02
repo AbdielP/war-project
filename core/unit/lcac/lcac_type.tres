@@ -6,7 +6,7 @@
 script = ExtResource("1")
 display_name = "LCAC"
 short_name = "LCA"
-actions = []
+actions = PackedStringArray("RETURN")
 domain = 2
 max_health = 110.0
 power = 1

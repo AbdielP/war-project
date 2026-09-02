@@ -1018,7 +1018,7 @@ theme_override_styles/disabled = SubResource("StyleBoxTexture_action")
 text = "UNLOAD"
 
 [node name="Land" type="Button" parent="Frame/InnerFrame/Pages/TroopsPage/Craft/Actions"]
-custom_minimum_size = Vector2(0, 17)
+custom_minimum_size = Vector2(60, 17)
 layout_mode = 2
 focus_mode = 0
 disabled = true

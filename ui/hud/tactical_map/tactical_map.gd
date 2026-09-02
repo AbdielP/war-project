@@ -122,6 +122,31 @@ func _on_map_context_requested(world_position: Vector2, unit: Unit) -> void:
 	context_requested.emit(world_position, unit)
 
 
+## El mapa se abrió para elegir playa: marca las orillas. Es sólo lo que enseña
+## —qué significa el click lo decide quien lo pidió.
+func set_picking_beach(value: bool) -> void:
+	_view.set_picking_beach(value)
+
+
+## Si en este mapa hay alguna orilla por la que desembarcar. Se pregunta antes de
+## encender el botón que abre esto.
+func has_beaches() -> bool:
+	return _view.has_beaches()
+
+
+## Qué orilla se lleva un click en ese punto, o `null`. Es la **misma** pregunta
+## que contesta el resaltado que sigue al ratón: si dijeran cosas distintas, el
+## mapa estaría señalando una playa que el click no coge.
+func beach_at(world: Vector2) -> Variant:
+	return _view.beach_at(world)
+
+
+## La coordenada de un punto, ya escrita ("F7"). Sale de aquí y no de quien la
+## enseña para que el mapa y la ficha digan lo mismo de la misma forma.
+func label_at(world: Vector2) -> String:
+	return _view.zone_label_at(world)
+
+
 func set_order_marker(world_position: Vector2) -> void:
 	_view.set_order_marker(world_position)
 

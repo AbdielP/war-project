@@ -5,6 +5,7 @@
 [ext_resource type="Resource" uid="uid://bpcombri2c111" path="res://core/unit/lhd_wasp/lhd_wasp_type.tres" id="3"]
 [ext_resource type="Script" uid="uid://dntj4qknbqy43" path="res://core/unit/lhd_wasp/lhd_wasp.gd" id="4"]
 [ext_resource type="Script" uid="uid://bf08vtibkljvq" path="res://core/unit/lhd_wasp/flight_deck.gd" id="5"]
+[ext_resource type="Script" path="res://core/unit/lhd_wasp/well_deck.gd" id="6"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(160, 304)
@@ -62,3 +63,18 @@ gizmo_extents = 6.0
 [node name="LaunchPoint" type="Marker2D" parent="FlightDeck" index="6" unique_id=902074173]
 position = Vector2(-22, -85)
 rotation = 3.1415927
+
+[node name="WellDeck" type="Node2D" parent="." index="4" unique_id=491283157]
+script = ExtResource("6")
+
+[node name="Ramp" type="Marker2D" parent="WellDeck" index="0" unique_id=808317052]
+position = Vector2(-5, 100)
+gizmo_extents = 6.0
+
+[node name="ExitPoint" type="Marker2D" parent="WellDeck" index="1" unique_id=808317053]
+position = Vector2(-5, 190)
+gizmo_extents = 6.0
+
+[node name="ApproachPoint" type="Marker2D" parent="WellDeck" index="2" unique_id=808317054]
+position = Vector2(-5, 380)
+gizmo_extents = 6.0

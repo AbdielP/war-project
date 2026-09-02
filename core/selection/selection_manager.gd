@@ -36,6 +36,7 @@ func _ready() -> void:
 	_hud.deselect_requested.connect(func() -> void: _select(null))
 	_hud.unit_focus_requested.connect(func(unit: Unit) -> void: _select(unit))
 	_hud.attack_requested.connect(_issue_attack_order)
+	_hud.return_requested.connect(_issue_return_order)
 	_hud.zoom_change_requested.connect(_camera.step_zoom)
 	_hud.map_clicked.connect(_on_map_clicked)
 	_hud.map_context_requested.connect(_on_map_context_requested)
@@ -155,6 +156,12 @@ func _handle_click(world_position: Vector2, unit: Unit) -> void:
 		# que vale sobre cualquier otra unidad: seleccionarla.
 		if _can_shoot(unit):
 			_issue_attack_order(unit)
+		# Con una lancha seleccionada, pulsar el buque es volver a bordo. Es la
+		# misma regla de siempre —lo que hay debajo decide qué significa el
+		# click—, y va **antes** de seleccionar porque si no el buque se llevaría
+		# el click y la orden no existiría.
+		elif _can_board(unit):
+			_issue_return_order(_selected_unit, _deck_of(unit))
 		elif unit == _selected_unit:
 			_select(null)
 		else:
@@ -182,6 +189,25 @@ func _handle_context(world_position: Vector2, unit: Unit) -> void:
 
 func _can_attack(target: Unit) -> bool:
 	return _has_own_selection() and _selected_unit.is_hostile_to(target)
+
+
+## Si lo seleccionado puede subir a bordo de eso. Son tres condiciones y ninguna
+## sobra: que lo nuestro sepa volver, que lo de debajo tenga dique, y que no sea
+## de otro bando — abordar el buque enemigo es otra cosa muy distinta.
+func _can_board(target: Unit) -> bool:
+	if not _has_own_selection() or target == null:
+		return false
+	if not _selected_unit.has_method("return_to") or _selected_unit == target:
+		return false
+	if _selected_unit.is_hostile_to(target):
+		return false
+	return _deck_of(target) != null
+
+
+## El dique de un buque, o `null` si no tiene. Se pregunta por la propiedad y no
+## por la clase: un barco que no sepa recoger lanchas simplemente no lo lleva.
+func _deck_of(vessel: Unit) -> WellDeck:
+	return vessel.get("well_deck") as WellDeck if vessel != null else null
 
 
 ## Como [method _can_attack] pero además **con qué**.
@@ -268,6 +294,22 @@ func _issue_attack_order(target: Unit) -> void:
 	_selected_unit.receive_attack_order(target)
 	# Atacar cancela la orden de movimiento, así que su marcador ya no señala
 	# nada: dejarlo puesto haría creer que el avión sigue yendo a ese punto.
+	_clear_move_order()
+
+
+## Vuelve a bordo. `deck` vacío significa "a tu casa", que es lo que pide el
+## botón: la lancha ya sabe de qué buque salió y no hay que decírselo. Pulsando
+## un barco sí se dice, porque el jugador está señalando cuál.
+##
+## Cancela la orden de movimiento como hace atacar: su marcador dejaría plantado
+## un destino al que la lancha ya no va.
+func _issue_return_order(craft: Unit, deck: WellDeck = null) -> void:
+	if not is_instance_valid(craft) or not craft.is_player_controlled():
+		return
+	if deck != null:
+		craft.return_to(deck)
+	elif craft.has_method("return_home"):
+		craft.return_home()
 	_clear_move_order()
 
 

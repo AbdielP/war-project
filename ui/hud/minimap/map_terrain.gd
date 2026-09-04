@@ -35,6 +35,11 @@ const UNKNOWN_COLOR := Color("ff0044")
 ## no hay una segunda lista que mantener.
 const BEACH_KIND := "arena"
 const WATER_KIND := "agua"
+## Y el firme por el que se circula. No lo usa el desembarco sino lo que rueda,
+## pero vive aquí con los otros dos porque **éste es el único sitio del proyecto
+## que lee la capa `tipo`**: repartir los nombres entre quienes preguntan es
+## dejar que uno se quede viejo el día que se renombre un tile.
+const LAND_KIND := "tierra"
 
 ## Un píxel por celda, con el color del terreno. Sin filtrar: se dibuja a escala
 ## entera y con Nearest, como todo lo demás del juego.

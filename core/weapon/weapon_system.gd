@@ -33,9 +33,18 @@ signal firing_stopped
 
 @export_group("Enlace")
 @export var rack_path: NodePath = ^"../Hardpoints"
+## De dónde sale el disparo cuando el arma no cuelga de ninguna estación.
+##
+## Un avión suelta el misil del pilón donde estaba colgado, y ése es el sitio.
+## Una torreta no: el arma no se ve por fuera, no hay sprite que descolgar, y sin
+## esto el proyectil nacería en el centro del casco, un palmo por detrás de la
+## boca del cañón y sin girar con la torre. Vacío = el centro de la unidad, que
+## es lo que había antes y sigue valiendo para quien no lo ponga.
+@export var muzzle_path: NodePath
 
 var _unit: Unit
 var _rack: HardpointRack
+var _muzzle: Node2D
 var _cooldown: float = 0.0
 ## Lo que este sistema tiene volando ahora mismo. Se vacía solo: los
 ## proyectiles se liberan al explotar.
@@ -66,6 +75,7 @@ var _solutions: Dictionary = {}
 func _ready() -> void:
 	_unit = get_parent() as Unit
 	_rack = get_node_or_null(rack_path) as HardpointRack
+	_muzzle = get_node_or_null(muzzle_path) as Node2D
 
 
 ## Encender o apagar el armamento. Arranca encendido — lo normal es que una
@@ -395,7 +405,7 @@ func _fire_one(target: Unit, weapon: WeaponType) -> bool:
 	# dibujadas — sale del centro de la unidad antes que no salir.
 	var muzzle: Node2D = _rack.release(weapon) if _rack != null else null
 	if muzzle == null:
-		muzzle = _unit
+		muzzle = _muzzle if is_instance_valid(_muzzle) else _unit
 	var projectile := weapon.projectile_scene.instantiate() as Projectile
 	if projectile == null:
 		return false

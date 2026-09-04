@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://core/unit/unit_type.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://beadjqhgjya1b" path="res://ui/hud/vessel_window/thumb_m1a1.png" id="2"]
+[ext_resource type="Resource" path="res://core/weapon/m2_browning.tres" id="3"]
 
 [resource]
 script = ExtResource("1")
@@ -13,3 +14,4 @@ max_health = 160.0
 power = 8
 deck_slots = 4
 portrait_icon = ExtResource("2")
+cannon = ExtResource("3")

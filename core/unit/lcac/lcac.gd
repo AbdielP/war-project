@@ -281,9 +281,14 @@ func _unload() -> void:
 			var unit := scene.instantiate() as Node2D
 			if unit == null:
 				continue
+			# El rumbo, **antes** de entrar en el árbol. Lo que desembarca
+			# arranca su conductor en `_ready` leyendo hacia dónde mira, y
+			# orientándolo después nace creyendo que apunta al este: pegaría un
+			# giro completo en cuanto reciba la primera orden. El sitio sí puede
+			# ir después, porque eso no lo lee nadie al nacer.
+			unit.rotation = rotation
 			world.add_child(unit)
 			unit.global_position = _dry_spot(ahead, i)
-			unit.rotation = rotation
 			salidos.append(unit)
 			i += 1
 	_cargo.clear()

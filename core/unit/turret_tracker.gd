@@ -47,6 +47,17 @@ signal target_lost
 
 ## A quién está siguiendo, o `null` si no hay nadie.
 var target: Unit = null
+## Un blanco impuesto desde fuera, que manda sobre la búsqueda. Es el que señaló
+## el jugador.
+##
+## **La preferencia es del jugador y no caduca porque pase otro más cerca.** Sin
+## esto, la torreta de una unidad propia rehace su elección cada décima de
+## segundo y le quita la orden de las manos al que la dio. La búsqueda sigue
+## corriendo por debajo, así que en cuanto se suelte —o el blanco muera— vuelve
+## a engancharse sola sin que nadie tenga que reiniciarla.
+##
+## No lo usa el Tunguska: una batería que se defiende sola no recibe órdenes.
+var forced: Unit = null
 
 var _rings: RangeRings
 var _owner_unit: Unit
@@ -100,8 +111,24 @@ func _aim_at(point: Vector2, delta: float) -> void:
 ## Elige a quién seguir: lo más cercano dentro del alcance. Se rehace entero cada
 ## vez en vez de aferrarse al de antes, así la torreta cambia sola al que se le
 ## meta más encima.
+## Sigue a éste y no busques a nadie más, hasta que se suelte o se muera.
+func hold(unit: Unit) -> void:
+	forced = unit
+	_refresh_target()
+
+
+func release() -> void:
+	forced = null
+	_refresh_target()
+
+
 func _refresh_target() -> void:
-	var found := _closest_in_range()
+	# Un blanco impuesto que ya no está no bloquea la torreta: se cae solo y la
+	# búsqueda vuelve a mandar. Así no hace falta que nadie llame a `release()`
+	# cuando lo que señaló el jugador se muere.
+	if forced != null and (not is_instance_valid(forced) or not forced.is_alive()):
+		forced = null
+	var found: Unit = forced if forced != null else _closest_in_range()
 	if found == target:
 		return
 	target = found

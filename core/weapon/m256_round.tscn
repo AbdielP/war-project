@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://core/weapon/rocket.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/art/sprites/hydra70.tres" id="2"]
+
+[node name="M256Round" type="Node2D"]
+z_index = 9
+script = ExtResource("1")
+launch_speed = 520.0
+cruise_speed = 520.0
+boost_time = 0.01
+fuel_time = 3.0
+coast_drag = 0.0
+max_lifetime = 1.2
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2")

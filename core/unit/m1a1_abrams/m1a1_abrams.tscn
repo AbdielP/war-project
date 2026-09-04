@@ -1,11 +1,11 @@
 [gd_scene format=3]
 
 [ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
-[ext_resource type="Texture2D" uid="uid://cbx3mrgcbqpb3" path="res://assets/art/sprites/M1A1_Abrams_placeholder.png" id="2"]
+[ext_resource type="Texture2D" path="res://assets/art/sprites/M1A1_Abrams.png" id="2"]
 [ext_resource type="Resource" path="res://core/unit/m1a1_abrams/m1a1_abrams_type.tres" id="3"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
-size = Vector2(30, 44)
+size = Vector2(26, 44)
 
 [node name="M1a1Abrams" groups=["unit_ground"] instance=ExtResource("1")]
 unit_type = ExtResource("3")
@@ -19,4 +19,4 @@ texture = ExtResource("2")
 shape = SubResource("RectangleShape2D_1")
 
 [node name="SelectionIndicator" parent="." index="2"]
-size = Vector2(30, 44)
+size = Vector2(26, 44)

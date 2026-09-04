@@ -1,13 +1,13 @@
 [gd_scene format=3]
 
 [ext_resource type="PackedScene" path="res://core/unit/unit.tscn" id="1"]
-[ext_resource type="Texture2D" uid="uid://d4ho8dpu63hay" path="res://assets/art/sprites/LCAC_placeholder.png" id="2"]
+[ext_resource type="Texture2D" path="res://assets/art/sprites/LCAC.png" id="2"]
 [ext_resource type="Resource" path="res://core/unit/lcac/lcac_type.tres" id="3"]
 [ext_resource type="Script" path="res://core/unit/lcac/lcac.gd" id="4"]
 [ext_resource type="Script" path="res://core/unit/naval/boat_controller.gd" id="5"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
-size = Vector2(48, 72)
+size = Vector2(46, 60)
 
 [node name="Lcac" groups=["unit_maritime"] instance=ExtResource("1")]
 z_index = 5
@@ -23,7 +23,7 @@ texture = ExtResource("2")
 shape = SubResource("RectangleShape2D_1")
 
 [node name="SelectionIndicator" parent="." index="2"]
-size = Vector2(48, 72)
+size = Vector2(46, 60)
 
 [node name="BoatController" type="Node" parent="." index="4"]
 script = ExtResource("5")

@@ -7,17 +7,20 @@ class_name UnitPortrait
 ## sobre la misma: la versión seleccionada cambia el color del borde entero y le
 ## añade una marca de esquina, y eso no sale de ningún `modulate`.
 ##
-## El marco mide 24 y su ventana interior 20 —el borde gasta 2 px por lado—, y
-## las siluetas vienen dibujadas ya centradas en un lienzo de 20×20: entran al
-## píxel y no se escala nada. No son las de 32 reducidas, son **otro dibujo**
-## con la silueta simplificada a propósito; achicar la de 32 tiraría tres de
-## cada cuatro píxeles y con ellos lo que la hacía reconocible.
+## El marco mide 32×35 y no es una caja: lleva una pestaña que **asoma por
+## arriba y por la izquierda**, así que el cuadro útil son sus 28 px centrales
+## (x 4..31) y la ventana interior 22×20, con el borde gastando 3 px por lado.
+## Las siluetas se dibujan centradas en esa ventana a su tamaño nativo, sin
+## escalar: cada una viene ya dibujada a la medida en que se ve, y las de 32
+## reducidas perderían tres de cada cuatro píxeles.
 ##
-## El ancho de 24 no es redondeo: la fuente del nombre gasta 8 px por letra y
-## el nombre son tres caracteres. 24 es exactamente lo que ocupan.
+## **La barra de vida va debajo del marco, no dentro.** Mide 28, que es
+## exactamente el ancho del cuadro, y por eso se alinea con su borde izquierdo
+## —4 px dentro de la textura— y no con el de la pestaña. La franja azul que el
+## marco lleva dibujada en su parte baja es del dibujo; no es la barra.
 ##
-## La barra de vida es color plano y no textura: un rectángulo verde basta y así
-## se estira al ancho que haga falta sin romper ningún borde.
+## Ese ancho de 28 es también lo que decide la altura total: el nombre son tres
+## caracteres de 8 px, o sea 24, y cabe centrado de sobra.
 
 ## Lo pulsó el jugador. Quien escucha decide qué es "seleccionar": el panel sólo
 ## sabe que este cuadrito representa a esa unidad.

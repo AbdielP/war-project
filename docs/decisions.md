@@ -2,6 +2,205 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-09-04 — el carro de combate: arte propio, se mueve y dispara
+
+Llegaron sprites dibujados para el M1A1 y la lancha, y con ellos el primer
+vehículo de tierra que hace algo. De paso, la lección más cara de la sesión no
+dejó una línea de código.
+
+### El M1 venía en tres piezas y hubo que montarlo midiendo
+
+La hoja trae la ametralladora del comandante, el casco y la torre por separado,
+más una captura del autor con el resultado. **La colocación se sacó de esa
+captura, no a ojo**: se redujo a resolución nativa muestreando el centro de cada
+celda de su rejilla y se buscó cada pieza por plantilla. Los picos salieron sin
+ambigüedad y las tres conservan su altura original — sólo se mueven a lo ancho.
+
+Comprobado píxel a píxel contra el adjunto: la silueta coincide entera, los 136
+píxeles de sombra caen donde deben, y de 924 opacos hay 874 idénticos. Los 50
+restantes se desvían **1 de 255** y están donde la sombra de la torre cae sobre
+el casco: es aritmética de mezcla, no colocación.
+
+Ese montaje acabó sirviendo para otra cosa. Cuando llegó el disparo, la torre
+tuvo que separarse otra vez, y las piezas se recortan ahora con `AtlasTexture`
+desde la hoja del autor —el patrón del Tunguska— en vez de partir el PNG. Lo que
+quedó de todo aquello no fue el archivo montado: fue **saber en qué píxel va
+cada pieza**.
+
+### La rotación del pixel art: lo que se probó, y por qué se tiró entero
+
+Girar un dibujo de 46×60 lo deshace. Esto se investigó a fondo y **se revirtió
+sin dejar nada**, así que conviene que quede escrito para no repetirlo.
+
+Primero, descartar lo que no era: se midió la captura del juego y **cada píxel
+del juego ocupa exactamente 2×2 de pantalla**, en el HUD, en el terreno y dentro
+del sprite. Todas las rachas son múltiplos de 2, sin excepción. El escalado está
+bien y no hay interpolación en ninguna parte. La lancha de esa captura estaba a
+**20,7°**, medidos por la raya amarilla de su cubierta: no estaba borrosa,
+estaba torcida.
+
+Después, el intento: **RotSprite**, que es lo que trae Aseprite en su menú de
+rotación — agrandar ×8 con Scale2x, girar arriba donde medio píxel ya no decide
+nada, y reducir por moda de bloque. Funciona en lo suyo: la lancha tiene 79
+colores y las giradas salen con 79, sin inventar ninguno, y el contorno deja de
+romperse. Se llegó a montar la tira de 16 rumbos y el `DirectionalSprite` que
+elige fotograma en vez de rotar el nodo. **No fue suficiente** y se borró todo.
+
+Lo que queda aprendido:
+
+- **No hay ajuste que arregle esto.** Una línea de 1 px a 20° no existe en una
+  rejilla. Unity tampoco lo resuelve: su Pixel Perfect Camera hace lo que este
+  proyecto ya hace, y su *Pixel Snapping* cuadra la posición, no el giro.
+- **Ningún algoritmo puede inventar los píxeles que faltan.** La cruz de la
+  cubierta, el contorno del casco y las rayas rojas están dibujados a escuadra;
+  girados 22° tendrían que estar **redibujados**.
+- **Así que los fotogramas por rumbo hay que producirlos, no calcularlos**, y
+  eso es presupuesto de arte. Con simetría espejo y giros de 90° —que son
+  exactos— 16 rumbos salen de tres dibujos y 8 rumbos de dos. Cuando toque.
+
+### El conductor: cuarto piloto, y tampoco reusa a ninguno
+
+`TankController` no hereda ni copia a `BoatController` por lo mismo que ninguno
+de los pilotos reusa a otro: **cada uno está construido sobre lo que su vehículo
+no puede hacer**. La lancha no vira sin arrancada, y de ese suelo sale su curva
+de salida del buque; las cadenas giran a velocidad cero. Copiar el modelo de la
+lancha con otros números habría dado un carro que traza curvas como un coche.
+
+De ahí sale su gesto sin programarlo: **encara y luego avanza**. Un carro no
+llega de lado a ningún sitio, y ponerse de frente antes de moverse es lo que
+hace de verdad — el blindaje bueno está delante.
+
+Tres reglas que no son adorno:
+
+- **Umbral de 30° para pivotar.** Girando siempre antes de avanzar, el carro se
+  clava en seco cada vez que el rumbo se desvía un grado y el avance sale a
+  tirones. Por debajo del umbral se corrige rodando.
+- **Marcha atrás** si el destino queda detrás y a menos de 90 px. Girarse entero
+  para recorrer medio casco es lo que hace que parezca un coche de juguete.
+- **La regla del terreno va atada al terreno, no al destino.** Mandarlo al otro
+  lado del agua no se rechaza: avanza hasta la orilla, se para y avisa. Eso
+  sobrevive a que el jugador cambie de idea; una regla atada al destino, no.
+
+Y **lista de puntos aunque hoy siempre traiga uno**. Con dos islas no hay nada
+que rodear, así que la línea recta sobra; el día que la haya, quien da la orden
+rellena la lista y el conductor no se toca.
+
+Medido con la función real: 200 px de frente en 6,8 s a 0,3 px del punto; 250 px
+a la espalda pivota moviéndose 0,01 px; 60 px a la espalda cía sin girarse; con
+la orilla en x=100 para en 99,9 y avisa; y un desvío de 11° se corrige rodando,
+cero fotogramas clavado.
+
+**Un cambio fuera del carro:** en `LandingCraft._unload()` el rumbo se le da
+ahora **antes** del `add_child`. Puesto después, el conductor nace leyendo una
+rotación de cero y el carro pega un giro completo con la primera orden.
+
+### La torre gira sobre su aro, y el aro se rasteriza
+
+El `offset` de la torre no es colocación fina: **es el aro**. El centro de su
+región cae en mitad del cañón, así que girándola por ahí el tubo barre media
+unidad. El aro se sacó rasterizando la tinta de la pieza —el centroide de su
+cuerpo, sin contar el tubo— y cae en un `.5`, porque el lado es impar.
+
+Comprobado sobre la escena: casco, torre y ametralladora en su píxel exacto,
+aro en (−1; −3,5) y boca del cañón en (−1; 25).
+
+**Dos armas con oficios distintos.** La ametralladora es el arma fija de
+`UnitType.cannon`, con munición ilimitada, y el cañón va con cuenta como los
+misiles del Tunguska. Elegir entre ellas lo hace el `WeaponSelector` que ya
+existía.
+
+Y `WeaponSystem` ganó un `muzzle_path` opcional: sin él el proyectil nacía en el
+centro del casco, un palmo por detrás de la boca y sin girar con la torre.
+
+### Acercarse es un anillo, y el que se acerca tiene que preguntar lo mismo que el que dispara
+
+El carro se mete hasta poder tirar y ni un metro más: arranca cuando el blanco
+se sale del alcance y para al 75 % de él. **Son dos bordes y no uno a
+propósito** — con un solo número corrige el último píxel eternamente contra algo
+que también se mueve.
+
+Sólo se acerca a lo que ordenó el jugador, nunca a lo que la torre engancha
+sola; si no, se iría de paseo detrás de lo primero que asomara. Pero eso dejó un
+agujero que costó encontrar y **es la lección de la sesión sobre depuración**:
+
+> La torre engancha sola a un blanco a 150 px. Le pones la ametralladora —130 px
+> contra los 260 del cañón— y el carro se queda quieto, callado y para siempre.
+> Estaba atacando, cambias de arma, deja de atacar. **Nada avisaba, porque nada
+> estaba roto**: el que decide dónde pararse y el que decide con qué disparar
+> estaban contestando preguntas distintas.
+
+Se tapó con una regla que es también una frase: **elegir arma a mano contra algo
+a lo que ya se está disparando cuenta como orden sobre ese blanco.** Sólo la
+elección a mano — el selector automático cambia de arma cada dos décimas, y sin
+ese filtro el carro saldría detrás de cualquier cosa. Medido: enganchado solo a
+150 px, con la M2 puesta se acerca a 98 y suelta 8 ráfagas; en automático se
+mueve 0,00 px y no adopta nada.
+
+Y `_reach_against()` respeta la elección: si el jugador puso arma, la distancia
+es la de ésa y no la del mejor alcance que se lleve.
+
+**De camino, un fallo de método propio:** se diagnosticó "no dispara" mirando
+`can_fire_at()`, que devuelve `false` para **cualquier** arma sostenida porque
+exige `projectile_scene`. La ametralladora no pasa por ahí. Lo que hay que medir
+es el gatillo — `firing_started` —, no la función que parece contestar.
+
+### Antiaéreo: le apunta, le tira, y no lo persigue
+
+`TurretTracker` pasó de vigilar un grupo a vigilar una lista, porque el carro
+tiene un cañón para blindados y una ametralladora que también le llega a lo que
+vuela. El Tunguska se queda con `unit_air` por omisión y no hubo que tocar su
+escena.
+
+El antiaéreo es la M2 del comandante, que es para lo que está montada ahí
+arriba. **A lo que vuela no se le persigue, ni con orden**: correr detrás de un
+avión es una carrera perdida y encima lo saca de donde se le mandó. Medido: 9
+ráfagas contra un Harrier a 90 px, 0,00 px de movimiento y 0,0° de desvío; a 260
+px ni se mueve ni gasta munición.
+
+Consecuencia aceptada: la torre engancha **al más cercano de los dos tipos**, así
+que un avión que pase cerca le roba la puntería a un carro más lejano.
+
+No hay proyectil que estalle en el aire porque un arma sostenida no instancia
+nada: el daño se aplica desde el arma y lo que se ve son las trazadoras
+apagándose a la distancia del blanco, igual que en el Tunguska.
+
+### Los retratos crecieron, y el número que lo resolvió fue el 28
+
+El panel de desplegadas cambió de arte: los marcos pasaron de 24×24 a 32×35 y
+ganaron una pestaña que asoma por arriba y por la izquierda. La barra de vida
+creció de 24 a 28.
+
+**Ese 28 es lo que resolvió la colocación.** Es exactamente el ancho del cuadro
+del marco sin contar la pestaña, así que la barra se alinea con su borde
+izquierdo —4 px dentro de la textura— y no con el de la pestaña. Es la misma
+relación que tenían las piezas anteriores. La franja azul que el marco lleva
+dibujada abajo es del dibujo, no es la barra: mide 22 y la barra 28.
+
+Y para encontrar todo eso **se diferenció la hoja contra su versión anterior en
+git** en vez de mirarla. Salieron seis bandas de cambios con sus coordenadas
+exactas, incluida la del tanque mini, de 9×14 en (435, 113).
+
+### Sabido y sin resolver
+
+- **Los disparos aciertan siempre.** Falta dispersión que salga del arma, la
+  distancia, si el blanco se mueve y quién dispara — y un tiro fallado tiene que
+  irse a alguna parte, o no se ve que se ha fallado.
+- **Mejoras por unidad**: puntería, velocidad, carga, ECM. Lo que falta decidir
+  no es la lista sino **dónde se guarda lo mejorado**, porque el `UnitType` lo
+  comparten todas las unidades de ese modelo.
+- **Daño según arma y blindaje.** Hoy todo lo que llega resta lo mismo y un
+  misil mata cualquier cosa de un tiro. Tienen que hablarse penetración y
+  grosor, y por qué cara le entra; el rebote y la no penetración salen de ahí.
+- **Los alcances son cortos y hay que rehacerlos.** Es balance, no mecánica, y
+  vale para todas las unidades.
+- **Sólo el M1A1 se mueve y dispara.** El LAV, el Amtrac y el T-14 siguen siendo
+  maniquíes.
+- La aproximación al dique sigue yéndose demasiado lejos.
+- Sin efecto de reventón para el fuego antiaéreo. Se pidió expresamente no
+  ponerlo.
+
+---
+
 ## 2026-09-01 — el desembarco entero: elegir playa, cruzar, y volver
 
 Se cerró el ciclo que la pestaña de tropas dejaba abierto. Ahora se elige una

@@ -143,6 +143,14 @@ func _work_the_approach() -> void:
 		_ordered_target = null
 		_closing = false
 		return
+	# **A lo que vuela no se le persigue.** El carro le tira si le pasa por
+	# encima del alcance y ya está: correr detrás de un avión es una carrera
+	# perdida de antemano —va diez veces más rápido— y encima lo saca de donde
+	# se le mandó. Es la misma idea que "quédate donde estás si no tienes con
+	# qué": acercarse sólo vale cuando acercarse sirve para algo.
+	if _ordered_target.get_domain() == UnitType.Domain.AIR:
+		_closing = false
+		return
 	var reach := _reach_against(_ordered_target)
 	if reach <= 0.0:
 		# Sin nada con qué dispararle, la respuesta buena es quedarse donde
@@ -170,8 +178,7 @@ func _work_the_approach() -> void:
 ## llegar a un punto; de alcances y de munición sabe la unidad, que es la que
 ## lleva las armas. Es la misma reparto que en el aire.
 func _reach_against(target: Unit) -> float:
-	var air: bool = target.unit_type != null \
-			and target.unit_type.domain == UnitType.Domain.AIR
+	var air: bool = target.get_domain() == UnitType.Domain.AIR
 	var bit: int = 1 if air else 2
 	# **Si el jugador eligió arma, la distancia es la de ESA y no la del mejor
 	# alcance que se lleve.** Con el máximo, un carro al que le pones la

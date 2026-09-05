@@ -33,9 +33,17 @@ signal target_lost
 @export var sprite_offset_deg: float = -90.0
 
 @export_group("Búsqueda")
-## Grupo en el que están las aeronaves. Cualquier unidad que se meta ahí entra en
-## la búsqueda: hoy sólo el Harrier, mañana lo que haya.
-@export var target_group: StringName = &"unit_air"
+## En qué grupos busca. Cualquier unidad que esté en uno de ellos entra en la
+## búsqueda.
+##
+## **Es una lista y no un grupo suelto** porque hay torretas que sirven para más
+## de una cosa: la del Tunguska sólo mira al aire, pero la del carro tiene un
+## cañón para blindados y una ametralladora que también le llega a lo que vuela,
+## y con un solo grupo habría que elegir a cuál de las dos hacerle caso.
+##
+## Qué se puede disparar contra lo que se enganche no se decide aquí: eso lo
+## sabe el arma. Esto sólo dice a quién mirar.
+@export var target_groups: PackedStringArray = PackedStringArray(["unit_air"])
 ## Cada cuánto vuelve a mirar quién anda cerca, en segundos. No hace falta cada
 ## frame — nada cruza un rango entero en una décima — y así no se recorre la
 ## lista de aviones 60 veces por segundo.
@@ -144,7 +152,18 @@ func _closest_in_range() -> Unit:
 		return null
 	var best: Unit = null
 	var best_distance := reach
-	for node in get_tree().get_nodes_in_group(target_group):
+	var seen: Dictionary = {}
+	var candidates: Array[Node] = []
+	for group in target_groups:
+		for node in get_tree().get_nodes_in_group(StringName(group)):
+			# Una unidad puede estar en dos de los grupos vigilados, y sin este
+			# filtro se mediría dos veces. No cambia a quién se elige, pero sí
+			# el trabajo, que es por fotograma y por torreta.
+			if seen.has(node.get_instance_id()):
+				continue
+			seen[node.get_instance_id()] = true
+			candidates.append(node)
+	for node in candidates:
 		var candidate := node as Unit
 		if candidate == null or not candidate.is_alive():
 			continue

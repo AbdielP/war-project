@@ -487,9 +487,20 @@ dispara**: apunta y avisa por señal de a quién.
 |---|---|---|
 | `turn_speed_deg` | 60 | velocidad de giro |
 | `sprite_offset_deg` | −90 | cañones dibujados hacia +Y |
-| `target_group` | `unit_air` | dónde busca |
+| `target_groups` | `["unit_air"]` | en qué grupos busca |
 | `rescan_interval` | 0,1 s | cada cuánto rehace la búsqueda |
 | `rings_path` | `../RangeRings` | de dónde saca el alcance |
+
+**Es una lista de grupos y no uno suelto** porque hay torretas que sirven para más de una cosa: la
+del Tunguska sólo mira al aire, pero la del carro tiene un cañón para blindados y una ametralladora
+que también le llega a lo que vuela, y con un grupo único habría que elegir a cuál de las dos
+hacerle caso. Qué se puede disparar contra lo enganchado no se decide aquí — eso lo sabe el arma.
+
+**`hold(unit)` / `release()`** imponen un blanco desde fuera, que manda sobre la búsqueda. Es el que
+señaló el jugador: **su preferencia no caduca porque pase otro más cerca**. La búsqueda sigue
+corriendo por debajo, así que al soltarlo —o al morir el retenido, que se cae solo sin que nadie
+llame a `release()`— la torreta se engancha otra vez sin reiniciar nada. El Tunguska no lo usa: una
+batería que se defiende sola nunca recibe órdenes.
 
 Tres decisiones dentro:
 
@@ -951,6 +962,79 @@ escena de prueba no enseña un botón que no puede cumplir. Es la primera unidad
 acción — el `ActionsPanel` se estrena aquí, y su hueco da para unos **8 caracteres** (`RETURN TO
 SHIP` se salía de la pantalla; un `PanelContainer` crece con el contenido en vez de recortarlo).
 
+
+### `TankController` — `core/unit/ground/tank_controller.gd`
+
+El conductor de un vehículo de cadenas. Decide **cómo** se mueve; a dónde va lo dice quien llame a
+`set_route()`. Mueve al nodo padre. Cuarto piloto del proyecto y tampoco reusa a ninguno de los
+otros tres, por la misma razón que ellos no se reusan entre sí: **cada uno está construido sobre lo
+que su vehículo no puede hacer.** La lancha no vira sin arrancada, y de ese suelo sale su curva de
+salida del buque. Las cadenas son justo lo contrario — giran a velocidad cero—, así que pueden
+ponerse de cara antes de salir. Copiar el modelo de la lancha con otros números daría un carro que
+traza curvas como un coche.
+
+| Campo | Qué decide |
+|---|---|
+| `forward_speed` / `reverse_speed` | 34 y 18. Ciar es para salir de un sitio, no para viajar. |
+| `acceleration` / `deceleration` | 26 y 45. La frenada **también** decide cuándo empieza a frenar (`v²/2a`). |
+| `turn_speed_deg` | 55, **a cualquier velocidad, incluida cero**. Es lo contrario del suelo de arrancada de la lancha. |
+| `pivot_threshold_deg` | 30. Por encima se para a girar; por debajo se corrige rodando. |
+| `reverse_angle_deg` / `reverse_distance` | 120° y 90 px. Cuándo compensa ciar en vez de darse la vuelta. |
+| `arrive_radius` / `settle_speed` | 5 px y 8 px/s. Las dos condiciones: pasar por encima lanzado no es llegar. |
+
+**El umbral de pivote es lo que hace que esto se vea bien, y no es un adorno.** Girando siempre
+antes de avanzar, el carro se clava en seco cada vez que el rumbo se desvía un grado y el avance
+sale a tirones; sin umbral ninguno describe curvas y deja de leerse como un carro.
+
+**`route` es una lista aunque hoy siempre traiga un punto.** Con dos islas y nada que rodear la
+línea recta sobra; el día que haya que esquivar algo, quien da la orden rellena la lista y aquí no
+se toca nada. Guardando un punto suelto, ese día habría que abrir el conductor entero — y lo que
+cambia no es cómo se conduce, es quién decide por dónde.
+
+**`can_drive` es un `Callable` que le pone otro.** El conductor no sabe de tiles, igual que el de la
+lancha no sabe si está varada: se lo dicen. Así sigue valiendo el día que lo que frene al carro no
+sea el agua sino un muro o un puente cortado. Se pregunta por **el sitio al que se va a pisar**, no
+por el que se pisa: un carro que comprueba dónde está ya se ha metido en el agua cuando contesta.
+
+`_backwards` es un pestillo y no una comparación por fotograma: la condición que lo enciende —el
+destino queda detrás— deja de cumplirse en cuanto empieza a retroceder.
+
+| señal | cuándo |
+|---|---|
+| `target_reached` | recorrió la lista entera |
+| `blocked` | el paso siguiente cae en terreno que no pisa |
+
+Las dos terminan la orden. `blocked` **no es un error**: el HUD tiene que dejar de decir que va a
+algún sitio igual que si hubiera llegado.
+
+---
+
+### `GroundVehicle` — `core/unit/ground/ground_vehicle.gd`
+
+Lo que un vehículo de suelo sabe **de sí mismo**: por dónde puede pisar y cuándo dar una orden por
+terminada. Del cómo se conduce va [`TankController`](#tankcontroller--coreunitgroundtank_controllergd).
+
+Va aquí y no dentro del Abrams porque la pregunta es la misma para el LAV, el Amtrac y el T-14: lo
+único que cambia entre ellos son los números del conductor, que están en el inspector. Un vehículo
+nuevo es poner esta escena y ajustar dos casillas, no escribir otro script.
+
+**`drivable`** es del vehículo y no del terreno: `["tierra", "arena"]` hoy, y el día que haya uno con
+ruedas que no suba a la arena se le quita "arena" y ya está. Sin capa de tiles a la que preguntar
+dice que sí, como hace la lancha: una escena abierta con F6 no tiene mapa, y negarse por eso dejaría
+el vehículo clavado justo en lo que se quiere mirar. La capa **se busca una sola vez**: encontrarla
+cuesta un recorrido del árbol entero y esto se pregunta en cada paso de cada vehículo.
+
+> **La regla va atada al terreno, no al destino**, igual que la de la lancha que descarga por estar
+> en la arena. Mandarlo al otro lado del agua no es un error que haya que rechazar: el carro avanza
+> hasta la orilla y se para. Eso sobrevive a que el jugador cambie de idea a mitad de camino.
+
+**Toma el mando en `_ready()`**, al revés que la lancha y los aviones. Un vehículo de tierra nace ya
+colocado —lo pone el mapa o lo suelta la lancha— y su sitio y su rumbo están puestos antes de entrar
+en el árbol; uno embarcado no puede, porque mientras está dentro es carga del buque. Eso obligó a un
+cambio en `LandingCraft._unload()`: **el rumbo se le da antes del `add_child`**, o el carro nace
+creyendo que mira al este y pega un giro completo con la primera orden.
+
+---
 
 ### Vuelo — `core/unit/flight/`
 
@@ -2280,6 +2364,12 @@ decide a quién se ataca (eso es la orden, y vive en `Unit`) ni cómo vuela lo q
 | `fired(weapon)` | Señal. La escucha el vuelo para romper el ataque |
 | `firing_started` / `firing_stopped` | Señales. Las escuchan los efectos del cañón |
 | `rack_path` | Export, `../Hardpoints` |
+| `muzzle_path` | Export, vacío. De dónde sale el tiro cuando el arma no cuelga de una estación |
+
+**`muzzle_path` existe por las torretas.** Un avión suelta el misil del pilón donde estaba
+colgado, y ése es el sitio; una torreta no tiene sprite que descolgar, así que sin esto el
+proyectil nacía en el centro del casco, un palmo por detrás de la boca y sin girar con la torre.
+Vacío = el centro de la unidad, que es lo que había antes y sigue valiendo para quien no lo ponga.
 
 **Apuntar y poder tirar son cosas distintas.** `set_cleared_to_fire()` es lo que las
 separa. Un `WeaponSystem` suelto dispara siempre que las condiciones se den — un tanque no
@@ -2459,8 +2549,10 @@ hasta que tenga comportamiento**.
 
 ### La fuerza de desembarco — `core/unit/{m1a1_abrams,lav25,aav7_amtrac,lcac}/`
 
-Tres desplegables y la lancha que las lleva. Las tres primeras siguen el patrón del T-14: **sin
-script**, porque todavía no tienen comportamiento. La lancha sí lo tiene ([`LandingCraft`](#landingcraft--coreunitlcaclcacgd)).
+Tres desplegables y la lancha que las lleva. El Abrams se mueve y dispara
+([`Abrams`](#abrams--coreunitm1a1_abramsm1a1_abramsgd)); el LAV y el Amtrac siguen el patrón del
+T-14 —**sin script**, porque todavía no tienen comportamiento— y la lancha tiene el suyo
+([`LandingCraft`](#landingcraft--coreunitlcaclcacgd)).
 
 | | Plazas | Vida | Potencia | Notas |
 |---|---|---|---|---|
@@ -2469,12 +2561,73 @@ script**, porque todavía no tienen comportamiento. La lancha sí lo tiene ([`La
 | AAV-7 Amtrac | `SWIMS` | 90 | 2 | `amphibious`: llega solo, lento y expuesto |
 | LCAC | lleva 4 | 110 | 1 | `cargo_slots`, dominio `NAVAL`, desarmada |
 
-> **Hoy no se mueven ni disparan, y eso condiciona lo que se puede construir encima.** No hay piloto
-> de tierra, así que "manda el tanque a la lancha" no existe porque "manda el tanque" no existe — el
-> reembarque cuelga de eso. Y **nada dispara a nada que flote o ruede**: el único enemigo armado es
-> el 2S6, cuya torreta busca en un grupo fijo (`unit_air`), y el T-14 no tiene sistema de armas.
+> **Sólo el Abrams se mueve y dispara.** El LAV y el Amtrac siguen siendo maniquíes, y el
+> reembarque cuelga de que dejen de serlo. Y **nada hostil dispara a nada que ruede o flote**: el
+> único enemigo armado es el 2S6, cuya torreta sólo busca en `unit_air`, y el T-14 no tiene sistema
+> de armas. El fuego, de momento, va en una sola dirección.
 
-> **Todo su arte está generado, no dibujado.** Bloques planos con la paleta del propio T-14.
+> **El LAV y el Amtrac siguen con arte generado** — bloques planos con la paleta del T-14. El Abrams
+> y la lancha ya tienen el suyo dibujado.
+
+---
+
+### `Abrams` — `core/unit/m1a1_abrams/m1a1_abrams.gd`
+
+```
+extends GroundVehicle   class_name Abrams
+```
+
+Un casco que va a donde le mandan y una torre que mira a otro lado. **Esa separación es el vehículo
+entero.** Ata los mismos tres cabos que el Tunguska más uno que él no necesita.
+
+**Arte:** las tres piezas se recortan de `assets/art/sprites/M1A1 Abrahams.png` con `AtlasTexture`,
+sin trocear el archivo — el mismo patrón que el Tunguska, y así la hoja del autor sigue siendo la
+única fuente.
+
+| nodo | región | posición | jerarquía |
+|---|---|---|---|
+| `Sprite2D` (casco) | `(18,3)` 28×38 | — | raíz |
+| `Turret` | `(53,9)` 21×39 | `(−1; −3,5)`, `offset (0,5; 10)` | hijo de la unidad — lleva `TurretTracker` |
+| `Mg` | `(3,13)` 12×19 | `(−3; 4)` | hijo de `Turret` |
+| `MainFlash` | — | `(0; 28,5)` | boca del cañón, hijo de `Turret` |
+
+> **El `offset` de la torre no es decoración: es el aro sobre el que gira.** El centro de la región
+> cae en mitad del cañón, no en la torre, así que girándola por ahí el tubo barre media unidad. El
+> aro se saca **rasterizando la tinta** de la pieza —el centroide de su cuerpo, sin contar el
+> tubo— y sale en un `.5`, porque el lado es impar. Redondearlo lo lleva a un vértice de la rejilla.
+
+**Las dos armas.** La ametralladora es el arma fija de `UnitType.cannon` —munición ilimitada— y el
+cañón va como armamento con cuenta, igual que los misiles del Tunguska. Cuál de las dos se usa lo
+decide el `WeaponSelector` que ya llevan el Harrier y el Tunguska.
+
+| | modo | alcance | daño | ritmo | contra |
+|---|---|---|---|---|---|
+| M256 120 mm | `LAUNCHER` | 260 | 140 | 1 cada 4,5 s | superficie |
+| M2HB .50 | `SUSTAINED` | 130 | 0,35/bala | 11/s en ráfagas de 0,7 s | superficie **y aire** |
+
+**El antiaéreo es la M2**, que es para lo que está montada ahí arriba. La torre vigila
+`["unit_ground", "unit_air"]` y engancha al más cercano de los dos, así que **un avión que pase
+cerca le roba la puntería a un carro que esté más lejos**. A lo que vuela **no se le persigue**, ni
+con orden: correr detrás de un avión es una carrera perdida y encima lo saca de donde se le mandó.
+Y no hay proyectil que estalle en el aire — un arma sostenida no instancia nada, el daño se aplica
+desde el arma y lo que se ve son las trazadoras apagándose a la distancia del blanco.
+
+**Acercarse hasta poder tirar, y ni un metro más.** `_work_the_approach()` arranca cuando el blanco
+se sale del alcance y para al `approach_fraction` de él (0,75). **Son dos números y no uno a
+propósito**: el sitio bueno es un anillo, y con un solo borde el carro corrige el último píxel
+eternamente contra algo que también se mueve. Sin arma que le sirva, se queda donde está — meterse
+en el alcance de algo a lo que no puedes hacer nada es sólo ponerse a tiro.
+
+> **Sólo se acerca a lo que ordenó el jugador**, nunca a lo que la torre engancha sola; si no, se
+> iría de paseo detrás de lo primero que asomara por el borde del alcance. Con una excepción que
+> tapó un agujero real: **elegir arma a mano contra algo a lo que ya se está disparando cuenta como
+> orden sobre ese blanco.** Sin ella, la torre enganchaba sola a 150 px, le ponías la ametralladora
+> —130 contra los 260 del cañón— y el carro se quedaba quieto, callado y para siempre. Nada avisaba,
+> porque no había nada roto: el que decide acercarse y el que decide con qué tirar estaban
+> contestando preguntas distintas.
+
+Y `_reach_against()` respeta esa elección: **si el jugador puso arma, la distancia es la de ésa** y
+no la del mejor alcance que se lleve.
 
 ---
 
@@ -3371,34 +3524,38 @@ extends Button   class_name UnitPortrait
 signal picked(unit: Unit)
 ```
 El cuadrito de una unidad, **como escena** (`unit_portrait.tscn`) y no montado en código: si no
-existe en el editor, no se puede ajustar sin arrancar el juego. Mide **24×39** y lleva cuatro
+existe en el editor, no se puede ajustar sin arrancar el juego. Mide **32×52** y lleva cuatro
 nodos con posición libre — `Frame`, `Mark`, `Health`, `Name` —, todos con `mouse_filter = IGNORE`
 para que el click lo coja el `Button` raíz, que va con `StyleBoxEmpty` en los cinco estados.
 
 | nodo | qué | dónde |
 |---|---|---|
-| `Frame` | marco dibujado, 24×24 | (0,0) |
-| `Mark` | silueta, 20×20 | (2,2) — la ventana del marco, `KEEP_CENTERED` |
-| `Health` | `ProgressBar`, 24×3 | (0,26) |
-| `Name` | modelo, Public Pixel a 8 | (0,31), 24×8 |
+| `Frame` | marco dibujado, 32×35 | (0,0) |
+| `Mark` | silueta, hueco de 20×20 | (8,5) — la ventana del marco, `KEEP_CENTERED` |
+| `Health` | `TextureProgressBar`, 28×5 | (4,37) |
+| `Name` | modelo, Yellow Pixel a 8 | (0,44), 32×8 |
 
 **Marco suelto y marco seleccionado son dos texturas, no un tinte** (`_FRAME` / `_FRAME_ON`): el
 seleccionado cambia el color del borde entero y añade una marca de esquina, y eso no sale de
 ningún `modulate`.
 
-**Las siluetas de 20×20 son otro dibujo, no las de 32 reducidas.** Achicar una de 32 a 16 tira
-tres de cada cuatro píxeles, y con ellos lo que la hacía reconocible; las pequeñas están
-redibujadas simplificando la silueta a propósito y vienen ya centradas en su lienzo. El marco de
-24 deja ventana de 20 —el borde gasta 2 px por lado—, así que entran al píxel y no se escala nada.
+**El marco no es una caja.** Lleva una pestaña que asoma por arriba y por la izquierda, así que su
+cuadro útil son los 28 px centrales de la textura —de x 4 a x 31— y la ventana interior mide 22×20,
+con el borde gastando 3 px por lado. La silueta va centrada en esa ventana a su tamaño nativo.
 
-**El ancho de 24 tampoco es redondeo**: Public Pixel gasta 8 px por letra y el nombre son tres
-caracteres. Nueve desplegadas ocupan 232 px de 640.
+> **Y de ahí sale dónde va la barra de vida: debajo del marco, no dentro.** Mide 28, que es
+> exactamente el ancho del cuadro, y por eso se alinea con su borde izquierdo y no con el de la
+> pestaña. Es la misma relación que tenían las piezas anteriores, cuando marco y barra medían 24.
+> La franja azul que el marco lleva dibujada abajo es parte del dibujo; no es la barra.
 
-**La barra de vida es color plano, no textura**: un `ProgressBar` con dos `StyleBoxFlat` —hueco
-`#3e3546`, relleno `#91db69`—, `show_percentage = false` y `step = 0` para aceptar valores
-fraccionarios. Antes eran dos PNG (`texture_under` + `texture_progress`) partidos del mismo
-dibujo; se cambió cuando el dibujo desapareció del PNG maestro. Un rectángulo se estira a
-cualquier ancho sin romper ningún borde, que es justo lo que un marco dibujado no aguanta.
+**Las siluetas son otro dibujo, no las de 32 reducidas.** Achicar una de 32 a 16 tira tres de cada
+cuatro píxeles, y con ellos lo que la hacía reconocible; las pequeñas están redibujadas
+simplificando la silueta a propósito y vienen ya centradas en su lienzo. No todas miden lo mismo
+—el Harrier 20×20, el Abrams 9×14— y por eso el hueco las centra en vez de escalarlas.
+
+**La barra es textura y no color plano**: `texture_under` y `texture_progress` con el mismo PNG, y
+el hueco se distingue por `tint_under`. Se recorta de la hoja de UI junto a los marcos, de modo que
+al retocar el marco hay que **volver a medirla**: la última vez creció de 24 a 28 con él.
 
 Se engancha a `Unit.health_changed` en `show_unit()`; no mira la vida cada frame.
 
@@ -3766,6 +3923,12 @@ coordenadas. No es un nodo: es el dato que dibujan los dos mapas.
 | `nearest_shoreline(world, reach_cells)` | la orilla más cercana, o `null` |
 | `kind_at(layer, cell)` / `kind_under(layer, world)` | estáticos. El tipo suelto, sin construir el mapa |
 | `find_layer(tree)` | estático. El `TileMapLayer` de la misión puesta |
+| `BEACH_KIND` / `WATER_KIND` / `LAND_KIND` | los tres nombres de la capa `tipo` |
+
+Los tres nombres viven aquí y no repartidos entre quienes preguntan, porque **éste es el único
+sitio del proyecto que lee la capa `tipo`**: repartirlos es dejar que uno se quede viejo el día
+que se renombre un tile. `LAND_KIND` no lo usa el desembarco sino lo que rueda — ver
+[`GroundVehicle`](#groundvehicle--coreunitgroundground_vehiclegd).
 
 **No toda la arena es orilla.** Lo que hace atracable a una celda no es su dibujo sino tener un
 vecino de agua por el que llegar: en el mapa de hoy hay 34 celdas de arena y sólo **21** valen —7 en
@@ -4620,7 +4783,10 @@ Los del mapa en `MapTerrain.COLORS`, y salen del propio pixel art de los tiles.
 - [x] **Cámara con foco desplazable** (`PanCamera.focus_offset` / `pan_focus`): al abrir la ventana del buque, la unidad se aparta a un lado con una transición y vuelve al centro —de golpe si se cambia de unidad, animado si sólo se suelta— al cerrarla
 
 ### Pendiente
-- [ ] **Las unidades de tierra no se mueven ni disparan.** Es el trabajo grande, y del que cuelga el resto del desembarco: sin piloto de tierra no hay reembarque, y sin armas "destruir lo que se vea" no ocurre
+- [ ] **Los disparos aciertan siempre, y no puede ser.** Un arma en parámetros impacta; lo único que dispersa hoy es `long_range_accuracy`, y sólo en el fuego sostenido. Hace falta una probabilidad de fallo que salga del arma, de la distancia, de si el blanco se mueve y de quién dispara — y **un tiro que falla tiene que irse a alguna parte**, no desaparecer: sin proyectil perdido no se ve que se ha fallado
+- [ ] **Mejoras por unidad**: puntería, velocidad, capacidad de carga, ECM. La mitad del sitio ya existe —`UnitType` guarda lo que el modelo trae de fábrica (`max_health`, `ecm_evasion`) y está decidido que las mejoras viven en la ficha de la unidad y no en un árbol aparte—, pero **lo mejorado no puede guardarse en el `UnitType`**, que es compartido por todas las de ese modelo. Eso es lo que falta por decidir
+- [ ] **Daño según arma y según blanco, con rebotes y no penetración.** Hoy `damage` es un número y todo lo que llega resta lo mismo, así que un misil mata cualquier cosa de un tiro. Tienen que hablarse el arma y el blindaje —penetración contra grosor, y **por qué cara le entra**—, y de ahí salen solos el rebote y el impacto que no atraviesa. Son también efecto y animación, no sólo cuenta
+- [ ] **Sólo el M1A1 se mueve y dispara.** El LAV, el Amtrac y el T-14 enemigo siguen siendo maniquíes: tienen `unit_type` y sprite, y nada más. `GroundVehicle` + `TankController` están escritos para que un vehículo nuevo sea poner la escena y ajustar el inspector
 - [ ] **Nada dispara a nada que flote.** El 2S6 busca sólo en `unit_air`; el combate de superficie no existe
 - [ ] **La maniobra de aproximación al dique se va demasiado lejos.** Entra derecha, pero el rodeo es exagerado: `WellDeck/ApproachPoint` (380 px por popa) y `LandingCraft.docking_speed` (22 px/s), los dos en el inspector
 - [ ] **Reembarcar tropa desembarcada.** El gesto será el de siempre —seleccionar el carro y pulsar la lancha— y las plazas se comprueban al subir, no al pulsar

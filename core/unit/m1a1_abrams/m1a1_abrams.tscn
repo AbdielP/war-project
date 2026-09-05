@@ -54,7 +54,7 @@ texture = SubResource("Turret")
 offset = Vector2(0.5, 10)
 script = ExtResource("6")
 turn_speed_deg = 40.0
-target_group = &"unit_ground"
+target_groups = PackedStringArray("unit_ground", "unit_air")
 
 [node name="Mg" type="Sprite2D" parent="Turret" index="0"]
 z_index = 1

@@ -9,6 +9,7 @@
 script = ExtResource("1")
 display_name = "AV-8B Harrier II"
 short_name = "AV8"
+actions = PackedStringArray("RETURN")
 portrait_icon = ExtResource("3")
 hangar_icon = ExtResource("4")
 cannon = ExtResource("2")

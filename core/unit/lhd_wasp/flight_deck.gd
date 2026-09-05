@@ -63,6 +63,13 @@ signal mode_changed(mode: Mode)
 ## primeros son de viaje y no piden puntería; el que la pide es el último, y ése
 ## lo remata el propio piloto con su radio de llegada.
 @export var leg_radius: float = 10.0
+## Cuánto más a popa queda el punto de espera inicial.
+##
+## **Lo fija el radio de giro del que entra, no el gusto.** Un avión que llega al
+## punto de espera navegando hacia popa tiene que dar media vuelta, y con 130 px
+## de radio eso son 260 px de través más lo que tarde en enderezarse. Corto, se
+## planta en la cubierta todavía virando.
+@export var pattern_leg: float = 380.0
 
 ## El grupo al que se apunta todo lo que vuela. Es lo único que puede estar
 ## encima de la cubierta, así que es lo único que hay que mirar.
@@ -818,6 +825,17 @@ func _end_recovery() -> void:
 	_refresh_mode()
 
 
+## El punto de espera inicial, más a popa que el de entrada.
+##
+## **Es para lo que no puede pararse.** Un helicóptero se coloca donde le digan y
+## ya está; un avión llega a un punto con el rumbo con el que venía, y si ése no
+## es el del buque, la entrada sale torcida y no hay forma de enderezarla parado.
+## Volando de aquí al punto de entrada queda alineado por construcción.
+func initial_point(on_axis: bool) -> Vector2:
+	var entry := final_point() if on_axis else join_point()
+	return entry + global_transform.y.normalized() * pattern_leg
+
+
 ## Por donde se entra: por detrás del buque, en coordenadas del mundo.
 ##
 ## Es también donde espera el que todavía no tiene plaza. Que sean el mismo punto
@@ -827,6 +845,16 @@ func join_point() -> Vector2:
 	return to_global(Vector2(
 			_takeoff_points[0].position.x + abeam_offset,
 			_recovery_join.position.y))
+
+
+## El punto de **entrada por el eje**, en coordenadas del mundo: a la misma
+## altura que el de entrada normal pero sobre la línea de la pista.
+##
+## Es por donde entra lo que toca rodando. Se sale por proa y se entra por popa,
+## así que es la misma franja recorrida en el otro sentido y en otro momento.
+func final_point() -> Vector2:
+	return to_global(Vector2(
+			_takeoff_points[0].position.x, _recovery_join.position.y))
 
 
 ## El punto de arrimada de esa plaza: a su altura pero al costado y fuera del

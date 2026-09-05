@@ -5,6 +5,7 @@
 [ext_resource type="Resource" uid="uid://dt4e6sl6ifbwv" path="res://core/unit/av8b_harrier/av8b_harrier_type.tres" id="3"]
 [ext_resource type="Script" uid="uid://b3c08xr25m8lk" path="res://core/unit/av8b_harrier/av8b_harrier.gd" id="4"]
 [ext_resource type="Script" uid="uid://c1s3dnfi6aan1" path="res://core/unit/flight/plane_controller.gd" id="5"]
+[ext_resource type="Script" path="res://core/unit/flight/vtol_landing.gd" id="22"]
 [ext_resource type="Script" uid="uid://d3s0jasumaqvv" path="res://core/unit/flight/orbit_behavior.gd" id="6"]
 [ext_resource type="Script" uid="uid://bim4jv2yqqy6a" path="res://core/weapon/hardpoint_rack.gd" id="7"]
 [ext_resource type="Script" uid="uid://nm0ui7hib5n3" path="res://core/unit/flight/attack_run_behavior.gd" id="8"]
@@ -45,6 +46,10 @@ min_speed = 75.0
 max_speed = 115.0
 acceleration = 50.0
 brake_in_turns = false
+
+[node name="VtolLanding" type="Node" parent="." unique_id=266563472]
+script = ExtResource("22")
+deceleration = 26.0
 
 [node name="OrbitBehavior" type="Node" parent="." index="4" unique_id=1582074282]
 script = ExtResource("6")

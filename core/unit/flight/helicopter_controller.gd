@@ -52,6 +52,8 @@ signal target_reached
 signal state_changed(state: int)
 ## Dejó la cubierta. Lo escucha el barco para dar la plaza por libre.
 signal took_off
+## Se posó del todo y paró. Espejo de [signal took_off].
+signal landed
 
 ## En qué anda. Es lo que mira la animación para saber qué dibujar.
 enum State {
@@ -59,6 +61,11 @@ enum State {
 	LIFTING,   ## Subiendo en vertical. Todavía en su sitio, ya no en cubierta.
 	FLYING,    ## De camino a un punto.
 	HOVER,     ## Llegó, y ahí se queda.
+	## Bajando en vertical sobre el sitio. Ya no obedece: la maniobra terminó y
+	## lo que queda es tocar. **Va al final del enum a propósito**, que el valor
+	## viaja en `state_changed` y colarlo en medio le cambiaría el estado a todo
+	## el que lo escuche.
+	LANDING,
 }
 
 @export_group("Ejes de marcha")
@@ -125,6 +132,10 @@ enum State {
 ## Ahora mismo es sólo una espera —no hay nada que dibujar todavía—, pero es el
 ## hueco donde entra la animación de despegue.
 @export var lift_time: float = 1.6
+## Lo que tarda en posarse desde que se queda quieto sobre el sitio. Igual que
+## `lift_time`, hoy es sólo una espera: es el hueco donde entra la animación de
+## posada y la parada de rotor.
+@export var land_time: float = 1.6
 
 var heading: float = 0.0
 var velocity: Vector2 = Vector2.ZERO
@@ -138,6 +149,15 @@ var aim: Node2D = null
 ## A qué distancia del blanco se planta a disparar. La decide quien da la orden
 ## —que es quien sabe con qué arma va—, no el piloto.
 var hold_distance: float = 0.0
+
+## Rumbo impuesto, en radianes, o `NAN` si el morro sale de la marcha.
+##
+## Es la tercera forma de gobernar el morro, junto al destino y al blanco, y hace
+## falta para **colocarse paralelo a algo**: un helicóptero que se arrima a un
+## barco no mira a donde va, mira a donde mira el barco. Sin esto, el tramo de
+## cruce lateral sobre la cubierta lo haría girando hacia su destino, que es
+## justo lo que la maniobra evita.
+var locked_heading: float = NAN
 
 var _body: Node2D
 var _state: State = State.GROUNDED
@@ -153,6 +173,7 @@ var _wanted_heading: float = 0.0
 ## Cuánto queda de morro antes de poder tocar el cíclico. Ver `stick_delay`.
 var _hold: float = 0.0
 var _lifting_for: float = 0.0
+var _landing_for: float = 0.0
 
 
 func _ready() -> void:
@@ -193,6 +214,7 @@ func disable() -> void:
 	set_physics_process(false)
 	has_target = false
 	aim = null
+	locked_heading = NAN
 	velocity = Vector2.ZERO
 	_stick = Vector2.ZERO
 	_pedal = 0.0
@@ -250,6 +272,21 @@ func attack(unit: Node2D, distance: float) -> void:
 		_set_state(State.FLYING)
 
 
+## Corrige el destino **sin volver a empezar la maniobra**. Es la hermana de
+## [method set_hold_distance] y existe por lo mismo: la usa quien persigue algo
+## que se mueve —un barco al que hay que arrimarse—, donde el punto cambia cada
+## fotograma.
+##
+## Repetir ahí [method set_target] dejaría el aparato clavado: cada llamada
+## rearma la espera del cíclico, así que el mando nunca llegaría a moverse y el
+## helicóptero se pasaría la vida metiendo morro sin salir del sitio.
+func steer_to(world_pos: Vector2) -> void:
+	target = world_pos
+	has_target = true
+	if _state == State.HOVER:
+		_set_state(State.FLYING)
+
+
 ## Cambia la distancia de tiro sin volver a empezar la maniobra. La usa quien
 ## cambia de arma en pleno ataque: la envolvente es otra, pero el gesto de
 ## encarar ya se hizo y repetirlo dejaría el aparato clavado metiendo morro.
@@ -275,6 +312,23 @@ func _lift_off() -> void:
 	took_off.emit()
 
 
+## Se posa: suelta los mandos y baja. Espejo de [method _lift_off], y como él,
+## hoy la bajada es sólo una espera —ver `land_time`—.
+##
+## No comprueba nada: cuándo se puede posar lo decide quien lleva la maniobra,
+## que es el único que sabe si hay cubierta debajo.
+func land() -> void:
+	has_target = false
+	aim = null
+	locked_heading = NAN
+	velocity = Vector2.ZERO
+	_stick = Vector2.ZERO
+	_pedal = 0.0
+	_yaw_rate = 0.0
+	_landing_for = 0.0
+	_set_state(State.LANDING)
+
+
 ## Suelta el destino, no el blanco: son dos mandos distintos y el morro sigue
 ## puesto donde estaba.
 func clear_target() -> void:
@@ -292,6 +346,16 @@ func _physics_process(delta: float) -> void:
 			_lifting_for += delta
 			if _lifting_for >= lift_time:
 				_set_state(State.FLYING if has_target else State.HOVER)
+			return
+		State.LANDING:
+			# Nada de `_fly` aquí: mientras baja está reparentado al barco y
+			# escribirle la posición del mundo pelearía con la cubierta, que ya
+			# lo lleva colocado.
+			_landing_for += delta
+			if _landing_for >= land_time:
+				_set_state(State.GROUNDED)
+				set_physics_process(false)
+				landed.emit()
 			return
 		_:
 			_fly(delta)
@@ -335,7 +399,13 @@ func _work_the_controls() -> void:
 
 	# Encarar es una decisión aparte de moverse, igual que las flechas son
 	# teclas aparte de W/S. Y de cerca ni se plantea: se entra de lado.
-	if dist > face_range:
+	#
+	# Con rumbo impuesto no se plantea nunca: el morro va donde le digan y el
+	# cíclico se ocupa de llegar. Es el mismo reparto de dos manos que en
+	# combate, con el barco en el papel del blanco.
+	if not is_nan(locked_heading):
+		_wanted_heading = locked_heading
+	elif dist > face_range:
 		_wanted_heading = to_target.angle()
 	_pedal = _pedal_input()
 

@@ -2,6 +2,140 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-09-05 — la cubierta también recoge
+
+Hasta hoy el buque sabía lanzar y no sabía recoger, así que `PlayerFleet.recall`
+sólo lo llamaba la lancha: **todo lo que despegaba se descontaba del hangar y no
+volvía nunca**. No era una función que faltara, era un agujero que ya estaba
+falseando la flota. Se cierra para el helicóptero; el Harrier queda pendiente y
+a propósito.
+
+### Lo primero fue decidir qué NO se construye
+
+Ninguna aeronave del jugador necesita pista: el Harrier es V/STOL y el Cobra es
+un helicóptero. Senda de planeo, gancho y cable no hacen falta para nada de lo
+que existe, y no se escribieron.
+
+Y el aterrizaje **se entra por popa** (`+Y` en coordenadas de cubierta) mientras
+la salida se va más allá de la proa (`-Y`). Eso lo dijo el usuario y resultó ser
+la pieza que simplifica todo lo demás: los dos flujos no se cruzan **ni en el
+aire**, así que basta con turnarse y no hace falta arbitraje ninguno.
+
+### El sí o no se contesta antes de la aproximación, no antes de posarse
+
+Es la asimetría de todo el asunto. Al despegar, si la cubierta está ocupada
+simplemente no se empieza y no hay nada comprometido. Al recoger es al revés:
+cuando el aparato ya está entrando, negarle la plaza lo deja sin sitio a donde
+ir.
+
+De ahí sale que la reserva **cubra la secuencia entera, ascensor incluido**.
+Reservando sólo el punto de toma, un aparato aterriza, se queda sin ascensor y se
+convierte en un estorbo que ya no puede quitar nadie.
+
+### Un modo no es otra bandera: es lo que sustituye a las cinco que había
+
+El usuario pidió que el buque enseñe qué está haciendo, y pegó en el sitio. El
+estado de la cubierta eran cinco banderas sueltas que nadie podía leer juntas
+(`_launching`, `_runway_busy`, `_taxiing`, `_occupied`, `_retry_pending`), y
+confundir dos de ellas ya había dejado el ascensor parado para siempre una vez.
+Meter la recuperación en ese montón era la forma segura de repetirlo.
+
+Lo bueno de la pega es que **la obligación de enseñarlo es lo que lo hace
+correcto**: si no se puede escribir el rótulo, no hay un estado sino una
+combinación de banderas.
+
+Pero hay **dos preguntas y no una**, y juntarlas habría sido el mismo fallo con
+otra cara:
+
+- *¿Qué está haciendo?*, para el rótulo, mira la tanda entera. `_launching` dura
+  lo que el jugador tarde en mover un helicóptero posado, y eso también es estar
+  lanzando.
+- *¿Puedo cederle el turno?* mira sólo si hay algo moviéndose **ahora mismo**.
+  Con la primera, un helicóptero aparcado dejaría fuera a todo el que quisiera
+  entrar; con la segunda como rótulo, el letrero parpadearía entre cada aparato
+  de la misma tanda.
+
+Y lo que se turna es **el aparato en curso, no la cola entera**: el que corre la
+pista termina, la recuperación toma la cubierta, y la cola sigue después donde
+estaba. Manda el que está en el aire, porque a él se le acaba el combustible.
+
+### Yo dije que esto tocaba el despegue y lo exageré
+
+Dije que el modo era un paso aparte con riesgo, porque es refactor de código
+bueno. El usuario preguntó por qué, y tenía razón: "¿puedo lanzar?" se decide
+dentro del propio código de despegue, así que alternar es **añadir ahí una
+pregunta**, no rediseñar nada. Con `_recovering == 0` cada puerta nueva es un
+no-op y el camino de salida es el de antes, línea por línea. La sonda de
+regresión lo confirmó: tres aparatos pedidos, dos Harrier por proa, el Cobra
+posado, igual que siempre.
+
+### Sincronizar la marcha con el barco no es adorno, es el relevo
+
+El usuario propuso que el helicóptero iguale la velocidad del buque, se desplace
+de costado sobre la cubierta y se pose. Es cómo se hace de verdad, y además es
+justo lo que hacía falta por dentro: **al igualar la marcha, su posición respecto
+al barco deja de cambiar**, que es exactamente la condición para colgarlo de él y
+medir el resto en coordenadas de cubierta.
+
+Y no hubo que programar la sincronización. Persiguiendo un punto **recalculado
+contra la cubierta cada fotograma**, el aparato iguala la marcha solo. Un punto
+capturado al empezar deja de ser su sitio en cuanto el barco avanza; el vivo, no.
+
+De regalo, el tramo más mirado de la maniobra —el cruce lateral— se hace con el
+aparato **paralelo al buque y sin rotar el sprite**. Girar pixel art lo destruye,
+y la maniobra que eligió el usuario esquiva sola la peor debilidad del proyecto.
+
+### Tres cosas que el piloto no sabía hacer
+
+- **`steer_to()`**, para corregir el destino sin volver a empezar la maniobra.
+  Repetir `set_target` cada fotograma rearma la espera del cíclico, así que el
+  mando no llega a moverse nunca: el helicóptero se pasaría la vida metiendo
+  morro sin salir del sitio. Es la hermana de `set_hold_distance`, que ya existía
+  por lo mismo.
+- **`locked_heading`**, la tercera forma de gobernar el morro junto al destino y
+  al blanco. Hace falta para colocarse **paralelo a algo**: el que se arrima a un
+  barco no mira a donde va, mira a donde mira el barco. Sin esto el cruce lateral
+  se haría girando hacia el destino, que es justo lo que la maniobra evita.
+- **`land()` y el estado `LANDING`**, espejo de `_lift_off` y `LIFTING`, con su
+  espera de `land_time` como hueco para la animación. Al final del enum, que el
+  valor viaja en `state_changed`.
+
+### No se rearma, y eso no es una omisión
+
+Al preguntar si un aparato recuperado vuelve rearmado, la respuesta del usuario
+fue que con qué sale lo decide él al relanzar. Es correcto y además ya estaba
+resuelto: el armamento se elige en el hangar. `return_to_fleet()` devuelve la
+unidad tal como está y lo gastado se queda gastado.
+
+`fleet_entry` y `return_to_fleet()` se subieron a `Unit`, que es donde tocaban:
+la pregunta —de qué casilla del pañol vino esto— es la misma para todos, y
+`LandingCraft` sólo añade encima la devolución de su carga.
+
+### Lo que se midió
+
+| comprobación | resultado |
+|---|---|
+| salida de tres aparatos con el modo puesto | idéntica: 2 Harrier por proa, Cobra posado |
+| entrada completa | popa (−97, 222) → través (−94, 103) → plaza (−22, 94), rumbo −91° |
+| dos pidiendo entrar mientras lanza | los dos esperan, entran por turno, la tanda se reanuda |
+| plazas y pañol al terminar | todo libre, `deployed` 2 → 0, cola vacía |
+| desvío a mitad de aproximación | plaza suelta, modo `IDLE`, obedece el destino nuevo |
+
+Las sondas van **como escena y no con `--script`**: en ese modo no existen los
+autoloads, y sin `PlayerFleet` no compila ni `Unit`.
+
+### Sabido y sin resolver
+
+- El Harrier no vuelve todavía. La columna entera es común y le sirve; lo que le
+  falta es el tramo final, que es donde vive el código de vuelo nuevo. Y sus dos
+  entradas —vertical si viene ligero, rodada si viene cargado— siguen decididas y
+  sin escribir, con sus efectos de aire caliente y polvo.
+- El combustible va justo detrás, que es lo que dispara la vuelta por decisión
+  del aparato y la otra mitad de "¿vengo ligero?".
+- La bajada por el ascensor y la posada son esperas, no animaciones.
+- **Nada de esto se ha probado con el buque en marcha**, porque el LHD todavía no
+  navega. Está diseñado para aguantarlo y no verificado.
+
 ## 2026-09-04 — el carro de combate: arte propio, se mueve y dispara
 
 Llegaron sprites dibujados para el M1A1 y la lancha, y con ellos el primer

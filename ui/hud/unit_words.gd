@@ -18,11 +18,24 @@ class_name UnitWords
 ## El orden importa: atacar manda sobre moverse, porque un avión que ataca
 ## también se está moviendo y lo primero es lo que el jugador quiere saber.
 static func status(unit: Unit, map: MapView,
-		idle: String, moving: String, attacking: String) -> String:
+		idle: String, moving: String, attacking: String,
+		launching: String = "", recovering: String = "") -> String:
 	if unit == null:
 		return ""
 	if is_instance_valid(unit.attack_target):
 		return attacking + unit.attack_target.get_display_name()
+	# Lo que hace su cubierta manda sobre navegar, por lo mismo que atacar manda
+	# sobre moverse: un buque en marcha es lo normal y sacar o meter un aparato
+	# es el suceso. Y va aquí y no en un panel propio porque **es un sitio y no
+	# dos**: la etiqueta y la ficha del mapa tienen que contar lo mismo.
+	if unit.has_method("get_deck_mode"):
+		match unit.get_deck_mode():
+			FlightDeck.Mode.LAUNCHING:
+				if launching != "":
+					return launching
+			FlightDeck.Mode.RECOVERING:
+				if recovering != "":
+					return recovering
 	var going: Variant = unit.get_move_destination()
 	if going != null:
 		return moving + zone_of(going, map)

@@ -71,6 +71,14 @@ var health: float = 0.0
 ## Quién le pegó el último. Se lee al morir, para poder decir por quién. `null`
 ## si nadie la mató o si quien lo hizo ya no existe.
 var killed_by: Unit = null
+## Su casilla en la flota, o vacío si no salió de ella. Se la pone quien la saca
+## —el dique a una lancha, la cubierta a una aeronave—, y es lo que la deja
+## volver a estar disponible al recogerla.
+##
+## Va aquí y no en cada vehículo porque la pregunta es la misma para todos: de
+## qué casilla del pañol vino esto. Con la escena sola habría que adivinarlo
+## comparando recursos.
+var fleet_entry: Dictionary = {}
 
 @onready var _selection_indicator: SelectionIndicator = $SelectionIndicator
 @onready var _target_marker: TargetMarker = $TargetMarker
@@ -379,6 +387,18 @@ func set_active_weapon(weapon: WeaponType) -> void:
 ## Moverse a un punto cancela el ataque en curso: son órdenes que compiten por
 ## el mismo destino. Las subclases que se mueven llaman a `super()` y luego
 ## resuelven el cómo.
+## Vuelve al pañol. Lo llama quien la recoge, no quien la sacó.
+##
+## **Devuelve la unidad tal como está**: lo que gastó se queda gastado, y con qué
+## sale la próxima vez se elige en el hangar, que es donde se elige el armamento.
+## Rearmar aquí sería decidir por el jugador.
+func return_to_fleet() -> void:
+	if fleet_entry.is_empty():
+		return
+	PlayerFleet.recall(fleet_entry)
+	fleet_entry = {}
+
+
 func receive_move_order(_target: Vector2) -> void:
 	set_attack_target(null)
 

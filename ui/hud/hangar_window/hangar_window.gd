@@ -176,7 +176,7 @@ func _on_deploy() -> void:
 	for i in _quantity:
 		if not PlayerFleet.try_deploy(_selected_entry):
 			break
-		if not flight_deck.request_deploy(_selected_entry["scene"], squad, _selected_loadout):
+		if not flight_deck.request_deploy(_selected_entry["scene"], squad, _selected_loadout, {}, _selected_entry):
 			PlayerFleet.recall(_selected_entry)
 			break
 	_selected_entry    = {}

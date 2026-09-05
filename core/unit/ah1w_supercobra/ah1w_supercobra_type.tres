@@ -8,6 +8,7 @@
 script = ExtResource("1")
 display_name = "AH-1W SuperCobra"
 short_name = "AH1"
+actions = PackedStringArray("RETURN")
 portrait_icon = ExtResource("2")
 cannon = ExtResource("3")
 cannon_rounds = 750

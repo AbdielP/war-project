@@ -48,9 +48,6 @@ signal order_fulfilled
 ## que vuelve hay que devolverla**, y para eso hace falta saber de qué casilla del
 ## pañol salió; con la escena sola habría que adivinarlo comparando recursos.
 var _cargo: Array = []
-## Su propia casilla en la flota. Es lo que la deja volver a estar disponible al
-## atracar. Se la pone el dique al crearla.
-var fleet_entry: Dictionary = {}
 ## De qué dique salió. Es a donde vuelve cuando se le da la orden sin decirle a
 ## cuál — que es el caso normal, porque hay un buque.
 var home_deck: WellDeck = null
@@ -113,9 +110,7 @@ func load_cargo(cargo: Array) -> void:
 ## Y devuelve la carga entera: traerte a casa lo que no llegaste a desembarcar no
 ## puede costarte perderlo. Es la simétrica de hundirse, donde no vuelve nada.
 func return_to_fleet() -> void:
-	if not fleet_entry.is_empty():
-		PlayerFleet.recall(fleet_entry)
-		fleet_entry = {}
+	super.return_to_fleet()
 	for line: Dictionary in _cargo:
 		var entry: Dictionary = line.get("entry", {})
 		if entry.is_empty():

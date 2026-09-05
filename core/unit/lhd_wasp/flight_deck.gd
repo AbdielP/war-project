@@ -1,4 +1,32 @@
 extends Node2D
+class_name FlightDeck
+
+## La cubierta de vuelo: saca aparatos y los recoge. Nunca las dos cosas a la vez.
+##
+## **Lanzar y recuperar se turnan**, y lo que se turna es el aparato en curso y
+## no la cola entera: el que corre la pista termina su carrera, la recuperación
+## toma la cubierta, y la cola sigue después donde estaba. Manda el que está en
+## el aire, porque a él se le acaba el combustible y al de cubierta no.
+##
+## **Se sale por proa y se entra por popa** (`-Y` y `+Y` en coordenadas de la
+## cubierta), así que los dos flujos no se cruzan ni en el aire. Es lo que hace
+## que turnarse baste y no haga falta más arbitraje.
+##
+## El sí o no a una entrada **se contesta antes de la aproximación, no antes de
+## posarse**. Al despegar, si la cubierta está ocupada simplemente no se empieza
+## y no hay nada comprometido; al recoger es al revés, y negarle la plaza a uno
+## que ya está entrando lo deja sin sitio a donde ir. Por eso la plaza se reserva
+## al conceder la entrada y cubre la secuencia entera, ascensor incluido: quien
+## reserva sólo el punto de toma acaba con un aparato posado y sin salida, que es
+## un estorbo que ya no puede quitar nadie.
+
+## Qué está haciendo la cubierta. Es lo que se enseña en el HUD, y **la
+## obligación de enseñarlo es lo que lo hace correcto**: si no se puede escribir
+## el rótulo, no hay un estado sino una combinación de banderas.
+enum Mode { IDLE, LAUNCHING, RECOVERING }
+
+## Cambió lo que está haciendo.
+signal mode_changed(mode: Mode)
 
 @export var taxi_speed: float = 30.0
 @export var elevator_cycle_time: float = 2.0
@@ -22,6 +50,20 @@ extends Node2D
 ## se usa mientras lo que estorba está volando: ver [method _retry_later].
 @export var retry_delay: float = 0.5
 
+@export_group("Recuperación")
+## Cuánto se aparta del eje de pista el tramo de arrimada, en píxeles de
+## cubierta. Negativo es por babor, que es el costado por el que la pista queda
+## más cerca del borde.
+##
+## El que entra se pone **al costado y fuera** del buque, sube paralelo hasta la
+## altura de su plaza y sólo entonces cruza de lado. Así ni sobrevuela la
+## cubierta de punta a punta ni se cruza con lo que esté saliendo por proa.
+@export var abeam_offset: float = -70.0
+## A cuánto se da por hecho un tramo de la aproximación, en píxeles. Los dos
+## primeros son de viaje y no piden puntería; el que la pide es el último, y ése
+## lo remata el propio piloto con su radio de llegada.
+@export var leg_radius: float = 10.0
+
 ## El grupo al que se apunta todo lo que vuela. Es lo único que puede estar
 ## encima de la cubierta, así que es lo único que hay que mirar.
 const _AIR_GROUP := &"unit_air"
@@ -36,6 +78,9 @@ const _SLOT_WAYPOINTS: Array = [-1, 0, -1, 2]
 	$TakeoffPoint1, $TakeoffPoint2, $TakeoffPoint3, $TakeoffPoint4
 ]
 @onready var _launch_point: Marker2D = $LaunchPoint
+## Por donde se entra: por detrás del buque. El que llega y no cabe espera aquí,
+## y el que sí cabe arranca desde aquí su arrimada.
+@onready var _recovery_join: Marker2D = $RecoveryJoin
 
 var _occupied: Array[bool] = [false, false, false, false]
 var _units: Array        = [null, null, null, null]
@@ -43,6 +88,31 @@ var _elevator_idx := 0
 var _taxi_queues: Array  = [[], []]
 var _taxiing: Array[bool] = [false, false]
 var _launching := false
+
+## A quién se le ha concedido la cubierta para entrar, por id de instancia, o 0.
+##
+## **Es el compromiso, y por eso es un id y no un `bool`**: hay que poder decir
+## si el que viene a preguntar es el mismo al que se le concedió. Mientras valga
+## algo, el lado del despegue está cerrado.
+var _recovering: int = 0
+## La plaza que se le guardó a ése.
+var _recovery_slot: int = -1
+## Los que pidieron entrar y esperan turno, por id y en orden de llegada.
+##
+## Un portero que dice "ahora no" tiene que decir también "ya puedes": sin esta
+## lista la petición se pierde y no hay error que lo delate, sólo un aparato
+## dando vueltas para siempre.
+var _inbound: Array[int] = []
+## La tanda que se quedó a medias al conceder una entrada. Se retoma al terminar
+## la recuperación, y por eso se guarda: la lista de a quién soltar se hizo al
+## empezar y no se puede reconstruir.
+var _deferred: Array = []
+var _mode: Mode = Mode.IDLE
+## Hay una tanda a medias esperando a que termine la entrada. Va aparte de
+## [member _deferred] porque **la lista puede estar vacía y aun así haber tanda
+## que cerrar**: es la misma trampa de siempre, un `bool` que dura una cosa no
+## puede contestar por otra.
+var _batch_deferred := false
 
 ## Hay un aparato **corriendo por la pista** ahora mismo. No es lo mismo que
 ## [member _launching], y confundirlos era el problema: una tanda dura lo que
@@ -115,9 +185,16 @@ func _obey_standing_order(unit: Node2D) -> void:
 		unit.receive_move_order(order["where"])
 
 
+## Saca un aparato a cubierta.
+##
+## `fleet_entry` viaja hasta aquí porque **lo que sale tiene que poder volver**:
+## es la casilla del pañol de la que se descontó, y sin ella no hay forma de
+## devolverlo al recogerlo. Se le pone a la unidad al crearla, igual que hace el
+## dique con una lancha.
 func request_deploy(scene: PackedScene, squad: Squad = null,
 		weapon_loadout: WeaponLoadout = null,
-		standing_order: Dictionary = {}) -> bool:
+		standing_order: Dictionary = {},
+		fleet_entry: Dictionary = {}) -> bool:
 	var elev_idx: int = _elevator_idx % _elevators.size()
 	var slot := _next_slot_for_elevator(elev_idx)
 	if slot == -1:
@@ -137,6 +214,7 @@ func request_deploy(scene: PackedScene, squad: Squad = null,
 		"squad": squad,
 		"weapon_loadout": weapon_loadout,
 		"order": standing_order,
+		"entry": fleet_entry,
 	})
 	_process_queue(elev_idx)
 	return true
@@ -159,6 +237,10 @@ func has_free_slot() -> bool:
 ## Lo que cierra la puerta es la carrera y no la tanda. Ver [member _runway_busy].
 ## La cola se reanuda en cuanto la pista queda libre, desde [method _seguir_una_vez].
 func _process_queue(elev_idx: int) -> void:
+	# Con una entrada concedida no rueda nadie. El que viene cruza la cubierta de
+	# costado para posarse, y el taxi la cruza en el otro sentido.
+	if _recovering != 0:
+		return
 	if _runway_busy:
 		return
 	if _taxiing[elev_idx] or _taxi_queues[elev_idx].is_empty():
@@ -187,6 +269,15 @@ func _process_queue(elev_idx: int) -> void:
 	var u := unit as Unit
 	if u != null:
 		u.set_weapon_loadout(job["weapon_loadout"])
+		u.fleet_entry = job.get("entry", {})
+		# De aquí salió y aquí vuelve. Es lo que hace que "regresar" sea una
+		# orden sin destino que dar, igual que con la lancha.
+		#
+		# Se pregunta por si **sabe volver** y no por el modelo: la cubierta no
+		# tiene por qué conocer qué aparatos existen, y el que todavía no sepa
+		# recogerse simplemente no lleva el dato.
+		if u.has_method("recovery_granted"):
+			u.set("home_deck", self)
 		var squad: Squad = job["squad"]
 		if squad != null:
 			u.squad = squad
@@ -206,7 +297,9 @@ func _process_queue(elev_idx: int) -> void:
 
 	get_tree().create_timer(elevator_cycle_time).timeout.connect(func() -> void:
 		_taxiing[elev_idx] = false
+		_offer_recovery()
 		_process_queue(elev_idx)
+		_refresh_mode()
 	)
 
 	var target: Marker2D = _takeoff_points[slot]
@@ -246,7 +339,11 @@ func _process_queue(elev_idx: int) -> void:
 		# eso no cambia, porque es verdad.
 		if _launch_speed_of(unit) <= 1.0:
 			_hand_over_control(unit)
+		# Otra costura: acaba de dejar de rodar, así que si alguien espera entrar
+		# éste es su turno.
+		_offer_recovery()
 		_check_ready_to_launch()
+		_refresh_mode()
 	)
 
 
@@ -257,6 +354,8 @@ func _process_queue(elev_idx: int) -> void:
 ## una tanda no hay nadie esperando a que termine. Por eso el final de la tanda
 ## vuelve a preguntar; ver [method _launch_next].
 func _check_ready_to_launch() -> void:
+	if _recovering != 0:
+		return
 	if _launching:
 		return
 	if not _taxi_queues[0].is_empty() or not _taxi_queues[1].is_empty():
@@ -309,6 +408,14 @@ func _start_launch_sequence() -> void:
 
 
 func _launch_next(order: Array) -> void:
+	# Se concedió una entrada mientras la tanda estaba en marcha. La tanda no se
+	# cancela —sigue abierta— pero no suelta a nadie más hasta que el que viene
+	# esté abajo. Se guarda por dónde iba: la lista se hizo al empezar y no hay
+	# forma de reconstruirla después.
+	if _recovering != 0:
+		_deferred = order
+		_batch_deferred = true
+		return
 	if order.is_empty():
 		_launching = false
 		# La lista de a quién soltar se hizo al empezar la tanda, y soltarla lleva
@@ -423,9 +530,19 @@ func _seguir_una_vez(unit: Node2D, order: Array) -> Callable:
 		# Antes de seguir con la tanda: uno que empieza a rodar es motivo para
 		# **no** lanzar todavía, y quien lo comprueba es el final de la tanda.
 		_runway_busy = false
+		# La pista queda libre justo aquí, así que es la primera costura donde se
+		# puede ceder el turno al que espera entrar. Va **antes** que la cola y
+		# que la tanda: manda el que está en el aire.
+		_offer_recovery()
+		if _recovering != 0:
+			_deferred = order
+			_batch_deferred = true
+			_refresh_mode()
+			return
 		for i in _taxi_queues.size():
 			_process_queue(i)
 		_launch_next(order)
+		_refresh_mode()
 	# Por `died` y no por `tree_exited`: al rebasar la proa el aparato se suelta
 	# al mundo, y eso también es salir de este árbol. Con `tree_exited` la tanda
 	# arrancaba al **llegar** a la proa en vez de al rebasarla.
@@ -559,3 +676,251 @@ func _next_slot_for_elevator(elev_idx: int) -> int:
 		if not _occupied[slot]:
 			return slot
 	return -1
+
+
+## Lo que la cubierta está haciendo, para contarlo.
+##
+## **No es la misma pregunta que [method _busy_on_deck]**, y juntarlas sería
+## repetir el fallo que ya costó una vez: aquí interesa la tanda entera —que
+## puede durar lo que el jugador tarde en mover un helicóptero posado—, y allí
+## sólo si hay algo moviéndose ahora mismo. Un rótulo que parpadeara entre cada
+## aparato de la misma tanda contaría una cosa que no está pasando.
+func mode() -> Mode:
+	if _recovering != 0:
+		return Mode.RECOVERING
+	if _launching or _busy_on_deck():
+		return Mode.LAUNCHING
+	for cola in _taxi_queues:
+		if not cola.is_empty():
+			return Mode.LAUNCHING
+	return Mode.IDLE
+
+
+## Hay algo moviéndose por la cubierta **ahora mismo**: alguien corriendo la
+## pista o alguien rodando. Es lo que decide si se puede ceder el turno, y por
+## eso no mira `_launching`: una tanda abierta con todo el mundo quieto no
+## estorba a nadie que quiera entrar.
+func _busy_on_deck() -> bool:
+	if _runway_busy:
+		return true
+	for rodando in _taxiing:
+		if rodando:
+			return true
+	return false
+
+
+func _refresh_mode() -> void:
+	var ahora := mode()
+	if ahora == _mode:
+		return
+	_mode = ahora
+	mode_changed.emit(ahora)
+
+
+## Pide entrar. Devuelve la plaza concedida, o −1 si toca esperar.
+##
+## Esperar **no es que le hayan dicho que no**: queda apuntado y se le avisa por
+## `recovery_granted` en cuanto la cubierta se libere. Sin esa lista la petición
+## se perdería sin un solo error que lo delatara, y el síntoma sería el peor de
+## todos: funciona sólo cuando vuelvo a pedirlo.
+func request_recovery(unit: Node2D) -> int:
+	if not is_instance_valid(unit):
+		return -1
+	var id := unit.get_instance_id()
+	if _recovering == id:
+		return _recovery_slot
+	if not _inbound.has(id):
+		_inbound.append(id)
+		# Se puede morir de camino, y entonces hay que soltarle la plaza. Va por
+		# `died` y no por `tree_exited`: al posarse se reparenta a la cubierta,
+		# y eso también es salir del árbol del mundo.
+		var u := unit as Unit
+		if u != null:
+			u.died.connect(func(_dead: Unit) -> void: cancel_recovery(id),
+					CONNECT_ONE_SHOT)
+	_offer_recovery()
+	_refresh_mode()
+	return _recovery_slot if _recovering == id else -1
+
+
+## Se retira: el jugador lo mandó a otro sitio, o se murió por el camino.
+##
+## **La plaza se suelta aquí y no en ningún otro sitio.** Un aparato al que se
+## desvía a mitad de vuelta deja su reserva puesta, y la cubierta se va llenando
+## de plazas fantasma que no ocupa nadie.
+func cancel_recovery(id: int) -> void:
+	_inbound.erase(id)
+	if _recovering != id:
+		_refresh_mode()
+		return
+	var slot := _recovery_slot
+	_recovering = 0
+	_recovery_slot = -1
+	if slot >= 0 and _units[slot] == null:
+		_occupied[slot] = false
+	_end_recovery()
+
+
+## Le concede la cubierta al primero de la cola que siga vivo, si se puede.
+func _offer_recovery() -> void:
+	if _recovering != 0 or _inbound.is_empty() or _busy_on_deck():
+		return
+	while not _inbound.is_empty():
+		var id: int = _inbound[0]
+		var unit := instance_from_id(id) as Node2D
+		if not is_instance_valid(unit):
+			_inbound.pop_front()
+			continue
+		var slot := _free_slot_for_recovery()
+		if slot == -1:
+			return
+		_inbound.pop_front()
+		_recovering = id
+		_recovery_slot = slot
+		# La reserva cubre la secuencia entera y no sólo el punto de toma. Ver la
+		# cabecera: negarle el ascensor a uno que ya está posado no es una
+		# respuesta, es un atasco.
+		_occupied[slot] = true
+		_units[slot] = null
+		if unit.has_method("recovery_granted"):
+			unit.recovery_granted(slot)
+		return
+
+
+## La plaza más a popa de las libres. Se prefiere la de atrás para que el que
+## entra no tenga que sobrevolar la cubierta entera hasta la proa.
+func _free_slot_for_recovery() -> int:
+	for slot in _occupied.size():
+		if not _occupied[slot]:
+			return slot
+	return -1
+
+
+## Terminó una entrada: se ofrece la cubierta al siguiente y, si no hay nadie,
+## se reabre el lado del despegue.
+##
+## Es la otra mitad del portero. Cerrar la puerta sin abrirla después deja la
+## cubierta muda: la tanda sigue marcada como abierta y nadie vuelve a preguntar.
+func _end_recovery() -> void:
+	_offer_recovery()
+	if _recovering != 0:
+		_refresh_mode()
+		return
+	if _batch_deferred:
+		_batch_deferred = false
+		var order: Array = _deferred
+		_deferred = []
+		_launch_next(order)
+	else:
+		for i in _taxi_queues.size():
+			_process_queue(i)
+		_check_ready_to_launch()
+	_refresh_mode()
+
+
+## Por donde se entra: por detrás del buque, en coordenadas del mundo.
+##
+## Es también donde espera el que todavía no tiene plaza. Que sean el mismo punto
+## no es ahorro: el que espera ya está colocado para arrancar la arrimada en
+## cuanto le den paso.
+func join_point() -> Vector2:
+	return to_global(Vector2(
+			_takeoff_points[0].position.x + abeam_offset,
+			_recovery_join.position.y))
+
+
+## El punto de arrimada de esa plaza: a su altura pero al costado y fuera del
+## buque. En coordenadas del mundo.
+func abeam_point(slot: int) -> Vector2:
+	var spot: Vector2 = _takeoff_points[slot].position
+	return to_global(Vector2(spot.x + abeam_offset, spot.y))
+
+
+## La plaza en sí, en coordenadas del mundo.
+func spot_point(slot: int) -> Vector2:
+	return to_global(_takeoff_points[slot].position)
+
+
+## Hacia donde apunta la proa, en el mundo. Es el rumbo al que se pone el que
+## entra: paralelo al buque, no mirando a donde va.
+func bow_heading() -> float:
+	return (-global_transform.y).angle()
+
+
+## Ya está encima de su plaza y quieto respecto al barco: **deja de volar y pasa
+## a ser carga**. De aquí en adelante todo se mide en coordenadas de cubierta,
+## que es justo lo que compra sincronizar la marcha con la del buque.
+##
+## Es el espejo de [method _detach], con la misma trampa: para lo que escuchaba
+## su muerte, entrar en este árbol no es morirse.
+func take_aboard(unit: Node2D, slot: int) -> void:
+	if not is_instance_valid(unit) or slot < 0:
+		return
+	if unit.get_parent() != self:
+		unit.reparent(self, true)
+	var spot: Marker2D = _takeoff_points[slot]
+	unit.position = spot.position
+	unit.rotation = spot.rotation
+	_units[slot] = unit
+
+
+## Lo lleva rodando a su ascensor y lo baja. Es el taxi de salida al revés, por
+## el mismo camino y con el mismo punto intermedio.
+##
+## Al final se devuelve a la flota **sin rearmar**: con qué sale la próxima vez
+## lo elige el jugador en el hangar, que es donde se elige el armamento.
+func stow(unit: Node2D, slot: int) -> void:
+	if not is_instance_valid(unit) or slot < 0:
+		return
+	var elev_idx := _elevator_of(slot)
+	_taxiing[elev_idx] = true
+	_refresh_mode()
+	var elevator: Marker2D = _elevators[elev_idx]
+	var wp_idx: int = _SLOT_WAYPOINTS[slot]
+
+	# En coordenadas de cubierta, igual que la salida: el aparato rueda **sobre**
+	# el barco, así que si el barco avanza el aparato avanza con él.
+	var tw := unit.create_tween()
+	var desde: Vector2 = unit.position
+	if wp_idx >= 0:
+		var wp: Marker2D = _takeoff_points[wp_idx]
+		var d1 := desde.distance_to(wp.position)
+		tw.tween_property(unit, "position", wp.position,
+				d1 / taxi_speed if taxi_speed > 0.0 else 0.01)
+		tw.tween_callback(func() -> void: unit.rotation = wp.rotation)
+		desde = wp.position
+	var d2 := desde.distance_to(elevator.position)
+	tw.tween_property(unit, "position", elevator.position,
+			d2 / taxi_speed if taxi_speed > 0.0 else 0.01)
+
+	var unit_id := unit.get_instance_id()
+	tw.finished.connect(func() -> void:
+		if is_instance_valid(unit):
+			unit.rotation = elevator.rotation
+		# Baja por el ascensor. Hoy es sólo la espera: es el hueco donde entra la
+		# animación de la rampa, igual que en la salida.
+		get_tree().create_timer(elevator_cycle_time).timeout.connect(func() -> void:
+			_taxiing[elev_idx] = false
+			_occupied[slot] = false
+			_units[slot] = null
+			_handed.erase(unit_id)
+			_standing.erase(unit_id)
+			if _recovering == unit_id:
+				_recovering = 0
+				_recovery_slot = -1
+			if is_instance_valid(unit):
+				if unit.has_method("return_to_fleet"):
+					unit.return_to_fleet()
+				unit.queue_free()
+			_end_recovery()
+		)
+	)
+
+
+## A qué ascensor pertenece una plaza. Sale de la misma tabla que reparte las
+## plazas al salir, y por eso el taxi de vuelta recorre el camino de ida.
+func _elevator_of(slot: int) -> int:
+	for elev_idx in _ELEVATOR_SLOTS.size():
+		if _ELEVATOR_SLOTS[elev_idx].has(slot):
+			return elev_idx
+	return 0

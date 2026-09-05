@@ -469,7 +469,7 @@ func launch(order: Dictionary = {}) -> void:
 	for i in squad:
 		if not PlayerFleet.try_deploy(entry):
 			break
-		if not deck.request_deploy(entry["scene"], formation, chosen_loadout, order):
+		if not deck.request_deploy(entry["scene"], formation, chosen_loadout, order, entry):
 			PlayerFleet.recall(entry)
 			break
 		out += 1

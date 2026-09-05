@@ -161,7 +161,7 @@ func _handle_click(world_position: Vector2, unit: Unit) -> void:
 		# click—, y va **antes** de seleccionar porque si no el buque se llevaría
 		# el click y la orden no existiría.
 		elif _can_board(unit):
-			_issue_return_order(_selected_unit, _deck_of(unit))
+			_issue_return_order(_selected_unit, _deck_of(unit, _selected_unit))
 		elif unit == _selected_unit:
 			_select(null)
 		else:
@@ -204,10 +204,21 @@ func _can_board(target: Unit) -> bool:
 	return _deck_of(target) != null
 
 
-## El dique de un buque, o `null` si no tiene. Se pregunta por la propiedad y no
-## por la clase: un barco que no sepa recoger lanchas simplemente no lo lleva.
-func _deck_of(vessel: Unit) -> WellDeck:
-	return vessel.get("well_deck") as WellDeck if vessel != null else null
+## El muelle de un buque que le sirva a lo seleccionado, o `null`.
+##
+## **La pregunta lleva dentro quién quiere volver**, porque la respuesta depende:
+## una lancha entra por el dique y una aeronave por la cubierta de vuelo. Contesta
+## el buque, que es el que sabe qué muelles tiene; aquí sólo se pregunta.
+##
+## El caso de abajo es el barco que sólo tiene dique y no sabe de la pregunta
+## nueva. Se le sigue preguntando por la propiedad y no por la clase: un barco
+## que no sepa recoger lanchas simplemente no la lleva.
+func _deck_of(vessel: Unit, craft: Unit = null) -> Node:
+	if vessel == null:
+		return null
+	if vessel.has_method("deck_for"):
+		return vessel.deck_for(craft if craft != null else _selected_unit)
+	return vessel.get("well_deck") as WellDeck
 
 
 ## Como [method _can_attack] pero además **con qué**.
@@ -303,7 +314,7 @@ func _issue_attack_order(target: Unit) -> void:
 ##
 ## Cancela la orden de movimiento como hace atacar: su marcador dejaría plantado
 ## un destino al que la lancha ya no va.
-func _issue_return_order(craft: Unit, deck: WellDeck = null) -> void:
+func _issue_return_order(craft: Unit, deck: Node = null) -> void:
 	if not is_instance_valid(craft) or not craft.is_player_controlled():
 		return
 	if deck != null:

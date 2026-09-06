@@ -215,6 +215,9 @@ enum Recovery {
 var _recovery: Recovery = Recovery.NONE
 var _recovery_deck: FlightDeck = null
 var _recovery_slot: int = -1
+## Qué puesto ocupa en la cola de los que esperan entrar. De él sale el radio de
+## su circuito: cada uno espera en el suyo y así no se dibujan unos sobre otros.
+var _hold_index: int = 0
 ## De qué cubierta salió. Se la pone ella al crearlo.
 var home_deck: FlightDeck = null
 
@@ -242,9 +245,34 @@ func return_to(deck: FlightDeck) -> void:
 		_start_the_pattern()
 	else:
 		_recovery = Recovery.WAITING
-		# Un avión que espera no se queda quieto, da vueltas. Y se las da **al
-		# barco** y no a un punto del mar, porque el barco se mueve.
-		orbit.orbit_around(deck)
+		_start_holding()
+
+
+## Se pone a esperar en el puesto que le tocó.
+##
+## Un avión que espera no se queda quieto, da vueltas. Y se las da **al barco** y
+## no a un punto del mar, porque el barco se mueve.
+func _start_holding() -> void:
+	if not is_instance_valid(_recovery_deck):
+		return
+	orbit.radius = _recovery_deck.holding_distance(_hold_index)
+	orbit.orbit_around(_recovery_deck)
+
+
+## Le cambian el puesto en la cola: los de delante entraron y todos se corren
+## hacia dentro. **El puesto es lo que separa a los que esperan**; sin él todos
+## reciben la misma orden y acaban volando en el mismo círculo.
+func recovery_hold(index: int) -> void:
+	_hold_index = index
+	if _recovery == Recovery.WAITING:
+		_start_holding()
+
+
+## ¿Entra rodando por el eje? Viniendo cargado, sí: el motor no lo sostiene
+## parado. Es lo que le pregunta la cubierta para saber qué ruta reservarle, y
+## está escrito contra [method comes_in_light] para que no haya dos respuestas.
+func lands_along_deck() -> bool:
+	return not comes_in_light()
 
 
 ## Le tocó el turno. Lo llama la cubierta cuando queda libre.
@@ -383,6 +411,10 @@ func _work_the_recovery() -> void:
 			vtol.steer_to(point)
 			if vtol.is_settled():
 				_recovery = Recovery.CROSS
+				# Ya tuerce hacia su plaza: la subida por el costado queda libre
+				# para el siguiente. Es lo que permite que entren de uno en uno
+				# por la línea y aun así se posen varios a la vez.
+				_recovery_deck.begin_cross_in(self)
 		Recovery.CROSS:
 			vtol.locked_heading = _recovery_deck.bow_heading()
 			vtol.steer_to(point)

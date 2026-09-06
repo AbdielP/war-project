@@ -197,6 +197,9 @@ enum Recovery {
 var _recovery: Recovery = Recovery.NONE
 var _recovery_deck: FlightDeck = null
 var _recovery_slot: int = -1
+## Qué puesto ocupa en la cola de los que esperan entrar. De él sale a qué
+## distancia por popa aguanta, para que dos que esperan no se pisen.
+var _hold_index: int = 0
 ## De qué cubierta salió. Es a donde vuelve cuando se le da la orden sin decirle
 ## a cuál, que es el caso normal porque hay un buque. Se la pone la cubierta al
 ## crearlo.
@@ -239,6 +242,13 @@ func recovery_granted(slot: int) -> void:
 		_recovery = Recovery.JOIN
 
 
+## Le cambian el puesto en la cola: los de delante entraron y todos se corren
+## hacia dentro. **El puesto es lo que separa a los que esperan**; sin él todos
+## reciben la misma orden y acaban parados en el mismo punto, uno encima de otro.
+func recovery_hold(index: int) -> void:
+	_hold_index = index
+
+
 ## Si está volviendo a esa cubierta. Lo pregunta el HUD para contarlo.
 func is_recovering_to(deck: FlightDeck) -> bool:
 	return _recovery != Recovery.NONE and _recovery_deck == deck
@@ -265,7 +275,9 @@ func _abort_recovery() -> void:
 ## lo que quiere decir sincronizar velocidad, y no hace falta programarlo aparte.
 func _leg_point() -> Vector2:
 	match _recovery:
-		Recovery.WAITING, Recovery.JOIN:
+		Recovery.WAITING:
+			return _recovery_deck.holding_point(_hold_index)
+		Recovery.JOIN:
 			return _recovery_deck.join_point()
 		Recovery.ALONGSIDE:
 			return _recovery_deck.abeam_point(_recovery_slot)
@@ -307,6 +319,10 @@ func _work_the_recovery() -> void:
 			pilot.steer_to(point)
 			if here.distance_to(point) <= _recovery_deck.leg_radius:
 				_recovery = Recovery.CROSS
+				# Ya tuerce hacia su plaza: la subida por el costado queda libre
+				# para el siguiente. Es lo que permite que suban de uno en uno
+				# por la línea y aun así se posen varios a la vez.
+				_recovery_deck.begin_cross_in(self)
 		Recovery.CROSS:
 			pilot.locked_heading = _recovery_deck.bow_heading()
 			pilot.steer_to(point)

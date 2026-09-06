@@ -49,6 +49,9 @@ signal boarding_requested(unit: Unit)
 ## AV-8B Harrier II"— pasa de 27 caracteres, contra los 20 de éstos.
 @export var status_launching: String = "Lanzando aeronave"
 @export var status_recovering: String = "Recuperando aeronave"
+## Lo que dice una aeronave que vuelve a su buque. No lleva destino: el destino
+## navega, y una coordenada que cambia sola no es un sitio.
+@export var status_returning: String = "Returning to base"
 
 @onready var _line: AnimatedSprite2D = $Line
 ## La prolongación de la línea, que es lo que la hace llegar hasta el final del
@@ -244,7 +247,8 @@ func _follow_unit() -> void:
 
 func _status_text() -> String:
 	return UnitWords.status(_unit, _map, status_idle, status_moving,
-			status_attacking, status_launching, status_recovering)
+			status_attacking, status_launching, status_recovering,
+			status_returning)
 
 
 func _start_name_entrance() -> void:

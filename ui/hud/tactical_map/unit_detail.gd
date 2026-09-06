@@ -107,7 +107,8 @@ func _refresh() -> void:
 	_health.value = _unit.health
 	_status.text = "  " + UnitWords.status(
 			_unit, _map, "EN ESPERA", "MOVI\u00c9NDOSE A: ", "ATACANDO A: ",
-			"LANZANDO AERONAVE", "RECUPERANDO AERONAVE").to_upper()
+			"LANZANDO AERONAVE", "RECUPERANDO AERONAVE",
+			"RETURNING TO BASE").to_upper()
 	_objective.text = "OBJETIVO: " + ("-" if not is_instance_valid(_unit.attack_target)
 			else _unit.attack_target.get_display_name().to_upper())
 	_fit()

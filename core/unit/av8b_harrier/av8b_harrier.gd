@@ -292,6 +292,13 @@ func _start_the_pattern() -> void:
 	pilot.set_target(_recovery_deck.initial_point(not comes_in_light()))
 
 
+## ¿Está volviendo a bordo? Lo pregunta el HUD para decirlo con todas las letras
+## en vez de contar que se está moviendo a un sitio: es lo mismo por fuera y no
+## es lo mismo para el jugador.
+func is_returning() -> bool:
+	return _recovery != Recovery.NONE
+
+
 ## Si está volviendo a esa cubierta.
 func is_recovering_to(deck: FlightDeck) -> bool:
 	return _recovery != Recovery.NONE and _recovery_deck == deck

@@ -249,6 +249,13 @@ func recovery_hold(index: int) -> void:
 	_hold_index = index
 
 
+## ¿Está volviendo a bordo? Lo pregunta el HUD para decirlo con todas las letras
+## en vez de contar que se está moviendo a un sitio: es lo mismo por fuera y no
+## es lo mismo para el jugador.
+func is_returning() -> bool:
+	return _recovery != Recovery.NONE
+
+
 ## Si está volviendo a esa cubierta. Lo pregunta el HUD para contarlo.
 func is_recovering_to(deck: FlightDeck) -> bool:
 	return _recovery != Recovery.NONE and _recovery_deck == deck

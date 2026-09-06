@@ -28,6 +28,21 @@ var _selected: Unit = null
 ## un cuadrito se esfume sin más deja al jugador dudando de si perdió algo o si
 ## nunca lo tuvo; verlo ahí, apagado, es el recuento de la operación.
 var _lost: Dictionary = {}
+## En qué orden va cada fila: `{índice de fila: [Unit o Squad, ...]}`.
+##
+## **El sitio en la fila es de la unidad, no del orden en que el motor la tenga
+## apuntada.** Antes salía de `get_nodes_in_group`, que devuelve orden interno:
+## al despegar, el aparato deja de colgar de la cubierta y pasa a colgar del
+## mundo, y eso lo vuelve a dar de alta **al final** de la lista. El cuadrito que
+## el jugador acababa de pulsar le saltaba al otro extremo de la fila justo al
+## darle la orden.
+##
+## Aquí sólo se añade al final lo que aparece nuevo, y los demás se corren
+## únicamente cuando uno desaparece. Es lo mismo que ya se hacía con las bajas.
+##
+## Un escuadrón se apunta por el escuadrón y no por su jefe, para que perderlo no
+## le mueva el sitio a los que quedan.
+var _order: Dictionary = {}
 
 
 func _ready() -> void:
@@ -100,28 +115,28 @@ func _apply_selection() -> void:
 				portrait.set_selected(portrait.unit != null and portrait.unit == _selected)
 
 
+## Rehace los cuadritos. El orden no se recalcula: se respeta el que ya había,
+## se quitan los que ya no están y lo nuevo se añade detrás.
 func _refresh() -> void:
 	for i in _rows.size():
 		var row: HBoxContainer = _rows[i]
 		for child in row.get_children():
 			child.free()
-		var group: String = _CATEGORIES[i][0]
-		var seen_squads: Array[Squad] = []
-		for node: Node in get_tree().get_nodes_in_group(group):
-			if not is_instance_valid(node):
-				continue
-			var unit := node as Unit
-			# El panel es el inventario desplegado del jugador. Los grupos
-			# dicen de qué tipo es la unidad, no de quién es.
-			if not unit.is_player_controlled():
-				continue
-			if unit.squad != null:
-				if unit.squad in seen_squads:
-					continue
-				seen_squads.append(unit.squad)
-				_add_portrait(row).show_unit(unit.squad.leader, unit.squad.members.size())
-			else:
-				_add_portrait(row).show_unit(unit, 1)
+		var presentes := _present_in(i)
+		var quedan: Array = []
+		for key in _order.get(i, []):
+			if presentes.has(key):
+				quedan.append(key)
+		for key in presentes:
+			if not quedan.has(key):
+				quedan.append(key)
+		_order[i] = quedan
+		for key in quedan:
+			var cuantos := 1
+			var squad := key as Squad
+			if squad != null:
+				cuantos = squad.members.size()
+			_add_portrait(row).show_unit(presentes[key], cuantos)
 		# Las bajas van detrás de las vivas, siempre. Es el orden de un parte:
 		# primero con qué se cuenta, después lo que costó.
 		for lost: Array in _lost.get(i, []):
@@ -129,9 +144,27 @@ func _refresh() -> void:
 	_apply_selection()
 
 
-## Un cuadrito vacío ya colgado de su fila. Entra en el árbol **antes** de que le
-## digan a quién representa: `show_unit` toca nodos `@onready`, y hasta que no
-## entra no existen.
+## Qué hay desplegado ahora en esa fila: `clave -> la unidad que la representa`.
+## La clave es el escuadrón cuando lo hay y la propia unidad cuando no, que es lo
+## que hace que el sitio sobreviva a un cambio de jefe.
+func _present_in(row: int) -> Dictionary:
+	var out: Dictionary = {}
+	var group: String = _CATEGORIES[row][0]
+	for node: Node in get_tree().get_nodes_in_group(group):
+		if not is_instance_valid(node):
+			continue
+		var unit := node as Unit
+		# El panel es el inventario desplegado del jugador. Los grupos dicen de
+		# qué tipo es la unidad, no de quién es.
+		if unit == null or not unit.is_player_controlled():
+			continue
+		if unit.squad != null:
+			if not out.has(unit.squad):
+				var jefe: Unit = unit.squad.leader
+				out[unit.squad] = jefe if is_instance_valid(jefe) else unit
+		elif not out.has(unit):
+			out[unit] = unit
+	return out
 func _add_portrait(row: HBoxContainer) -> UnitPortrait:
 	var portrait: UnitPortrait = PORTRAIT.instantiate()
 	row.add_child(portrait)

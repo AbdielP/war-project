@@ -19,7 +19,8 @@ class_name UnitWords
 ## también se está moviendo y lo primero es lo que el jugador quiere saber.
 static func status(unit: Unit, map: MapView,
 		idle: String, moving: String, attacking: String,
-		launching: String = "", recovering: String = "") -> String:
+		launching: String = "", recovering: String = "",
+		returning: String = "") -> String:
 	if unit == null:
 		return ""
 	if is_instance_valid(unit.attack_target):
@@ -36,6 +37,16 @@ static func status(unit: Unit, map: MapView,
 			FlightDeck.Mode.RECOVERING:
 				if recovering != "":
 					return recovering
+	# Volver a bordo manda sobre moverse, y por la misma razón que atacar: es un
+	# desplazamiento, sí, pero lo que el jugador quiere saber es a qué va. Y no
+	# lleva coordenada: el destino es un buque que además se mueve, así que
+	# nombrar el punto al que apunta ahora mismo diría algo que dentro de dos
+	# segundos es mentira.
+	#
+	# Se pregunta por si **sabe volver** y no por el modelo, igual que hace la
+	# cubierta: lo que no lo sepa contestar simplemente no dice esto.
+	if returning != "" and unit.has_method("is_returning") 			and bool(unit.call("is_returning")):
+		return returning
 	var going: Variant = unit.get_move_destination()
 	if going != null:
 		return moving + zone_of(going, map)

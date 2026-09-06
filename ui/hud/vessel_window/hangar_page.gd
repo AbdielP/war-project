@@ -184,6 +184,11 @@ func _ready() -> void:
 	_loadout_compact = _loadout.offset_top + _options.offset_bottom + _LOADOUT_PAD
 	_actions_room = -_actions.offset_top
 	_take_off.pressed.connect(launch)
+	# El pañol ya no cambia sólo cuando se pulsa aquí: un aparato que vuelve a
+	# bordo devuelve su plaza sin que la interfaz haya hecho nada, y con la
+	# ventana abierta el número se quedaba con el valor de cuando se abrió. Es lo
+	# mismo que ya hacía la solapa de tropas por la lancha que atraca.
+	PlayerFleet.changed.connect(_on_fleet_changed)
 	_targeted_take_off.pressed.connect(target_requested.emit)
 	_cursor.text = _CURSOR
 	_start_blink()
@@ -308,14 +313,35 @@ func _show_detail(entry: Dictionary) -> void:
 	# decide si un misil antiaéreo acierta o se va, así que el jugador tiene que
 	# poder compararlo entre aparatos antes de mandar uno a una zona defendida.
 	_ecm.text = "%d%%" % roundi(type.ecm_evasion * 100.0)
-	_squad_available = maxi(int(entry.get("total", 0)) - int(entry.get("deployed", 0)), 0)
-	_squad_max.text = "MAX %d" % _squad_available
+	_update_available(entry)
 	_set_squad(1)
 	_prompt.hide()
 	_detail.show()
 	# El modelo, el último: se centra contra el tamaño del hueco, y así se mide
 	# sobre una ficha que ya está puesta en pantalla.
 	_model.show_scene(entry.get("scene"))
+
+
+## Salió o volvió algo. Se repintan las casillas y el contador del que está
+## elegido; **no se rehace la rejilla**, que soltaría la casilla que el jugador
+## tiene delante en mitad de estar mirándola.
+func _on_fleet_changed() -> void:
+	for child in _slots.get_children():
+		var slot := child as AircraftSlot
+		if slot != null:
+			slot.refresh()
+	if is_instance_valid(_chosen) and not _chosen.entry.is_empty():
+		_update_available(_chosen.entry)
+		# Con el tope nuevo: si volvieron aparatos sube, y si salieron baja y de
+		# paso recorta la cantidad elegida, que podría haberse quedado por encima.
+		_set_squad(squad)
+
+
+## Cuántos quedan de ese modelo. El diccionario es el mismo que lleva la flota
+## —viaja por referencia—, así que basta con volver a leerlo.
+func _update_available(entry: Dictionary) -> void:
+	_squad_available = maxi(int(entry.get("total", 0)) - int(entry.get("deployed", 0)), 0)
+	_squad_max.text = "MAX %d" % _squad_available
 
 
 ## Cuántos van a salir. Se apaga la flecha que ya no lleva a ningún sitio en vez

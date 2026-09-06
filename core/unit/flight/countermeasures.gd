@@ -21,7 +21,8 @@ class_name Countermeasures
 ##
 ## Cada tipo sirve contra una guía y sólo contra ésa. Soltar el equivocado no
 ## hace nada, y ahí está la decisión: hay que saber qué te dispararon. El parte
-## ya lo dice — `MUD SPIKE` es radar.
+## ya lo dice, y lo dice **en el aviso de lanzamiento**, que canta el código del
+## arma que viene: `SAM LAUNCH` es radar.
 
 ## Se gastó una. `left` es lo que queda de ese tipo.
 signal spent(kind: Kind, left: int)

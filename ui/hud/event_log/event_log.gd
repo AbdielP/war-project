@@ -181,7 +181,11 @@ func _watch(node: Node) -> void:
 		return
 	unit.died.connect(_on_died)
 	unit.attack_target_changed.connect(_on_target_changed.bind(unit))
-	unit.tracked_by.connect(_on_tracked.bind(unit))
+	# `tracked_by` **no sale por el parte**, y es a propósito: que un radar te
+	# enganche no es un suceso sino un estado, y en cuanto hay defensas en el
+	# mapa se cumple casi todo el rato. Un renglón que se repite sin parar tapa
+	# los que sí cuentan algo. La amenaza se enseña en el minimapa, que es donde
+	# un estado se lee de un vistazo sin gastar sitio.
 	unit.fired_upon_by.connect(_on_fired_upon.bind(unit))
 	unit.missile_inbound.connect(_on_missile_inbound.bind(unit))
 	for child in unit.get_children():
@@ -245,19 +249,6 @@ func _brevity_of(unit: Unit, target: Unit) -> String:
 	return " (%s)" % weapon.brevity_code
 
 
-## "Harrier: MUD SPIKE desde B4". Un radar de superficie la tiene
-## enganchada, y **todavía no le disparan**: es el aviso que llega a tiempo.
-##
-## Se da la coordenada de LA AMENAZA, no la del avión: lo que el jugador necesita
-## saber es de dónde viene, para decidir por dónde sale.
-func _on_tracked(threat: Unit, unit: Unit) -> void:
-	if not _is_worth_reporting(unit, threat):
-		return
-	add_event("%s: MUD SPIKE%s" % [_short(unit),
-			_from(threat.global_position)], Kind.ALERT)
-
-
-## "Harrier: AAA, bajo fuego desde B4". Esto ya no es un aviso.
 func _on_fired_upon(threat: Unit, unit: Unit) -> void:
 	if not _is_worth_reporting(unit, threat):
 		return

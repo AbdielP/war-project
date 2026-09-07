@@ -202,19 +202,43 @@ enum Recovery {
 	ALONGSIDE,  ## Viene ligero: subiendo por el costado hasta su plaza.
 	CROSS,      ## Viene ligero: cruzando de lado sobre la cubierta.
 	SETTLING,   ## Ya es carga del barco: bajando.
+	## Los cuatro tramos del circuito del que entra rodando. Es el de un
+	## portaaviones de verdad: se pasa por el costado en paralelo al buque, media
+	## vuelta, se vuelve por el tramo paralelo, y al llegar a la altura de la popa
+	## otra media vuelta que **termina ya alineado con la cubierta**.
+	##
+	## La alineación no se busca: sale de la geometría. El tramo paralelo va
+	## separado el doble del radio de viraje, así que media vuelta de ese radio
+	## acaba justo encima del eje. Ver `FlightDeck.pattern_offset`.
+	ENTRY,      ## Entrando al circuito, hacia el tramo paralelo.
+	DOWNWIND,   ## Por el tramo paralelo, en sentido contrario al buque.
+	BASE,       ## El viraje que lo mete en final.
+	FINAL,      ## Ya sobre el eje, hacia la popa.
 }
 
 @export_group("Vuelta a bordo")
 ## A cuánto se da por hecho un tramo de avión. Grande a propósito: un avión no
 ## llega a un punto, lo pasa cerca. Es el mismo criterio con el que navega.
 @export var join_radius: float = 45.0
+## Con cuánto margen se da por alcanzada la cabeza del tramo paralelo. Ancho,
+## porque un avión no llega a un punto: pasa cerca.
+@export var entry_radius: float = 70.0
+## El radio del circuito de espera. Es el mínimo al que un avión puede dar
+## vueltas: por debajo, cada punto del círculo le cae dentro de su propio giro.
+@export var hold_radius: float = 330.0
+## Cuánta recta de tramo paralelo necesita por delante para incorporarse a media
+## altura, en vez de subir hasta la puerta. Es lo que le da agilidad sin
+## estropearle el viraje.
+## Cuánta recta de tramo paralelo necesita por delante para incorporarse a media
+## altura, en vez de subir hasta la cabeza.
+@export var min_downwind: float = 260.0
 ## A qué distancia del punto de entrada suelta gas. Con la aceleración del
 ## Harrier, pasar de crucero a mínima cuesta unos 80 px; el resto es margen.
 @export var throttle_back_at: float = 180.0
 ## A qué distancia por delante persigue la línea de cubierta al entrar rodando.
 ## Es un suelo: si viene muy separado, el punto se aleja solo para no cortar la
 ## raya de través.
-@export var approach_lookahead: float = 150.0
+@export var approach_lookahead: float = 250.0
 ## Con qué ángulo corta la línea como mucho. **Es lo que quita el zigzag** sin
 ## tocar cómo gira el avión: cuanto más cerrado, más largo entra.
 @export var intercept_deg: float = 30.0
@@ -229,8 +253,8 @@ enum Recovery {
 ## Lo que se le admite al cruzar la popa para dejarle tocar. Si llega más ancho o
 ## más torcido **no aterriza: repite la pasada**. Es lo que hace que todas las
 ## tomas sean iguales, en vez de aceptar la que salga y arreglarla luego.
-@export var touchdown_width: float = 12.0
-@export var touchdown_cone_deg: float = 12.0
+@export var touchdown_width: float = 20.0
+@export var touchdown_cone_deg: float = 25.0
 
 var _recovery: Recovery = Recovery.NONE
 var _recovery_deck: FlightDeck = null
@@ -243,6 +267,16 @@ var _hold_index: int = 0
 ## que si a mitad de aproximación soltara la última bomba y cambiara de idea,
 ## volaría un patrón distinto del que tiene reservado.
 var _along_deck: bool = false
+## Le dieron entrada, pero todavía no está en el sitio del circuito por donde se
+## entra. **No se sale del circuito de espera en cualquier punto**: el que estaba
+## dando la vuelta por el costado de estribor cuando le tocó cruzaba el barco de
+## través y llegaba al tramo paralelo de cualquier manera — y de ahí no había
+## aproximación que saliera derecha. Se espera a pasar por el lado bueno.
+var _cleared: bool = false
+## Salió del viraje por detrás de la popa, que es de donde hay que llegar.
+var _final_from_astern: bool = false
+## Cuántas pasadas lleva falladas en esta vuelta a bordo.
+var _go_arounds: int = 0
 ## De qué cubierta salió. Se la pone ella al crearlo.
 var home_deck: FlightDeck = null
 
@@ -265,6 +299,7 @@ func return_to(deck: FlightDeck) -> void:
 	dogfight.stop()
 	_recovery_deck = deck
 	_along_deck = not comes_in_light()
+	_go_arounds = 0
 	var slot := deck.request_recovery(self)
 	_recovery_slot = slot
 	if slot >= 0:
@@ -281,17 +316,26 @@ func return_to(deck: FlightDeck) -> void:
 func _start_holding() -> void:
 	if not is_instance_valid(_recovery_deck):
 		return
-	orbit.radius = _recovery_deck.holding_distance(_hold_index)
-	orbit.orbit_around(_recovery_deck)
+	# **Esperar es quedarse donde está**, dando vueltas sobre su propio sitio.
+	# Mandarlos a anillos alrededor del buque los alejaba del barco, los metía
+	# por encima de la cubierta y los dejaba a tiro de lo que hubiera cerca. El
+	# que espera no tiene que ir a ningún sitio: ya está donde lo dejó el jugador.
+	# **El círculo de espera es el mismo que la entrada**: roza la línea de la
+	# pista, así que dar vueltas aquí ya es estar en la aproximación. Al que le
+	# toca no le queda maniobra que hacer, sólo dejar de girar.
+	orbit.radius = hold_radius
+	orbit.orbit_around(_recovery_deck.hold_center())
 
 
 ## Le cambian el puesto en la cola: los de delante entraron y todos se corren
 ## hacia dentro. **El puesto es lo que separa a los que esperan**; sin él todos
 ## reciben la misma orden y acaban volando en el mismo círculo.
+## Le cambian el puesto en la cola. **No mueve al avión**: esperar es quedarse
+## donde está, y el puesto sólo dice a quién le toca después.
 func recovery_hold(index: int) -> void:
 	_hold_index = index
-	if _recovery == Recovery.WAITING:
-		_start_holding()
+
+
 
 
 ## ¿Entra rodando por el eje? Viniendo cargado, sí: el motor no lo sostiene
@@ -306,19 +350,44 @@ func recovery_granted(slot: int) -> void:
 	if _recovery == Recovery.NONE:
 		return
 	_recovery_slot = slot
-	if _recovery == Recovery.WAITING:
+	if _recovery != Recovery.WAITING:
+		return
+	if _along_deck:
+		# Sigue dando vueltas hasta pasar por el punto en que el círculo toca la
+		# pista. Lo comprueba [method _work_the_recovery] cada fotograma.
+		_cleared = true
+	else:
 		_start_the_pattern()
 
 
 func _start_the_pattern() -> void:
-	_recovery = Recovery.JOIN
+	if _along_deck:
+		# **No hay maniobra de entrada.** Se mete en el círculo de espera, que ya
+		# es el circuito de aterrizaje, y sale de él por donde toca.
+		_recovery = Recovery.WAITING
+		_cleared = true
+		_start_holding()
+		return
 	orbit.stop()
+	_recovery = Recovery.JOIN
 	# **Sin gas.** Se vuelve a casa despacio, que es como se entra a un barco:
 	# cuanta menos velocidad traiga, menos cubierta gasta frenando y mejor se mete
 	# en la línea. Meterle gas al primero de la cola sólo servía para que llegara
 	# antes y peor.
 	pilot.set_cruising(false)
-	pilot.set_target(_recovery_deck.initial_point(_along_deck))
+	pilot.set_target(_recovery_deck.pattern_entry() if _along_deck \
+			else _recovery_deck.initial_point(false))
+
+
+## ¿Está esperando turno para entrar? Lo pregunta el HUD.
+func is_holding() -> bool:
+	return _recovery == Recovery.WAITING
+
+
+## ¿Está ya entrando, o sea comprometido con la aproximación? Lo pregunta el HUD.
+func is_landing() -> bool:
+	return _recovery in [Recovery.FINAL, Recovery.RUNWAY, Recovery.ALONGSIDE,
+			Recovery.CROSS, Recovery.SETTLING]
 
 
 ## ¿Está volviendo a bordo? Lo pregunta el HUD para decirlo con todas las letras
@@ -399,6 +468,16 @@ func _leg_point() -> Vector2:
 				return _recovery_deck.axis_lookahead(global_position,
 						approach_lookahead, intercept_deg)
 			return _recovery_deck.join_point()
+		Recovery.ENTRY:
+			return _recovery_deck.pattern_entry()
+		Recovery.DOWNWIND:
+			return _recovery_deck.downwind_lookahead(global_position,
+					approach_lookahead, intercept_deg)
+		Recovery.BASE:
+			return _recovery_deck.pattern_rollout()
+		Recovery.FINAL:
+			return _recovery_deck.axis_lookahead(global_position,
+					approach_lookahead, intercept_deg)
 		Recovery.RUNWAY:
 			# Para **antes** del ascensor, no encima de la plaza.
 			return _recovery_deck.rollout_point(_recovery_slot)
@@ -413,7 +492,18 @@ func _leg_point() -> Vector2:
 ## Los tramos se cierran con **pestillo**: una condición viva se cumple de camino
 ## y el avión se re-apuntaría a un destino que ya tiene al lado.
 func _work_the_recovery() -> void:
-	if _recovery == Recovery.NONE or _recovery == Recovery.WAITING:
+	if _recovery == Recovery.NONE:
+		return
+	if _recovery == Recovery.WAITING:
+		# Le dieron entrada: se sale del circuito de espera al pasar por el
+		# costado bueno, no en el punto en que estuviera.
+		# Se sale del circuito de espera **por delante de la proa**, que es por
+		# donde se entra al de aterrizaje. Saliendo por donde tocara, el avión
+		# cruzaba el buque y se incorporaba a mitad del tramo, con cualquier
+		# rumbo.
+		if _cleared and is_instance_valid(_recovery_deck) 				and _recovery_deck.at_release_point(global_position, get_facing()):
+			_cleared = false
+			_roll_out_of_the_turn()
 		return
 	if not is_instance_valid(_recovery_deck):
 		_abort_recovery()
@@ -457,6 +547,47 @@ func _work_the_recovery() -> void:
 						_go_around()
 			elif here.distance_to(point) <= join_radius:
 				_go_jet_borne()
+		Recovery.ENTRY:
+			# Se pone en cabeza del tramo paralelo, al costado y a la altura de la
+			# proa. Con gas, que esto todavía es transitar.
+			pilot.set_cruising(true)
+			pilot.update_target(point)
+			# Y si ya viene por el costado bueno y hacia popa con recta por
+			# delante, se incorpora ahí mismo en vez de subir hasta la cabeza.
+			if here.distance_to(point) <= entry_radius 					or _recovery_deck.can_join_downwind(here, get_facing(),
+							min_downwind):
+				_recovery = Recovery.DOWNWIND
+				pilot.set_target(_leg_point())
+		Recovery.DOWNWIND:
+			pilot.set_cruising(true)
+			pilot.update_target(point)
+			if _recovery_deck.past_turn_y(here):
+				_recovery = Recovery.BASE
+				# El viraje ya es aproximación: se suelta gas y es cuando el
+				# buque lo canta.
+				pilot.set_cruising(false)
+				pilot.set_target(_leg_point())
+		Recovery.BASE:
+			pilot.update_target(point)
+			# **La curva la traza el avión.** El tramo paralelo va separado el
+			# doble de su radio de viraje, así que media vuelta acaba encima del
+			# eje sola. Aquí sólo se mira cuándo ha salido de ella.
+			if _recovery_deck.on_centreline(here, join_radius):
+				_recovery = Recovery.FINAL
+				_final_from_astern = not _recovery_deck.past_ramp(here)
+				pilot.set_target(_leg_point())
+		Recovery.FINAL:
+			pilot.update_target(point)
+			# Si sale del viraje ya por encima del barco es que la ha errado: no
+			# hay final que volar, así que se vuelve a la puerta. Sin esto se
+			# quedaba dando tumbos sobre la cubierta sin llegar a posarse nunca.
+			if _recovery_deck.past_ramp(here) and not _final_from_astern:
+				_go_around()
+			elif _recovery_deck.past_ramp(here):
+				if _lined_up_to_land():
+					_go_jet_borne()
+				else:
+					_go_around()
 		Recovery.RUNWAY:
 			# Entrando por el eje: morro paralelo al buque y frenada a lo largo
 			# de la cubierta. **Esto es lo que se ve** de que viene cargado, no
@@ -495,10 +626,15 @@ func _facing_the_ship() -> bool:
 
 ## ¿Llega en condiciones de tocar? Encima de la línea y con el morro derecho.
 func _lined_up_to_land() -> bool:
-	if not _recovery_deck.on_centreline(global_position, touchdown_width):
+	# **Cada pasada fallida ensancha el margen.** Un avión que no aterriza nunca
+	# es mucho peor que uno que aterriza algo torcido: se queda dando vueltas
+	# para siempre y de paso deja la cubierta bloqueada para los demás. A la
+	# tercera entra seguro.
+	var holgura := 1.0 + float(_go_arounds)
+	if not _recovery_deck.on_centreline(global_position, touchdown_width * holgura):
 		return false
 	var desvio := angle_difference(get_facing(), _recovery_deck.bow_heading())
-	return absf(desvio) <= deg_to_rad(touchdown_cone_deg)
+	return absf(desvio) <= deg_to_rad(touchdown_cone_deg * holgura)
 
 
 ## No llegaba bien: **repite la pasada**. Vuelve al punto de espera y entra otra
@@ -506,10 +642,23 @@ func _lined_up_to_land() -> bool:
 ##
 ## Es lo que hace que todas las tomas se vean iguales. Y no se puede atascar:
 ## cada vuelta empieza más a popa, con más recta para centrarse.
-func _go_around() -> void:
-	_recovery = Recovery.JOIN
+## Deja de girar y sigue recto a la pista. Es literalmente todo lo que hace falta:
+## el círculo de espera está colocado para que en ese punto ya esté enfilado.
+func _roll_out_of_the_turn() -> void:
+	orbit.stop()
+	_recovery = Recovery.FINAL
+	_final_from_astern = true
 	pilot.set_cruising(false)
-	pilot.set_target(_recovery_deck.initial_point(_along_deck))
+	pilot.set_target(_leg_point())
+
+
+## No llegó bien: vuelve al círculo y lo intenta en la siguiente vuelta. Sin
+## subir a ningún lado ni desviarse: es el mismo círculo de siempre.
+func _go_around() -> void:
+	_go_arounds += 1
+	_recovery = Recovery.WAITING
+	_cleared = true
+	_start_holding()
 
 
 func _go_jet_borne() -> void:

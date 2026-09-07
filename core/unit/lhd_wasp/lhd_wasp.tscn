@@ -72,6 +72,10 @@ gizmo_extents = 6.0
 position = Vector2(-22, 122)
 gizmo_extents = 6.0
 
+[node name="HoldCenter" type="Marker2D" parent="FlightDeck" index="9" unique_id=902074176]
+position = Vector2(-347, 372)
+gizmo_extents = 6.0
+
 [node name="WellDeck" type="Node2D" parent="." index="4" unique_id=491283157]
 script = ExtResource("6")
 

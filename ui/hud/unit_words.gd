@@ -20,7 +20,8 @@ class_name UnitWords
 static func status(unit: Unit, map: MapView,
 		idle: String, moving: String, attacking: String,
 		launching: String = "", recovering: String = "",
-		returning: String = "") -> String:
+		returning: String = "", taking_off: String = "",
+		holding: String = "", landing: String = "") -> String:
 	if unit == null:
 		return ""
 	if is_instance_valid(unit.attack_target):
@@ -37,6 +38,16 @@ static func status(unit: Unit, map: MapView,
 			FlightDeck.Mode.RECOVERING:
 				if recovering != "":
 					return recovering
+	# Lo que está haciendo respecto al buque manda sobre moverse, y en este orden:
+	# **entrando, esperando turno, saliendo, y volviendo**. Los tres primeros son
+	# momentos concretos y cortos; «volviendo a bordo» dura todo lo demás, así que
+	# si fuera antes se comería a los otros tres.
+	if landing != "" and unit.has_method("is_landing") 			and bool(unit.call("is_landing")):
+		return landing
+	if holding != "" and unit.has_method("is_holding") 			and bool(unit.call("is_holding")):
+		return holding
+	if taking_off != "" and unit.taking_off:
+		return taking_off
 	# Volver a bordo manda sobre moverse, y por la misma razón que atacar: es un
 	# desplazamiento, sí, pero lo que el jugador quiere saber es a qué va. Y no
 	# lleva coordenada: el destino es un buque que además se mueve, así que

@@ -95,6 +95,47 @@ signal mode_changed(mode: Mode)
 ## que aguardan se dibujen unos encima de otros.
 @export var hold_spacing: float = 90.0
 
+@export_group("Circuito de aterrizaje")
+## Cuánto se separa del eje de cubierta el tramo paralelo del circuito.
+##
+## **Es el doble del radio de viraje del avión y no es un número estético.** Con
+## esa separación exacta, el viraje de media vuelta que lo mete en final termina
+## encima del eje por pura geometría: no hay que perseguir la línea ni corregir
+## nada después. Es lo que hace que todas las tomas salgan iguales.
+@export var pattern_offset: float = 260.0
+## Cuánta agua por detrás de la popa se le deja al salir del viraje.
+##
+## **Es la recta final, y corta no perdona.** Con 120 px, al que salía del viraje
+## unos metros descolocado no le daba tiempo a centrarse antes de la popa, y se
+## iba a repetir la pasada una y otra vez. Con el doble, el que sale bien no lo
+## nota y el que sale algo torcido tiene sitio para arreglarlo.
+@export var pattern_turn_margin: float = 230.0
+## Cuánto más abierto vuela cada uno de los que esperan.
+##
+## Son circunferencias **concéntricas**: dos nunca se cortan, así que el que
+## espera no se topa con el que aterriza ni con los otros que esperan. Y al irse
+## el de delante, todos se cierran un puesto, que es lo que los deja ya en camino.
+@export var pattern_hold_step: float = 80.0
+## Cuánto por delante de la proa está la puerta del circuito.
+##
+## **Se entra siempre por ahí, vengan de donde vengan.** Dejar que se metieran
+## por donde les pillara era lo que producía las entradas raras: uno que se
+## incorporaba a mitad del tramo paralelo llegaba a la popa con cualquier rumbo,
+## y de ahí no sale una toma buena.
+@export var pattern_entry_lead: float = 60.0
+## Con cuánto margen se da por pasado el punto de salida de la espera.
+@export var release_radius: float = 60.0
+## Y con cuánto desvío de morro. Estrecho: la gracia es salir ya enfilado.
+@export var release_cone_deg: float = 30.0
+## A qué distancia por detrás de la popa se engancha la recta de entrada.
+##
+## **Es lo único que queda del circuito.** Ni tramos paralelos ni virajes
+## dibujados: se va a un punto detrás del barco y desde ahí se sigue la línea de
+## cubierta, que al perseguirla con un ángulo de corte acotado traza sola la
+## curva de entrada. Corto para que nadie se vaya lejos, largo para que la curva
+## quepa.
+@export var approach_gate_len: float = 700.0
+
 ## El grupo al que se apunta todo lo que vuela. Es lo único que puede estar
 ## encima de la cubierta, así que es lo único que hay que mirar.
 const _AIR_GROUP := &"unit_air"
@@ -160,6 +201,17 @@ const _CROSS_SEG: Array = [Seg.CROSS_0, Seg.CROSS_1, Seg.LANE_1, Seg.CROSS_3]
 ## Medido sobre el propio dibujo — la raya amarilla llega hasta ahí — y puesto
 ## como marcador para poder cuadrarlo a ojo en el editor.
 @onready var _recovery_ramp: Marker2D = $RecoveryRamp
+## El centro del circuito de espera.
+##
+## **Está puesto para que el círculo roce la línea de la pista**, por detrás y a
+## babor. Eso es lo que hace que salir de la espera no sea una maniobra: el que
+## da vueltas ahí pasa, una vez por vuelta, justo encima del eje y apuntando a la
+## popa, así que sólo tiene que dejar de girar.
+##
+## Antes el círculo era una figura distinta de la entrada, y todo lo feo que se
+## veía —subir a la proa, virar cerrado pegado al casco— era el trozo que hacía
+## falta para pasar de una a la otra. Siendo la misma figura, ese trozo no existe.
+@onready var _hold_center: Marker2D = $HoldCenter
 
 ## Quién está aparcado en cada plaza. Es inventario, no reserva: lo que dice si
 ## se puede pasar por ahí es [member _held].
@@ -242,6 +294,9 @@ var _standing: Dictionary = {}
 ## apuntar el blanco a posteriori sólo cambia el rótulo: el avión se queda
 ## orbitando el barco mientras el HUD dice que está atacando.
 func _hand_over_control(unit: Node2D) -> void:
+	var salido := unit as Unit
+	if salido != null:
+		salido.taking_off = false
 	if not is_instance_valid(unit):
 		return
 	var id := unit.get_instance_id()
@@ -281,6 +336,11 @@ func request_deploy(scene: PackedScene, squad: Squad = null,
 		weapon_loadout: WeaponLoadout = null,
 		standing_order: Dictionary = {},
 		fleet_entry: Dictionary = {}) -> bool:
+	# **Con alguien volviendo no se saca nada.** Aceptar el encargo descontaba el
+	# aparato del pañol y luego no salía, porque la pista está guardada para el
+	# que entra: el jugador veía «lanzando aeronave» sin que apareciera nadie.
+	if recovery_pending():
+		return false
 	var elev_idx: int = _elevator_idx % _elevators.size()
 	var slot := _next_slot_for_elevator(elev_idx)
 	if slot == -1:
@@ -359,6 +419,7 @@ func _process_queue(elev_idx: int) -> void:
 		_standing[unit_id] = order
 	var u := unit as Unit
 	if u != null:
+		u.taking_off = true
 		u.set_weapon_loadout(job["weapon_loadout"])
 		u.fleet_entry = job.get("entry", {})
 		# De aquí salió y aquí vuelve. Es lo que hace que "regresar" sea una
@@ -437,7 +498,7 @@ func _process_queue(elev_idx: int) -> void:
 ## pueda soltar**, porque montar una tanda para no soltar a nadie deja un
 ## temporizador latiendo para siempre.
 func _check_ready_to_launch() -> void:
-	if _launching:
+	if _launching or recovery_pending():
 		return
 	# Con aparatos todavía saliendo o entrando por un ascensor se espera: la
 	# tanda se arma de una vez y con la lista de los que hay, así que soltarla a
@@ -927,7 +988,7 @@ func _lands_along_deck(unit: Node2D) -> bool:
 ## Y ninguna de las dos coordina nada. Coordinar es saber **dónde**, y eso sólo
 ## lo contesta la tabla de trozos.
 func mode() -> Mode:
-	if not _recovering.is_empty():
+	if recovery_pending():
 		return Mode.RECOVERING
 	if _launching or _busy_on_deck():
 		return Mode.LAUNCHING
@@ -935,11 +996,31 @@ func mode() -> Mode:
 		if not cola.is_empty():
 			return Mode.LAUNCHING
 	return Mode.IDLE
+
+
+## ¿Hay alguna aeronave volviendo, esté donde esté?
+##
+## **Cuentan también las que esperan turno.** Todas las que están en el circuito
+## van a aterrizar, así que la cubierta está ocupada recogiendo de principio a
+## fin. Diciendo «en espera» entre un aterrizaje y el siguiente, el jugador pedía
+## un despegue, el buque lo aceptaba, no salía nadie —la pista está guardada para
+## el que entra— y el rótulo saltaba a «recuperando» dos segundos después.
+func recovery_pending() -> bool:
+	return not _recovering.is_empty() or not _inbound.is_empty()
+
+
 ## Hay algo moviéndose por la cubierta **ahora mismo**. Es para el rótulo: una
 ## tanda abierta con todo el mundo quieto sigue siendo una tanda, y algo rodando
 ## sigue siendo movimiento aunque no haya tanda.
 func _busy_on_deck() -> bool:
 	return _moving > 0
+
+
+## El centro de los circuitos de espera, por delante de la proa.
+func hold_center() -> Node2D:
+	return _hold_center
+
+
 func _refresh_mode() -> void:
 	var ahora := mode()
 	if ahora == _mode:
@@ -994,13 +1075,11 @@ func cancel_recovery(id: int) -> void:
 	if estaba:
 		_refresh_holds()
 	_refresh_mode()
-## Reparte entrada a los que esperan, **empezando por el más cercano**.
+## Reparte entrada a los que esperan, **por orden de llegada**.
 ##
-## No por el que lo pidió primero: hacer esperar al que ya está encima del barco
-## porque otro, a mil píxeles, pulsó antes, no tiene sentido para quien lo mira.
-##
-## Se reparte a todos los que quepan, no sólo al primero. Cuántos caben lo dice
-## [method _free_slot_for_recovery], que para el que llega rodando es uno.
+## Antes elegía al más cercano, y eso hacía que el último se colara: con todos
+## dando vueltas, quién es el más cercano cambia cada segundo según por dónde ande
+## cada uno de su círculo. El orden es el de la cola y punto.
 func _offer_recovery() -> void:
 	var i := 0
 	while i < _inbound.size():
@@ -1010,33 +1089,16 @@ func _offer_recovery() -> void:
 			_inbound.remove_at(i)
 	var entraron := false
 	while not _inbound.is_empty():
-		var elegido := -1
-		var mejor := INF
-		var slot := -1
-		var along := false
-		for k in _inbound.size():
-			var u := instance_from_id(_inbound[k]) as Node2D
-			var d := global_position.distance_to(u.global_position)
-			if d >= mejor:
-				continue
-			var a := _lands_along_deck(u)
-			var s := _free_slot_for_recovery(_inbound[k], a)
-			if s == -1:
-				continue
-			mejor = d
-			elegido = k
-			slot = s
-			along = a
-		if elegido < 0:
-			break
-		var id: int = _inbound[elegido]
+		var id: int = _inbound[0]
 		var unit := instance_from_id(id) as Node2D
-		_inbound.remove_at(elegido)
+		var along := _lands_along_deck(unit)
+		var slot := _free_slot_for_recovery(id, along)
+		if slot == -1:
+			break
+		_inbound.pop_front()
 		entraron = true
 		_recovering[slot] = id
 		_hold(_recovery_route(slot, along), id)
-		# Al que llega rodando se le guarda también la bajada: como sólo entra
-		# uno cada vez, dejarlo posado y el ascensor cogido no adelanta nada.
 		if along:
 			_hold(_taxi_route(slot, recovery_elevator()), id)
 		_units[slot] = null
@@ -1072,8 +1134,10 @@ func recovery_slot() -> int:
 ## obliga a cruzar, y pueden entrar varios a la vez porque no comparten pista.
 func _free_slot_for_recovery(owner: int, along_deck: bool) -> int:
 	if along_deck:
-		if not _recovering.is_empty():
-			return -1
+		# Que entre uno cada vez no hace falta escribirlo: **todos van a la misma
+		# plaza**, así que la ruta ya lo impone. Y al no escribirlo, el siguiente
+		# recibe turno en cuanto el anterior deja la plaza, sin esperar a que
+		# acabe de bajar por el ascensor.
 		var fija := recovery_slot()
 		if _dest[fija] != 0:
 			return -1
@@ -1189,6 +1253,13 @@ func axis_lookahead(from: Vector2, ahead: float, max_intercept_deg: float) -> Ve
 	var desvio := absf(here.x - eje.x)
 	var pendiente := tan(deg_to_rad(clampf(max_intercept_deg, 5.0, 85.0)))
 	var delante := maxf(ahead, desvio / pendiente)
+	# **Cuanto más cerca de la popa, más cerca mira.** Con la mirada larga fija,
+	# los últimos píxeles de desvío no se corrigen nunca: el ángulo sale tan
+	# abierto que el avión llega igual de torcido que empezó. Acortándola al
+	# final, lo poco que quede se endereza justo antes de tocar.
+	var falta := here.y - _recovery_ramp.position.y
+	if falta > 0.0:
+		delante = minf(delante, maxf(falta * 0.7, 120.0))
 	return to_global(Vector2(eje.x, maxf(here.y - delante, eje.y)))
 
 
@@ -1203,6 +1274,127 @@ func astern_of_pattern(world_pos: Vector2, ancho: float) -> bool:
 	if aqui.y < _recovery_ramp.position.y + pattern_leg:
 		return false
 	return absf(aqui.x - _launch_point.position.x) <= ancho
+
+
+## Donde se engancha la recta de entrada: sobre el eje de cubierta y por detrás
+## de la popa. Un solo punto, cerca, y se mueve con el barco.
+func approach_gate() -> Vector2:
+	return to_global(Vector2(_launch_point.position.x,
+			_recovery_ramp.position.y + approach_gate_len))
+
+
+## ¿Está ya por detrás de la popa con sitio para la entrada?
+func astern_with_room(world_pos: Vector2, min_room: float) -> bool:
+	return to_local(world_pos).y >= _recovery_ramp.position.y + min_room
+
+
+## El tramo paralelo del circuito, a la altura que se pida.
+func pattern_downwind(y: float) -> Vector2:
+	return to_global(Vector2(_launch_point.position.x - pattern_offset, y))
+
+
+## Por dónde se entra al circuito: el tramo paralelo, a la altura de la proa.
+func pattern_entry() -> Vector2:
+	return pattern_downwind(_launch_point.position.y - pattern_entry_lead)
+
+
+## Por dónde se sale de la espera: donde el círculo toca la línea de la pista.
+func release_point() -> Vector2:
+	return to_global(Vector2(_launch_point.position.x, _hold_center.position.y))
+
+
+## ¿Está ahí y apuntando a la popa, o sea listo para seguir recto?
+func at_release_point(world_pos: Vector2, facing: float) -> bool:
+	if world_pos.distance_to(release_point()) > release_radius:
+		return false
+	return absf(angle_difference(facing, bow_heading())) <= deg_to_rad(release_cone_deg)
+
+
+## ¿Puede meterse ya en el tramo paralelo desde donde está?
+##
+## **Se le deja entrar a media altura si le queda recta suficiente**, en vez de
+## obligarle a subir hasta la puerta. Un avión que ya viene por el costado bueno
+## y hacia popa no tiene por qué dar la vuelta entera: eso era media vuelta de
+## reloj por aparato. Lo único que se le exige es venir en la línea, ir hacia
+## popa, y tener sitio para asentarse antes de virar.
+func can_join_downwind(world_pos: Vector2, facing: float, min_left: float) -> bool:
+	var aqui := to_local(world_pos)
+	var linea: float = _launch_point.position.x - pattern_offset
+	if absf(aqui.x - linea) > 50.0:
+		return false
+	if pattern_turn_y() - aqui.y < min_left:
+		return false
+	var popa := bow_heading() + PI
+	return absf(angle_difference(facing, popa)) <= deg_to_rad(45.0)
+
+
+## A qué altura se deja el tramo paralelo y se vira a final.
+func pattern_turn_y() -> float:
+	return _recovery_ramp.position.y + pattern_turn_margin
+
+
+## Donde acaba el viraje: sobre el eje y a la misma altura en que empezó, que es
+## lo que da media vuelta de radio fijo.
+func pattern_rollout() -> Vector2:
+	return to_global(Vector2(_launch_point.position.x, pattern_turn_y()))
+
+
+## ¿Está por el costado bueno y yendo hacia popa, o sea en el sitio por donde se
+## entra al circuito?
+##
+## Es la puerta para dejar el circuito de espera. Sin ella, al que le tocaba el
+## turno estando por el otro costado cruzaba el buque de través y se metía en el
+## tramo paralelo de cualquier manera: de ahí no sale una aproximación derecha ni
+## repitiendo la pasada tres veces.
+func abeam_to_port(world_pos: Vector2, facing: float) -> bool:
+	if to_local(world_pos).x > _launch_point.position.x - pattern_offset * 0.5:
+		return false
+	var popa := bow_heading() + PI
+	return absf(angle_difference(facing, popa)) <= deg_to_rad(70.0)
+
+
+## ¿Está ya dentro del circuito? Basta con estar del lado bueno y por delante de
+## la altura de virar: **es una zona y no un punto**, porque un avión no llega a
+## un punto, pasa cerca. Exigirle tocarlo hacía que uno que venía del otro
+## costado lo fallara y entrara al tramo paralelo de cualquier manera.
+func in_the_pattern(world_pos: Vector2) -> bool:
+	var aqui := to_local(world_pos)
+	if aqui.y > pattern_turn_y():
+		return false
+	return aqui.x <= _launch_point.position.x - pattern_offset * 0.5
+
+
+## ¿Llegó ya a la altura de virar?
+func past_turn_y(world_pos: Vector2) -> bool:
+	var aqui := to_local(world_pos)
+	if aqui.y < pattern_turn_y():
+		return false
+	# **Y sobre el tramo paralelo, no sólo a su altura.** El viraje sale bien
+	# porque la separación es justo el doble del radio; empezándolo desde otra
+	# separación, la media vuelta no acaba en el eje y la recta final se queda
+	# corta. Si todavía no está en la línea, sigue bajando hasta cogerla.
+	var linea: float = _launch_point.position.x - pattern_offset
+	return absf(aqui.x - linea) <= 50.0
+
+
+## Un punto del tramo paralelo por delante de quien pregunta, para seguirlo como
+## se sigue el eje. Ver [method axis_lookahead].
+func downwind_lookahead(from: Vector2, ahead: float, max_intercept_deg: float) -> Vector2:
+	var aqui := to_local(from)
+	var x: float = _launch_point.position.x - pattern_offset
+	var desvio := absf(aqui.x - x)
+	var pendiente := tan(deg_to_rad(clampf(max_intercept_deg, 5.0, 85.0)))
+	var delante := maxf(ahead, desvio / pendiente)
+	# El punto va siempre por delante, también pasada la altura de virar: si se
+	# clava ahí, uno que llegue ancho se queda persiguiendo un punto que tiene
+	# detrás en vez de meterse en la línea.
+	return to_global(Vector2(x, minf(aqui.y + delante, pattern_turn_y() + 250.0)))
+
+
+## El radio del circuito de espera de quien hace ese número en la cola. Siempre
+## por fuera del circuito de aterrizaje, para no cruzarse con él.
+func pattern_hold_radius(index: int) -> float:
+	return pattern_offset + pattern_hold_step * float(maxi(index, 0) + 1)
 
 
 ## ¿Está encima de la línea de cubierta, dentro de ese margen?

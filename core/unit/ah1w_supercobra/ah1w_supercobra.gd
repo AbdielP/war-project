@@ -249,6 +249,16 @@ func recovery_hold(index: int) -> void:
 	_hold_index = index
 
 
+## ¿Está esperando turno para entrar? Lo pregunta el HUD.
+func is_holding() -> bool:
+	return _recovery == Recovery.WAITING
+
+
+## ¿Está ya entrando, o sea comprometido con la aproximación? Lo pregunta el HUD.
+func is_landing() -> bool:
+	return _recovery in [Recovery.ALONGSIDE, Recovery.CROSS, Recovery.SETTLING]
+
+
 ## ¿Está volviendo a bordo? Lo pregunta el HUD para decirlo con todas las letras
 ## en vez de contar que se está moviendo a un sitio: es lo mismo por fuera y no
 ## es lo mismo para el jugador.

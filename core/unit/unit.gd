@@ -79,6 +79,11 @@ var killed_by: Unit = null
 ## qué casilla del pañol vino esto. Con la escena sola habría que adivinarlo
 ## comparando recursos.
 var fleet_entry: Dictionary = {}
+## Está saliendo del buque: rodando a su punto, corriendo la pista o subiendo.
+## **Lo pone y lo quita la cubierta**, que es la única que sabe cuándo empieza y
+## cuándo deja de ser cosa suya. Vive aquí y no en la aeronave porque el HUD lo
+## pregunta a cualquier unidad sin saber de qué tipo es.
+var taking_off: bool = false
 
 @onready var _selection_indicator: SelectionIndicator = $SelectionIndicator
 @onready var _target_marker: TargetMarker = $TargetMarker

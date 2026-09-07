@@ -106,9 +106,9 @@ func _refresh() -> void:
 	_health.max_value = maximum
 	_health.value = _unit.health
 	_status.text = "  " + UnitWords.status(
-			_unit, _map, "EN ESPERA", "MOVI\u00c9NDOSE A: ", "ATACANDO A: ",
-			"LANZANDO AERONAVE", "RECUPERANDO AERONAVE",
-			"RETURNING TO BASE").to_upper()
+			_unit, _map, "STANDING BY", "MOVING TO: ", "ATTACKING: ",
+			"LAUNCHING AIRCRAFT", "RECOVERING AIRCRAFT", "RETURNING TO BASE",
+			"TAKING OFF", "HOLDING", "LANDING").to_upper()
 	_objective.text = "OBJETIVO: " + ("-" if not is_instance_valid(_unit.attack_target)
 			else _unit.attack_target.get_display_name().to_upper())
 	_fit()

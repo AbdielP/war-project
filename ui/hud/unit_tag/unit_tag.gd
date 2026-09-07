@@ -41,14 +41,22 @@ signal boarding_requested(unit: Unit)
 ## táctico**, igual que el parte de eventos: el del minimapa agrupa las zonas
 ## hasta caber en 87 px y diría lo mismo de medio mapa.
 @export var map_path: NodePath
-@export var status_idle: String = "En espera"
-@export var status_moving: String = "Moviéndose a "
-@export var status_attacking: String = "Atacando a "
+@export var status_idle: String = "Standing by"
+@export var status_moving: String = "Moving to "
+@export var status_attacking: String = "Attacking "
 ## Lo que dice un buque mientras su cubierta trabaja. Caben de sobra: el hueco
 ## del rótulo mide 160 px y el caso largo que ya se enseña hoy —"Atacando a
 ## AV-8B Harrier II"— pasa de 27 caracteres, contra los 20 de éstos.
-@export var status_launching: String = "Lanzando aeronave"
-@export var status_recovering: String = "Recuperando aeronave"
+@export var status_launching: String = "Launching aircraft"
+@export var status_recovering: String = "Recovering aircraft"
+## Lo que dice el que está saliendo del buque: rodando, corriendo la pista o
+## subiendo.
+@export var status_taking_off: String = "Taking off"
+## El que espera turno para entrar. **Es el término de verdad** y además cabe:
+## el hueco del rótulo son unos 26 caracteres.
+@export var status_holding: String = "Holding"
+## Y el que ya está entrando.
+@export var status_landing: String = "Landing"
 ## Lo que dice una aeronave que vuelve a su buque. No lleva destino: el destino
 ## navega, y una coordenada que cambia sola no es un sitio.
 @export var status_returning: String = "Returning to base"
@@ -248,7 +256,7 @@ func _follow_unit() -> void:
 func _status_text() -> String:
 	return UnitWords.status(_unit, _map, status_idle, status_moving,
 			status_attacking, status_launching, status_recovering,
-			status_returning)
+			status_returning, status_taking_off, status_holding, status_landing)
 
 
 func _start_name_entrance() -> void:

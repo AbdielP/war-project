@@ -2,6 +2,74 @@
 
 Registro cronológico (más reciente arriba). Una entrada por decisión: qué se decidió y por qué.
 
+## 2026-09-07 — el circuito de aterrizaje
+
+El aterrizaje del Harrier se rehízo entero, varias veces, y lo que salió al final es mucho más
+simple que cualquiera de los intentos. Vale la pena anotar el camino, porque el error se repitió
+con formas distintas toda la sesión.
+
+### La alineación se saca de la geometría, no se persigue
+
+Los cuatro primeros intentos tenían la misma estructura: llevar al avión más o menos a la línea de
+cubierta y **corregir lo que quedara** —persiguiendo un punto adelantado sobre la raya, acotando el
+ángulo de corte, repitiendo la pasada si llegaba torcido—. Ninguno funcionó del todo, y cada arreglo
+destapaba otro caso.
+
+Lo que funciona es no tener que corregir. El circuito de espera es un **círculo tangente a la línea
+de la pista**, colocado a un radio de viraje del eje. El que da vueltas ahí pasa, una vez por vuelta,
+justo encima de la línea y apuntando a la popa. Entrar es dejar de girar. No hay maniobra de enlace,
+así que no hay nada que enderezar.
+
+Eso también borró de un plumazo lo feo que el usuario venía señalando toda la noche: subir a la
+proa, acelerar y virar cerrado pegado al casco existían **sólo** para pasar del circuito de espera
+al de aterrizaje, que eran dos figuras distintas.
+
+### Un avión no llega a un punto: pasa cerca
+
+Media sesión se fue en puertas de maniobra escritas como «¿estoy a menos de X del punto?». Un avión
+con radio de giro de 130 px falla un punto por noventa, da la vuelta y vuelve a entrar con el morro
+al revés — y desde ahí ya no hay aproximación que salga derecha. Las puertas de una maniobra son
+**líneas o zonas**: cruzar la popa, estar por detrás con sitio, estar sobre el eje.
+
+### Repartir por cercanía no es un orden
+
+El turno se daba al más cercano de los que esperaban. Con todos orbitando, quién es el más cercano
+cambia cada segundo según por dónde ande cada uno de su vuelta, y el último se colaba. El orden es
+el de la cola.
+
+### Soltar un recurso a trozos reparte media verdad
+
+`take_aboard` soltaba la ruta trozo a trozo y cada suelta volvía a repartir la cubierta. El
+resultado: el siguiente se llevaba lo primero que quedaba libre, que era justo la peor plaza. Se
+sueltan todos de una vez y después se reparte.
+
+### Rodando no hay marcha atrás
+
+El frenado en cubierta corregía como cualquier desplazamiento: se pasaba del punto y volvía. Con el
+morro bloqueado paralelo al buque, volver es ir marcha atrás — 12 px a 17 px/s, medido. Se le manda
+parar **antes** del ascensor y lo que sobre se recorre rodando de frente.
+
+### Un rótulo que se apaga entre dos fases invita a una acción imposible
+
+El buque decía «en espera» entre un aterrizaje y el siguiente. El jugador pedía un despegue, se
+aceptaba, se descontaba el aparato del pañol, no salía nadie —la pista está guardada— y el rótulo
+volvía a «recuperando». Todo el que está en el circuito va a aterrizar, así que la cubierta está
+ocupada recogiendo de principio a fin, y mientras tanto no se lanza.
+
+### Y lo que más caro salió: la sonda pasaba y el juego fallaba
+
+Ronda tras ronda las pruebas headless daban tres de tres y el usuario veía aviones dando tumbos.
+Eso no es mala suerte: **significa que la sonda no reproduce el caso**. Las mías creaban aeronaves
+en el aire con `start_flight`; las suyas salían del hangar, volaban, atacaban y volvían, y el buque
+navegaba. Cuando por fin monté la sonda con el camino de verdad —sacar del hangar, despegar, ordenar
+volver— el fallo apareció en la primera pasada.
+
+### Estados de las aeronaves
+
+Se añadieron **Taking off**, **Holding** y **Landing**, y de paso los rótulos pasaron todos a
+inglés, que es lo que hay que localizar luego. Prioridad: atacando, aterrizando, esperando turno,
+saliendo, volviendo a bordo, moviéndose, en espera.
+
 ## 2026-09-05 — la cubierta también recoge
 
 Hasta hoy el buque sabía lanzar y no sabía recoger, así que `PlayerFleet.recall`

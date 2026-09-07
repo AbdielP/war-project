@@ -164,6 +164,18 @@ automática dentro de una pantalla concreta.
 `OS.has_feature("editor")`, falso en cualquier build exportada. Todo lo que haya en `[context]` se le
 pasa a la pantalla tal cual; cada una mira las claves que entiende.
 
+### Pendiente — desplegar unidades al instante
+
+Falta un botón de depuración que ponga una unidad en el mapa **ya**, sin sacarla del hangar del LHD
+ni del dique. Hoy, para mirar cómo se comporta un aparato hay que abrir la ventana del buque,
+elegirlo, esperar el ascensor, el rodaje y el despegue: minuto y medio para cada prueba de algo que
+no tiene nada que ver con la cubierta.
+
+Va donde va `DevBoot`, bajo `OS.has_feature("editor")`, para que no llegue a una versión publicada.
+Lo que tiene que resolver es elegir tipo, bando y sitio; y la unidad que aparezca así **no sale del
+pañol**, porque no la sacó nadie: sin `fleet_entry` no puede volver, y ésa es exactamente la
+diferencia entre una unidad de prueba y una desplegada.
+
 ### La salida de la misión es un andamio
 
 `ui/screens/mission/mission.gd` escucha **F10** y va al debriefing. Mientras no haya condiciones de
@@ -858,108 +870,110 @@ mirar cada `retry_delay`, una espera a la vez, y sólo mientras el estorbo esté
 
 ---
 
-### La recuperación — `FlightDeck` + `Ah1wSuperCobra`
+### La recuperación — `FlightDeck` + aeronaves
 
-La cubierta también recoge. Es el ciclo de salida al revés y **nunca las dos cosas a la vez**:
-`enum Mode { IDLE, LAUNCHING, RECOVERING }`, con `mode()` y la señal `mode_changed`.
+La cubierta también recoge. Es el ciclo de salida al revés, y **mientras haya alguien volviendo no
+se lanza nada**: `enum Mode { IDLE, LAUNCHING, RECOVERING }`, con `mode()` y `mode_changed`.
 
 **Se sale por proa y se entra por popa** (`-Y` y `+Y` en coordenadas de cubierta), así que los dos
-flujos no se cruzan ni en el aire. Es lo que hace que baste con turnarse y no haga falta más
-arbitraje.
+flujos no se cruzan ni en el aire.
 
-**Lo que se turna es el aparato en curso, no la cola entera.** El que corre la pista termina su
-carrera, la recuperación toma la cubierta, y la cola sigue después donde estaba. Manda el que está
-en el aire: a él se le acaba el combustible y al de cubierta no.
+#### El circuito: la espera y la entrada son la misma figura
 
-**Y por eso hay dos preguntas distintas, no una:**
+Un círculo, por detrás del buque y a babor, **colocado para que roce la línea de cubierta**. Todo
+el que vuelve da vueltas ahí. El que tiene turno no maniobra: al pasar por el punto en que el
+círculo toca la línea ya está encima del eje y apuntando a la popa, así que **deja de girar y sigue
+recto**.
 
-| pregunta | quién la contesta | qué mira |
+Eso es lo único que hay, y es lo que costó llegar. Antes eran dos figuras distintas —un circuito de
+aterrizaje por un lado y unos anillos de espera por otro— y todo lo que se veía mal era el trozo
+que hacía falta para saltar de una a la otra: subir a la proa, acelerar, virar cerrado pegado al
+casco. Siendo la misma figura, ese trozo no existe.
+
+**La alineación sale de la geometría, no de perseguirla.** El centro del círculo se coloca a un
+radio de viraje del eje, así que la tangente cae clavada en la línea. Los primeros intentos
+enderezaban al avión persiguiendo la raya con un ángulo de corte acotado, y siempre llegaba con
+unos píxeles de sesgo que ninguna corrección quitaba a tiempo.
+
+| pieza | dónde | qué es |
 |---|---|---|
-| ¿qué está haciendo? (rótulo) | `mode()` | la tanda entera: `_launching`, colas, algo moviéndose |
-| ¿puedo cederle el turno? | `_busy_on_deck()` | sólo si hay algo moviéndose **ahora**: `_runway_busy`, `_taxiing` |
+| `HoldCenter` | marcador de la escena | centro del círculo, a un radio del eje |
+| `release_point()` | `FlightDeck` | donde el círculo toca la línea |
+| `at_release_point()` | `FlightDeck` | ahí y con el morro a la popa: ya puede seguir recto |
+| `axis_lookahead()` | `FlightDeck` | el tramo final, mirando cada vez más cerca según se acerca |
 
-Juntarlas repetiría el fallo que ya costó una vez. `_launching` dura lo que el jugador tarde en
-mover un helicóptero posado —puede ser nunca—, así que usarla como puerta dejaría fuera a todo el
-que quisiera entrar; y usar sólo `_busy_on_deck()` como rótulo lo haría parpadear entre cada
-aparato de la misma tanda, contando algo que no está pasando.
+#### Una plaza, un ascensor, uno cada vez y por orden
 
-**El sí o no se contesta antes de la aproximación, no antes de posarse.** Al despegar, si la
-cubierta está ocupada simplemente no se empieza y no hay nada comprometido; al recoger es al revés,
-y negarle la plaza a uno que ya está entrando lo deja sin sitio a donde ir. Por eso `request_recovery()`
-reserva la plaza y **la reserva cubre la secuencia entera, ascensor incluido**: quien reserva sólo el
-punto de toma acaba con un aparato posado y sin salida, que es un estorbo que ya no puede quitar
-nadie.
+Se recoge siempre en la misma plaza —la que está a la altura del ascensor central— y se baja por
+ese ascensor. **Que entre uno cada vez no está escrito en ninguna parte**: todos necesitan la misma
+plaza, así que la reserva de ruta ya lo impone, y el siguiente recibe turno en cuanto el anterior
+la deja, sin esperar a que acabe de bajar.
 
-**Un −1 no es un "no", es un "todavía no".** El que no cabe queda apuntado en `_inbound` y la
-cubierta le avisa por `recovery_granted(slot)` en cuanto se libera (`_offer_recovery`, llamado desde
-las cuatro costuras: fin de taxi, fin de ciclo de ascensor, pista libre y fin de recuperación). Sin
-esa lista la petición se perdería sin un solo error que lo delatara, y el síntoma sería el de
-siempre: *funciona sólo cuando vuelvo a pedirlo*.
+El turno va **por orden de petición**. Repartirlo por cercanía parecía razonable y no lo es: con
+todos dando vueltas, quién está más cerca cambia cada segundo según por dónde ande cada uno de su
+círculo, y el último se cuela.
 
-**La tanda diferida lleva bandera propia.** `_deferred` guarda por dónde iba la tanda —la lista se
-hizo al empezar y no se puede reconstruir— y `_batch_deferred` dice que hay tanda que cerrar, porque
-**la lista puede quedar vacía y aun así haberla**. Es la misma trampa de siempre: un `bool` que dura
-una cosa no puede contestar por otra.
+#### Dos formas de entrar
 
-**La maniobra del helicóptero** (`Recovery { NONE, WAITING, JOIN, ALONGSIDE, CROSS, SETTLING }`, en
-`ah1w_supercobra.gd`) va por popa, sube por el costado y cruza de lado:
-
-| tramo | a dónde | rumbo |
+| entrada | quién | cómo |
 |---|---|---|
-| `WAITING` / `JOIN` | `deck.join_point()` — por detrás y al costado | libre, va a donde va |
-| `ALONGSIDE` | `deck.abeam_point(slot)` — a la altura de su plaza, fuera del buque | clavado a `bow_heading()` |
-| `CROSS` | `deck.spot_point(slot)` — encima de la plaza | clavado a `bow_heading()` |
-| `SETTLING` | ya es carga del barco | — |
+| rodada | el que llega con armamento colgado | por el eje, toca en la popa y frena rodando |
+| vertical | helicóptero, y el Harrier vacío | sube por el costado y cruza de lado a su plaza |
 
-El punto **se recalcula contra el buque cada fotograma**. Un punto capturado al empezar deja de ser
-su sitio en cuanto el barco avanza; persiguiendo el punto vivo, el aparato iguala la marcha del
-buque solo. **Eso es lo que quiere decir sincronizar velocidad, y no hay que programarlo aparte** —
-y al igualarla su posición respecto al barco deja de cambiar, que es exactamente la condición para
-colgarlo de él (`take_aboard`) y medir el resto en coordenadas de cubierta.
+Lo decide el propio aparato (`lands_along_deck()`), **una sola vez, al pedir entrada**: la cubierta
+le reserva una ruta u otra según la respuesta, así que cambiar de idea a mitad de aproximación
+dejaría al avión volando un patrón distinto del que tiene guardado.
 
-Y hay un regalo: el tramo más mirado de todos, el cruce, se hace **sin girar el sprite**. Girar
-pixel art lo destruye, así que la maniobra esquiva sola la peor debilidad del proyecto.
+El helicóptero conserva su reparto de siempre: la plaza libre más a popa, varios a la vez usando
+los dos ascensores, y se coloca sobre la marca al posarse. Su maniobra no cambió nunca.
 
-Los tramos se cierran con **pestillo**, por lo mismo que la lancha al atracar: una condición viva se
-cumple de camino y el aparato se re-apuntaría a un destino que ya tiene al lado.
+#### Rodando no existe la marcha atrás
 
-**Al posarse, primero se sube a bordo y después se baja**, no al revés: si se posa antes de
-reparentar, el barco se le escapa por debajo durante la bajada. Y en cubierta no se dispara
-(`weapons.set_active(false)`), espejo de `_on_took_off`.
+`VtolLanding.rolling` es la carrera de frenado por cubierta, y sólo va hacia adelante y por su eje.
+Si se pasa del punto, se para donde esté. Antes corregía como cualquier otro desplazamiento: se
+pasaba unos píxeles, volvía, y como el morro va bloqueado paralelo al buque, volvía **de espaldas**
+—medido, 12 px a 17 px/s durante segundo y medio—. Eso es lo que se veía como si frenase con un
+gancho, que en un LHD no existe.
 
-**Después manda la cubierta.** `stow()` lo lleva rodando a **su** ascensor —el que le toca a su
-plaza sale de la misma tabla que las reparte al salir, así que la vuelta recorre el camino de ida—,
-lo baja y llama a `return_to_fleet()`. **No se rearma**: con qué sale la próxima vez lo elige el
-jugador en el hangar, que es donde se elige el armamento. Rearmar ahí sería decidir por él.
+Y se le manda parar **antes** del ascensor, no encima: lo que sobre de frenada se lo come el rodaje,
+que va de frente. La frenada se calcula para pararse ahí (`start_rollout`), no a un ritmo fijo.
 
-**Órdenes nuevas cancelan la vuelta y sueltan la plaza** (`_abort_recovery`, desde
-`receive_move_order` y desde `_on_attack_target_changed`). Sin eso, un aparato al que se desvía a
-mitad de vuelta deja su reserva puesta y la cubierta se va llenando de plazas que no ocupa nadie —
-y además el piloto recibiría a la vez la corrección de la aproximación y la orden nueva, ganando la
-última que se escribiera.
+#### El rótulo y el despegue
 
-**Se pide por el botón y por el gesto**, como la lancha: `actions = ["RETURN"]` en el `UnitType` del
-Cobra, y pulsar el buque con el helicóptero seleccionado. Los dos acaban en `_issue_return_order`.
-Quién recoge a quién lo contesta el buque (`LhdWasp.deck_for(unit)`: cubierta de vuelo para lo que
-vuela, dique para lo que flota) y no quien pregunta — el que quiere volver sabe volar o navegar, no
-qué muelles tiene este barco.
+`mode()` dice `RECOVERING` **desde que alguien pide entrar hasta que el último está guardado**,
+contando también a los que esperan turno: todos van a aterrizar. Y mientras tanto `request_deploy()`
+contesta que no. Con el rótulo apagándose entre un aterrizaje y el siguiente, el jugador pedía un
+despegue, el buque lo aceptaba, descontaba el aparato del pañol, no salía nadie —la pista está
+guardada para el que entra— y el rótulo volvía a «recuperando» dos segundos después.
 
-**Medido en sondas** (LHD parado en el origen, plaza 0 = `TakeoffPoint1`):
+Las aeronaves dicen lo suyo por `UnitWords.status()`, que pregunta `taking_off`, `is_holding()` e
+`is_landing()`: **Taking off**, **Holding**, **Landing**.
+
+#### Lo que se midió
 
 | comprobación | resultado |
 |---|---|
-| salida de tres aparatos con el modo nuevo puesto | idéntica a antes: 2 Harrier por proa, Cobra posado |
-| entrada completa de un Cobra | popa (−97, 222) → través (−94, 103) → plaza (−22, 94), rumbo −91° |
-| dos pidiendo entrar con la cubierta lanzando | los dos a `WAITING`, entran por turno, la tanda se reanuda después |
-| plazas y pañol al terminar | `[false×4]`, `deployed` 2 → 0, cola de entrada vacía |
-| desvío a mitad de aproximación | plaza suelta, modo `IDLE`, obedece el destino nuevo |
+| tres cargados desde tres lados, pidiendo 0, 1, 2 | entran en ese orden, ~28 s entre uno y otro |
+| dónde tocan | los tres en el eje exacto, `x = -22` |
+| retroceso durante la frenada | 0,00 px (antes 12,29) |
+| cuatro helicópteros | los cuatro guardados, plazas de siempre |
+| salida de tres | idéntica: 2 Harrier por proa, Cobra posado |
+| despegue con dos volviendo | rechazado, no descuenta del pañol |
 
-`Unit.fleet_entry` y `Unit.return_to_fleet()` viven ahora en la base y no en cada vehículo: la
-pregunta —de qué casilla del pañol vino esto— es la misma para todos, y `LandingCraft` sólo añade
-encima la devolución de su carga. `FlightDeck.request_deploy()` recibe la casilla y se la pone al
-aparato al crearlo, igual que hace el dique con una lancha: **lo que sale tiene que poder volver**.
+#### Sabido y sin resolver
 
----
+- **Nada de esto se ha probado con el buque en marcha.** Todo el circuito está en coordenadas de
+  cubierta, así que se mueve con el barco, pero no está verificado navegando.
+- El que llega por estribor cruza por delante del buque para alcanzar el círculo, y en ese trayecto
+  puede pasarle por encima. Rodearlo es lo que falta.
+- La aproximación **directa** —entrar sin dar la vuelta cuando ya se viene por popa y alineado— es
+  real y no está: hoy todos pasan por el círculo.
+- Los efectos del Harrier al posarse (aire caliente, polvo contra la cubierta) y la animación de la
+  rampa del ascensor siguen siendo esperas sin dibujo.
+- Quedan sin usar en `FlightDeck` los restos del circuito anterior —`pattern_entry`,
+  `downwind_lookahead`, `pattern_rollout`, `can_join_downwind`, `approach_gate`— y los valores
+  `ENTRY`, `DOWNWIND` y `BASE` del enum de la aeronave.
+
 ---
 
 ### `WellDeck` — `core/unit/lhd_wasp/well_deck.gd`

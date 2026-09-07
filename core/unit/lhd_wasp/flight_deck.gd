@@ -156,6 +156,10 @@ const _CROSS_SEG: Array = [Seg.CROSS_0, Seg.CROSS_1, Seg.LANE_1, Seg.CROSS_3]
 ## Por donde se entra: por detrás del buque. El que llega y no cabe espera aquí,
 ## y el que sí cabe arranca desde aquí su arrimada.
 @onready var _recovery_join: Marker2D = $RecoveryJoin
+## Donde toca el que entra rodando: el extremo de popa de la línea de cubierta.
+## Medido sobre el propio dibujo — la raya amarilla llega hasta ahí — y puesto
+## como marcador para poder cuadrarlo a ojo en el editor.
+@onready var _recovery_ramp: Marker2D = $RecoveryRamp
 
 ## Quién está aparcado en cada plaza. Es inventario, no reserva: lo que dice si
 ## se puede pasar por ahí es [member _held].
@@ -452,6 +456,14 @@ func _check_ready_to_launch() -> void:
 	var hay_quien_pueda := false
 	var estorbo_en_el_aire := false
 	for i in _units.size():
+		# **El que acaba de entrar no es candidato a salir.** Está posado en su
+		# plaza y con el control cedido, así que por fuera no se distingue de uno
+		# recién sacado del hangar; pero la cubierta todavía lo está llevando al
+		# ascensor. Sin esto se montaba una tanda con él dentro y el aparato
+		# recibía a la vez la carrera de despegue y el rodaje de vuelta: dos
+		# tirones opuestos, y el resultado era verlo ir de reversa por la pista.
+		if _recovering.has(i):
+			continue
 		var unidad: Node2D = _units[i]
 		if not is_instance_valid(unidad) or _handed.has(unidad.get_instance_id()):
 			continue
@@ -505,6 +517,11 @@ func _launch_next(order: Array) -> void:
 		_check_ready_to_launch()
 		return
 	var slot: int = order.pop_front()
+	# La lista se hizo al empezar la tanda y desde entonces puede haber entrado
+	# alguien en esa plaza. Al que está volviendo no se le lanza.
+	if _recovering.has(slot):
+		_launch_next(order)
+		return
 	var unit: Node2D = _units[slot]
 	if not is_instance_valid(unit):
 		_launch_next(order)
@@ -736,8 +753,8 @@ func _next_slot_for_elevator(elev_idx: int) -> int:
 	for slot in priority:
 		if _spot_claimed(slot):
 			continue
-		var wp: int = _SLOT_WAYPOINTS[slot]
-		if wp >= 0 and _units[wp] != null and not _leaving_soon(wp):
+		var wp: int = _gate_of(elev_idx)
+		if wp != slot and _units[wp] != null and not _leaving_soon(wp):
 			continue
 		return slot
 	return -1
@@ -812,11 +829,47 @@ func _launch_route(slot: int) -> Array:
 ## se vuelve por el mismo sitio.
 func _taxi_route(slot: int, elev_idx: int) -> Array:
 	var r: Array = [_ELEV_SEG[elev_idx], _LANE_SEG[elev_idx]]
-	var wp: int = _SLOT_WAYPOINTS[slot]
-	if wp >= 0:
-		r.append(_SPOT_SEG[wp])
-	r.append(_SPOT_SEG[slot])
+	var puerta := _gate_of(elev_idx)
+	for i in range(mini(slot, puerta), maxi(slot, puerta) + 1):
+		r.append(_SPOT_SEG[i])
 	return r
+
+
+## La plaza que queda a la altura de ese ascensor: por ahí se entra y se sale de
+## él. Sale de los marcadores y no de una tabla, así que mover un ascensor en el
+## editor mueve con él su acceso.
+func _gate_of(elev_idx: int) -> int:
+	var y: float = _elevators[elev_idx].position.y
+	var mejor := 0
+	var dist := INF
+	for i in _takeoff_points.size():
+		var d := absf(_takeoff_points[i].position.y - y)
+		if d < dist:
+			dist = d
+			mejor = i
+	return mejor
+
+
+## Por qué ascensor baja el que está en esa plaza: **el que le quede más cerca
+## rodando**.
+##
+## No es la misma pregunta que por cuál sale a cubierta, y contestar las dos con
+## la misma tabla era el fallo. Aquélla reparte plazas al **sacar** aparatos;
+## ésta mide el camino de vuelta. Desde la plaza intermedia el ascensor central
+## queda a 42 px y el de popa a 67, y la tabla mandaba al de popa: el avión se
+## recorría la pista al revés para llegar al más lejano de los dos.
+func _stow_elevator_of(slot: int) -> int:
+	var mejor := 0
+	var dist := INF
+	var aqui: Vector2 = _takeoff_points[slot].position
+	for e in _elevators.size():
+		var puerta: Vector2 = _takeoff_points[_gate_of(e)].position
+		var largo := absf(aqui.y - puerta.y) \
+				+ puerta.distance_to(_elevators[e].position)
+		if largo < dist:
+			dist = largo
+			mejor = e
+	return mejor
 
 
 ## La entrada. Hay dos formas de entrar y por eso hay dos rutas: por el costado
@@ -941,84 +994,126 @@ func cancel_recovery(id: int) -> void:
 	if estaba:
 		_refresh_holds()
 	_refresh_mode()
-## Reparte plaza a todos los que esperan y quepan, no al primero.
+## Reparte entrada a los que esperan, **empezando por el más cercano**.
 ##
-## No mira si la cubierta está ocupada: lo que decide es si hay una **ruta de
-## entrada entera libre**. Por eso pueden posarse cuatro a la vez —cuatro plazas
-## y cuatro carriles paralelos— y por eso el quinto espera sin que haya que
-## escribir en ninguna parte cuántos caben.
+## No por el que lo pidió primero: hacer esperar al que ya está encima del barco
+## porque otro, a mil píxeles, pulsó antes, no tiene sentido para quien lo mira.
 ##
-## Se recorre la cola por orden y **no se para en el primero que no cabe**: uno
-## que viene cargado necesita el eje libre y puede no caber mientras el de detrás
-## sí. Pararse ahí sería que el primero de la fila bloquee a todos.
+## Se reparte a todos los que quepan, no sólo al primero. Cuántos caben lo dice
+## [method _free_slot_for_recovery], que para el que llega rodando es uno.
 func _offer_recovery() -> void:
-	var entraron := false
 	var i := 0
 	while i < _inbound.size():
-		var id: int = _inbound[i]
-		var unit := instance_from_id(id) as Node2D
-		if not is_instance_valid(unit):
-			_inbound.remove_at(i)
-			entraron = true
-			continue
-		var along := _lands_along_deck(unit)
-		var slot := _free_slot_for_recovery(id, along)
-		if slot == -1:
+		if is_instance_valid(instance_from_id(_inbound[i])):
 			i += 1
-			continue
-		_inbound.remove_at(i)
+		else:
+			_inbound.remove_at(i)
+	var entraron := false
+	while not _inbound.is_empty():
+		var elegido := -1
+		var mejor := INF
+		var slot := -1
+		var along := false
+		for k in _inbound.size():
+			var u := instance_from_id(_inbound[k]) as Node2D
+			var d := global_position.distance_to(u.global_position)
+			if d >= mejor:
+				continue
+			var a := _lands_along_deck(u)
+			var s := _free_slot_for_recovery(_inbound[k], a)
+			if s == -1:
+				continue
+			mejor = d
+			elegido = k
+			slot = s
+			along = a
+		if elegido < 0:
+			break
+		var id: int = _inbound[elegido]
+		var unit := instance_from_id(id) as Node2D
+		_inbound.remove_at(elegido)
 		entraron = true
 		_recovering[slot] = id
-		# La reserva cubre la secuencia entera y no sólo el punto de toma: negarle
-		# el ascensor a uno que ya está posado no es una respuesta, es un atasco.
 		_hold(_recovery_route(slot, along), id)
+		# Al que llega rodando se le guarda también la bajada: como sólo entra
+		# uno cada vez, dejarlo posado y el ascensor cogido no adelanta nada.
+		if along:
+			_hold(_taxi_route(slot, recovery_elevator()), id)
 		_units[slot] = null
 		if unit.has_method("recovery_granted"):
 			unit.recovery_granted(slot)
 	if entraron:
 		_refresh_holds()
-## Qué plaza se le da al que entra, o −1 si hoy no hay ninguna a la que pueda
-## llegar. Se prefiere la de más a popa: es la que menos cubierta obliga a
-## recorrer, tanto por el costado como por el eje.
+func recovery_elevator() -> int:
+	var mejor := 0
+	for e in _elevators.size():
+		var y: float = _takeoff_points[_gate_of(e)].position.y
+		if y < _takeoff_points[_gate_of(mejor)].position.y:
+			mejor = e
+	return mejor
+
+
+## La plaza donde se posa todo el que entra.
+func recovery_slot() -> int:
+	return _gate_of(recovery_elevator())
+
+
+## ¿Se le puede dar entrada ahora? Devuelve la plaza, o −1.
 ##
-## Además de que la ruta esté libre hay una segunda condición, y es de sentido
-## común: **no se mete a nadie en una plaza cuya salida tapa uno aparcado.** Del
-## sitio de dentro se sale rodando por encima del de fuera, y el de fuera no se
-## va a mover solo — sólo lo mueve el jugador. Quien entrara ahí se quedaría
-## atrapado hasta que a alguien se le ocurriera sacarlo.
+## **Son dos reglas distintas porque son dos maniobras distintas.**
+##
+## El que llega rodando entra de uno en uno y siempre a la misma plaza, la que
+## está a la altura del ascensor central: necesita la pista entera para frenar,
+## así que repartirle sitios distintos daba una entrada distinta cada vez. Se le
+## reserva la secuencia completa, bajada incluida.
+##
+## El que se posa en vertical no necesita nada de eso: baja de arriba sobre la
+## plaza que le den. Coge la libre más a popa, que es la que menos cubierta le
+## obliga a cruzar, y pueden entrar varios a la vez porque no comparten pista.
 func _free_slot_for_recovery(owner: int, along_deck: bool) -> int:
+	if along_deck:
+		if not _recovering.is_empty():
+			return -1
+		var fija := recovery_slot()
+		if _dest[fija] != 0:
+			return -1
+		if not _route_free(_recovery_route(fija, true), owner):
+			return -1
+		if not _route_free(_taxi_route(fija, recovery_elevator()), owner):
+			return -1
+		return fija
 	for slot in _SPOT_SEG.size():
 		if _dest[slot] != 0:
 			continue
-		var wp: int = _SLOT_WAYPOINTS[slot]
-		if wp >= 0 and _units[wp] != null and not _leaving_soon(wp):
+		# La bajada desde esa plaza cruza otras, y si en alguna hay alguien
+		# aparcado que no se va a mover solo, el que entre ahí se queda encerrado.
+		var tapada := false
+		var bajada := _taxi_route(slot, _stow_elevator_of(slot))
+		for otra in _SPOT_SEG.size():
+			if otra == slot or _units[otra] == null or _leaving_soon(otra):
+				continue
+			if bajada.has(_SPOT_SEG[otra]):
+				tapada = true
+				break
+		if tapada:
 			continue
-		# Tampoco se ofrece una plaza que alguien de cubierta necesita para
-		# salir. Su ruta todavía no está reservada —espera a que se despeje otra
-		# cosa—, así que la comprobación de arriba no la ve, y sin esto el que
-		# llega se la quita al que se va una y otra vez.
 		if _needed_by_stow(slot):
 			continue
-		if _route_free(_recovery_route(slot, along_deck), owner):
+		if _route_free(_recovery_route(slot, false), owner):
 			return slot
 	return -1
-
-
-## ¿Hay alguien esperando para bajar que tenga que pasar por esa plaza?
 func _needed_by_stow(slot: int) -> bool:
+	var seg: int = _SPOT_SEG[slot]
 	for elev_idx in _stow_queues.size():
 		for job in _stow_queues[elev_idx]:
-			if _taxi_route(job["slot"], elev_idx).has(_SPOT_SEG[slot]):
+			if _taxi_route(job["slot"], elev_idx).has(seg):
 				return true
+	for k in _recovering:
+		if k != slot and _taxi_route(k, _stow_elevator_of(k)).has(seg):
+			return true
 	return false
 
 
-## ¿El que está aparcado ahí se va a ir solo?
-##
-## Es la diferencia entre un estorbo y una espera. El que acaba de entrar está en
-## cola para bajar y desaparece sin que nadie haga nada; el que salió del hangar
-## se queda hasta que el jugador le dé una orden, y puede ser nunca. Sólo el
-## segundo es motivo para no meter a nadie detrás de él.
 func _leaving_soon(slot: int) -> bool:
 	var unit: Node2D = _units[slot]
 	if unit == null:
@@ -1065,6 +1160,87 @@ func final_point() -> Vector2:
 
 ## El punto de arrimada de esa plaza: a su altura pero al costado y fuera del
 ## buque. En coordenadas del mundo.
+## Donde toca el que entra rodando. **La frenada empieza aquí y no antes**: con
+## el punto de toma metido en el agua, el avión terminaba de frenar antes de
+## llegar al barco y la cubierta no pintaba nada. Poniéndolo en la popa, los
+## 200 px de cubierta que tiene delante son su pista.
+func ramp_point() -> Vector2:
+	return to_global(_recovery_ramp.position)
+
+
+## Un punto **sobre la línea de cubierta**, por delante de donde esté el que
+## pregunta y a la distancia que pida.
+##
+## Es lo que mete a un avión en la raya en vez de hacerle cortar hacia ella. Al
+## perseguir un punto que va corriendo por la línea, el rumbo acaba siendo el de
+## la línea, porque el punto siempre está encima. Y funciona venga de donde
+## venga y mirando a donde mire, que es justo lo que no daba un punto fijo: allí
+## se llegaba con el morro donde tocara, y enderezarse costaba media vuelta y
+## ochenta píxeles de desvío.
+func axis_lookahead(from: Vector2, ahead: float, max_intercept_deg: float) -> Vector2:
+	var here := to_local(from)
+	var eje: Vector2 = _launch_point.position
+	# **El ángulo con que se corta la línea va acotado, y de ahí sale cuánto hay
+	# que mirar por delante.** Con una distancia fija, el que llega muy separado
+	# apunta casi perpendicular a la raya, la cruza y tiene que volver: es el
+	# zigzag de pasarse al otro lado. Alejando el punto en proporción al desvío,
+	# el corte nunca pasa de este ángulo y el avión vira y se endereza a la vez,
+	# sin cerrar el giro.
+	var desvio := absf(here.x - eje.x)
+	var pendiente := tan(deg_to_rad(clampf(max_intercept_deg, 5.0, 85.0)))
+	var delante := maxf(ahead, desvio / pendiente)
+	return to_global(Vector2(eje.x, maxf(here.y - delante, eje.y)))
+
+
+## ¿Está ya lo bastante a popa para empezar la entrada rodada?
+##
+## Es una **línea y no un radio**, por lo mismo que la de la popa. Un avión no
+## llega a un punto: pasa cerca, y con un radio de 45 px lo normal es fallarlo,
+## dar la vuelta y volver a entrar con el morro al revés. Eso era la mitad del
+## viraje feo — no venía de cómo gira, venía de tener que darse la vuelta.
+func astern_of_pattern(world_pos: Vector2, ancho: float) -> bool:
+	var aqui := to_local(world_pos)
+	if aqui.y < _recovery_ramp.position.y + pattern_leg:
+		return false
+	return absf(aqui.x - _launch_point.position.x) <= ancho
+
+
+## ¿Está encima de la línea de cubierta, dentro de ese margen?
+func on_centreline(world_pos: Vector2, ancho: float) -> bool:
+	return absf(to_local(world_pos).x - _launch_point.position.x) <= ancho
+
+
+## El otro extremo de la misma línea, más allá de la proa.
+##
+## **Es un punto al que mirar, no un sitio al que ir.** Un avión persiguiendo un
+## punto lejano sobre la línea se va poniendo encima de ella; persiguiendo el
+## punto de toma se planta ahí con el ángulo que traiga, que es lo que hacía que
+## entrase cruzado y a un costado.
+func axis_point() -> Vector2:
+	return to_global(_launch_point.position)
+
+
+## ¿Ya cruzó la popa? Es la puerta de la entrada rodada, y es una **línea** y no
+## un radio: cruzarla es estar sobre la cubierta, que es la condición de verdad.
+func past_ramp(world_pos: Vector2) -> bool:
+	return to_local(world_pos).y <= _recovery_ramp.position.y
+
+
+## Dónde para el que llega rodando: **antes del ascensor, nunca pasado de él**.
+##
+## A medio camino entre la línea del ascensor y el punto de aterrizaje que tiene
+## por detrás. Pararlo justo encima del ascensor obligaba a clavarlo al píxel, y
+## lo que sobraba de frenada lo recuperaba yendo hacia atrás. Parándolo antes,
+## ese resto se recorre rodando de frente, que es lo que hace un avión.
+func rollout_point(slot: int) -> Vector2:
+	var puerta := _gate_of(_stow_elevator_of(slot))
+	var sitio: Vector2 = _takeoff_points[puerta].position
+	var y := sitio.y
+	if puerta > 0:
+		y = (y + _takeoff_points[puerta - 1].position.y) * 0.5
+	return to_global(Vector2(sitio.x, y))
+
+
 func abeam_point(slot: int) -> Vector2:
 	var spot: Vector2 = _takeoff_points[slot].position
 	return to_global(Vector2(spot.x + abeam_offset, spot.y))
@@ -1097,14 +1273,24 @@ func take_aboard(unit: Node2D, slot: int) -> void:
 	if unit.get_parent() != self:
 		unit.reparent(self, true)
 	var spot: Marker2D = _takeoff_points[slot]
-	unit.position = spot.position
+	# El que baja en vertical se coloca sobre la marca: llega encima de ella y
+	# cuadrarlo no se nota. **El que llega rodando se queda donde paró**, porque
+	# para unos píxeles antes a propósito y colocarlo sería un salto; ese resto se
+	# lo come el rodaje, que va de frente.
+	if not _lands_along_deck(unit):
+		unit.position = spot.position
 	unit.rotation = spot.rotation
 	_units[slot] = unit
 	var id := unit.get_instance_id()
 	_hold([_SPOT_SEG[slot]], id)
-	_release([Seg.APPROACH, Seg.AXIS, _CROSS_SEG[slot]], id)
+	# **Todo de una vez.** Cada suelta vuelve a repartir la cubierta, así que
+	# soltando trozo a trozo el reparto ve media verdad y le da al siguiente lo
+	# primero que quedó libre. Medido: el segundo Harrier cargado se llevaba la
+	# plaza de popa, que es justo la que no sirve para llegar rodando.
+	var sueltos: Array = [Seg.APPROACH, Seg.AXIS, _CROSS_SEG[slot]]
 	for i in slot:
-		_release([_SPOT_SEG[i]], id)
+		sueltos.append(_SPOT_SEG[i])
+	_release(sueltos, id)
 ## Lo lleva rodando a su ascensor y lo baja. Es el taxi de salida al revés, por
 ## el mismo camino y con el mismo punto intermedio.
 ##
@@ -1116,7 +1302,7 @@ func take_aboard(unit: Node2D, slot: int) -> void:
 func stow(unit: Node2D, slot: int) -> void:
 	if not is_instance_valid(unit) or slot < 0:
 		return
-	var elev_idx := _elevator_of(slot)
+	var elev_idx := _stow_elevator_of(slot)
 	_stow_queues[elev_idx].append({"unit": unit, "slot": slot})
 	_refresh_mode()
 	_process_stow(elev_idx)
@@ -1159,17 +1345,22 @@ func _process_stow(elev_idx: int) -> void:
 	_movement_started()
 
 	var elevator: Marker2D = _elevators[elev_idx]
-	var wp_idx: int = _SLOT_WAYPOINTS[slot]
+	# Rueda por el eje hasta la altura del ascensor y cruza. Esa altura la da el
+	# propio ascensor, no una tabla escrita a mano.
+	var wp_idx := _gate_of(elev_idx)
+	var puerta: Vector2 = _takeoff_points[wp_idx].position
 
-	# En coordenadas de cubierta, igual que la salida: el aparato rueda **sobre**
+	# En coordenadas de cubierta, igual que al salir: el aparato rueda **sobre**
 	# el barco, así que si el barco avanza el aparato avanza con él.
 	var tw := unit.create_tween()
 	var desde: Vector2 = unit.position
 	var rot: float = unit.rotation
-	if wp_idx >= 0:
-		var wp: Marker2D = _takeoff_points[wp_idx]
-		rot = _face_and_roll(tw, unit, desde, wp.position, rot)
-		desde = wp.position
+	# Primero por el eje hasta la altura del ascensor, y después de través. Se
+	# mira **dónde está de verdad** y no de qué plaza es: el que llegó rodando
+	# para donde pudo, unos píxeles por detrás de su marca.
+	if desde.distance_to(puerta) > 1.0:
+		rot = _face_and_roll(tw, unit, desde, puerta, rot)
+		desde = puerta
 	_face_and_roll(tw, unit, desde, elevator.position, rot)
 
 	tw.finished.connect(func() -> void:
@@ -1215,21 +1406,6 @@ func _face_and_roll(tw: Tween, unit: Node2D, desde: Vector2, hasta: Vector2,
 	return rot + giro
 
 
-## A qué ascensor pertenece una plaza. Sale de la misma tabla que reparte las
-## plazas al salir, y por eso el taxi de vuelta recorre el camino de ida.
-func _elevator_of(slot: int) -> int:
-	for elev_idx in _ELEVATOR_SLOTS.size():
-		if _ELEVATOR_SLOTS[elev_idx].has(slot):
-			return elev_idx
-	return 0
-
-
-## Reparte los puestos de espera. Cada uno que aguarda recibe el suyo, y al
-## quedarse uno menos delante todos se corren hacia dentro.
-##
-## Sin esto todos reciben la misma orden de esperar y se van al mismo sitio:
-## apelotonados y dibujados unos encima de otros. Un aparato en espera necesita
-## un **puesto** además de un turno.
 func _refresh_holds() -> void:
 	for i in _inbound.size():
 		var u := instance_from_id(_inbound[i]) as Node2D

@@ -68,6 +68,10 @@ rotation = 3.1415927
 position = Vector2(-92, 230)
 gizmo_extents = 6.0
 
+[node name="RecoveryRamp" type="Marker2D" parent="FlightDeck" index="8" unique_id=902074175]
+position = Vector2(-22, 122)
+gizmo_extents = 6.0
+
 [node name="WellDeck" type="Node2D" parent="." index="4" unique_id=491283157]
 script = ExtResource("6")
 

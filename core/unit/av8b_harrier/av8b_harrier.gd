@@ -211,6 +211,26 @@ enum Recovery {
 ## A qué distancia del punto de entrada suelta gas. Con la aceleración del
 ## Harrier, pasar de crucero a mínima cuesta unos 80 px; el resto es margen.
 @export var throttle_back_at: float = 180.0
+## A qué distancia por delante persigue la línea de cubierta al entrar rodando.
+## Es un suelo: si viene muy separado, el punto se aleja solo para no cortar la
+## raya de través.
+@export var approach_lookahead: float = 150.0
+## Con qué ángulo corta la línea como mucho. **Es lo que quita el zigzag** sin
+## tocar cómo gira el avión: cuanto más cerrado, más largo entra.
+@export var intercept_deg: float = 30.0
+## Cuánto puede llevar el morro desviado y aun así darse por encarado al buque
+## para empezar la entrada. Ancho a propósito: sólo hace falta que venga hacia
+## acá, porque enderezarlo ya lo hace la propia línea durante la aproximación.
+@export var join_cone_deg: float = 60.0
+## Y cuánto puede estar separado de la línea para arrancar la aproximación.
+## Ancho: enderezarse es trabajo de la aproximación, no requisito para empezarla.
+## Estrecharlo aquí lo dejaba dando vueltas al punto sin llegar a cumplirlo nunca.
+@export var join_width: float = 600.0
+## Lo que se le admite al cruzar la popa para dejarle tocar. Si llega más ancho o
+## más torcido **no aterriza: repite la pasada**. Es lo que hace que todas las
+## tomas sean iguales, en vez de aceptar la que salga y arreglarla luego.
+@export var touchdown_width: float = 12.0
+@export var touchdown_cone_deg: float = 12.0
 
 var _recovery: Recovery = Recovery.NONE
 var _recovery_deck: FlightDeck = null
@@ -218,6 +238,11 @@ var _recovery_slot: int = -1
 ## Qué puesto ocupa en la cola de los que esperan entrar. De él sale el radio de
 ## su circuito: cada uno espera en el suyo y así no se dibujan unos sobre otros.
 var _hold_index: int = 0
+## Cómo va a entrar esta vez. **Se decide una vez, al pedir sitio, y no se vuelve
+## a preguntar.** La cubierta le reserva una ruta u otra según la respuesta, así
+## que si a mitad de aproximación soltara la última bomba y cambiara de idea,
+## volaría un patrón distinto del que tiene reservado.
+var _along_deck: bool = false
 ## De qué cubierta salió. Se la pone ella al crearlo.
 var home_deck: FlightDeck = null
 
@@ -239,6 +264,7 @@ func return_to(deck: FlightDeck) -> void:
 	attack.stop()
 	dogfight.stop()
 	_recovery_deck = deck
+	_along_deck = not comes_in_light()
 	var slot := deck.request_recovery(self)
 	_recovery_slot = slot
 	if slot >= 0:
@@ -272,7 +298,7 @@ func recovery_hold(index: int) -> void:
 ## parado. Es lo que le pregunta la cubierta para saber qué ruta reservarle, y
 ## está escrito contra [method comes_in_light] para que no haya dos respuestas.
 func lands_along_deck() -> bool:
-	return not comes_in_light()
+	return _along_deck
 
 
 ## Le tocó el turno. Lo llama la cubierta cuando queda libre.
@@ -287,9 +313,12 @@ func recovery_granted(slot: int) -> void:
 func _start_the_pattern() -> void:
 	_recovery = Recovery.JOIN
 	orbit.stop()
-	# Con gas: volver a casa es una orden que cumplir, no un paseo.
-	pilot.set_cruising(true)
-	pilot.set_target(_recovery_deck.initial_point(not comes_in_light()))
+	# **Sin gas.** Se vuelve a casa despacio, que es como se entra a un barco:
+	# cuanta menos velocidad traiga, menos cubierta gasta frenando y mejor se mete
+	# en la línea. Meterle gas al primero de la cola sólo servía para que llegara
+	# antes y peor.
+	pilot.set_cruising(false)
+	pilot.set_target(_recovery_deck.initial_point(_along_deck))
 
 
 ## ¿Está volviendo a bordo? Lo pregunta el HUD para decirlo con todas las letras
@@ -357,13 +386,22 @@ func _back_to_wing_flight() -> void:
 ## punto capturado al empezar deja de ser su sitio en cuanto el barco avanza; y
 ## persiguiendo el vivo, el avión iguala su marcha solo.
 func _leg_point() -> Vector2:
-	var por_el_eje := not comes_in_light()
+	var por_el_eje := _along_deck
 	match _recovery:
 		Recovery.JOIN:
 			return _recovery_deck.initial_point(por_el_eje)
 		Recovery.APPROACH:
-			return _recovery_deck.final_point() if por_el_eje \
-					else _recovery_deck.join_point()
+			# Entrando por el eje **se persigue la propia línea**, no un punto:
+			# un sitio de la raya que va corriendo por delante del avión. Eso es
+			# lo que lo mete encima de ella venga como venga. Mirando a un punto
+			# fijo llegaba cruzado y a un costado, y ochenta píxeles fuera.
+			if por_el_eje:
+				return _recovery_deck.axis_lookahead(global_position,
+						approach_lookahead, intercept_deg)
+			return _recovery_deck.join_point()
+		Recovery.RUNWAY:
+			# Para **antes** del ascensor, no encima de la plaza.
+			return _recovery_deck.rollout_point(_recovery_slot)
 		Recovery.ALONGSIDE:
 			return _recovery_deck.abeam_point(_recovery_slot)
 		_:
@@ -382,28 +420,42 @@ func _work_the_recovery() -> void:
 		return
 	var here := global_position
 	var point := _leg_point()
+	var por_el_eje := _along_deck
 	match _recovery:
 		Recovery.JOIN:
 			# Todavía es un avión: no puede pararse, así que el punto se corrige
 			# sin replantearle el viraje en curso.
 			pilot.update_target(point)
-			if here.distance_to(point) <= join_radius:
+			# La entrada rodada no espera a **llegar** al punto de espera: espera
+			# a estar lo bastante a popa y viniendo hacia el barco. Exigirle
+			# tocar el punto lo hacía fallarlo, dar la vuelta y empezar la
+			# aproximación de espaldas, que es de donde salía el viraje feo.
+			if por_el_eje:
+				if _recovery_deck.astern_of_pattern(here, join_width) 						and _facing_the_ship():
+					_recovery = Recovery.APPROACH
+					pilot.set_target(_leg_point())
+			elif here.distance_to(point) <= join_radius:
 				_recovery = Recovery.APPROACH
 				pilot.set_target(_leg_point())
 		Recovery.APPROACH:
-			# **Se apunta al punto de entrada, no más allá.** Apuntando más
-			# adelante en la misma línea el avión sale mejor alineado, pero deja
-			# de pasar cerca del punto de entrada: converge sobre la línea a lo
-			# largo de cientos de píxeles y cruza su altura todavía a un lado.
-			# Y entonces la puerta de la transición nunca se abre, el avión da
-			# vueltas para siempre y la cubierta se queda en recuperación.
-			# Probado: 90 s sin entrar. Lo que endereza la entrada es el tramo
-			# inicial largo, no el punto al que se mira.
 			pilot.update_target(point)
-			# Suelta gas al acercarse. Se entra despacio, y además cuanta menos
-			# velocidad traiga menos cubierta gasta frenando.
-			pilot.set_cruising(here.distance_to(point) > throttle_back_at)
-			if here.distance_to(point) <= join_radius:
+			# **Entrando por el eje la puerta es cruzar la popa, no acercarse a un
+			# punto.** Es la diferencia entre una línea y un radio: apuntar lejos
+			# alinea al avión pero le hace pasar de largo de cualquier punto
+			# intermedio, y con una puerta de radio la transición no se abría nunca
+			# — probado, 90 s dando vueltas. Con la línea sí se puede mirar lejos,
+			# que es lo único que endereza la entrada.
+			#
+			# El gas se suelta contra la popa en los dos casos: es el sitio al que
+			# de verdad hay que llegar despacio.
+			pilot.set_cruising(false)
+			if por_el_eje:
+				if _recovery_deck.past_ramp(here):
+					if _lined_up_to_land():
+						_go_jet_borne()
+					else:
+						_go_around()
+			elif here.distance_to(point) <= join_radius:
 				_go_jet_borne()
 		Recovery.RUNWAY:
 			# Entrando por el eje: morro paralelo al buque y frenada a lo largo
@@ -431,12 +483,35 @@ func _work_the_recovery() -> void:
 			pass
 
 
-## Deja de volar por el ala. **Aquí el Harrier deja de ser un avión**: el piloto
-## suelta el mando y lo recoge el de sustentación, heredando rumbo y velocidad
-## para que el relevo no se note — igual que al revés en el despegue.
+## ¿Viene hacia el buque, aunque sea de refilón? No se le pide puntería: la línea
+## de cubierta ya lo endereza durante la aproximación. Lo que se evita es que la
+## empiece de espaldas y tenga que dar media vuelta encima del barco.
+func _facing_the_ship() -> bool:
+	if not is_instance_valid(_recovery_deck):
+		return false
+	var desvio := angle_difference(get_facing(), _recovery_deck.bow_heading())
+	return absf(desvio) <= deg_to_rad(join_cone_deg)
+
+
+## ¿Llega en condiciones de tocar? Encima de la línea y con el morro derecho.
+func _lined_up_to_land() -> bool:
+	if not _recovery_deck.on_centreline(global_position, touchdown_width):
+		return false
+	var desvio := angle_difference(get_facing(), _recovery_deck.bow_heading())
+	return absf(desvio) <= deg_to_rad(touchdown_cone_deg)
+
+
+## No llegaba bien: **repite la pasada**. Vuelve al punto de espera y entra otra
+## vez, en vez de posarse torcido y arreglarlo arrastrándolo por la cubierta.
 ##
-## Y aquí se bifurcan las dos entradas, que es lo único que las separa: la misma
-## maniobra con otra lista de puntos.
+## Es lo que hace que todas las tomas se vean iguales. Y no se puede atascar:
+## cada vuelta empieza más a popa, con más recta para centrarse.
+func _go_around() -> void:
+	_recovery = Recovery.JOIN
+	pilot.set_cruising(false)
+	pilot.set_target(_recovery_deck.initial_point(_along_deck))
+
+
 func _go_jet_borne() -> void:
 	var rumbo := pilot.heading
 	var marcha := pilot.velocity
@@ -445,7 +520,12 @@ func _go_jet_borne() -> void:
 	# En cubierta no se dispara. Se apaga al entrar en sustentación y no al
 	# tocar: de aquí en adelante el avión está sobre el barco.
 	weapons.set_active(false)
-	_recovery = Recovery.ALONGSIDE if comes_in_light() else Recovery.RUNWAY
+	_recovery = Recovery.RUNWAY if _along_deck else Recovery.ALONGSIDE
+	if _along_deck:
+		# Rueda por cubierta: morro paralelo al buque y frenada calculada para
+		# pararse donde se le dice. De aquí en adelante no puede ir hacia atrás.
+		vtol.locked_heading = _recovery_deck.bow_heading()
+		vtol.start_rollout(_recovery_deck.rollout_point(_recovery_slot))
 
 
 ## Toca cubierta. Primero se sube a bordo y después se posa, para que la bajada

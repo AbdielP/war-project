@@ -70,6 +70,9 @@ signal state_changed(state: State)
 ## `lift_time` en el helicóptero: es el hueco donde entran la animación de
 ## posada y los efectos de tobera.
 @export var land_time: float = 1.4
+## A lo que rueda por cubierta cuando ya ha frenado y todavía le falta un tramo
+## para su sitio. Es velocidad de taxi, no de vuelo.
+@export var taxi_speed: float = 14.0
 ## Grados a sumar al rumbo para orientar el sprite. El arte apunta a +Y.
 @export var sprite_offset_deg: float = -90.0
 
@@ -79,6 +82,19 @@ var target: Vector2 = Vector2.ZERO
 ## Rumbo impuesto, o `NAN` si el morro sigue a la marcha. Entrando a un barco
 ## siempre está puesto: se entra **paralelo al buque**, no mirando a donde se va.
 var locked_heading: float = NAN
+
+## Rodando por cubierta. **Ahí no existe la marcha atrás**: un aparato con
+## ruedas sobre una cubierta sin gancho ni cables no retrocede, y hasta ahora sí
+## lo hacía. Se pasaba del punto de parada y volvía de espaldas con el morro
+## clavado al frente — medido, 12 px a 17 px/s durante segundo y medio. Eso era
+## lo que se veía como si frenase con un gancho.
+var rolling := false
+## Hacia dónde rueda. Se congela al empezar: la carrera va en línea recta y no se
+## vuelve a decidir a mitad.
+var _roll_dir := Vector2.ZERO
+## Lo que frena, calculado para pararse en el punto pedido. No es un número fijo
+## porque la cubierta que queda por delante cambia según dónde toque.
+var _brake: float = 0.0
 
 var _body: Node2D
 var _state: State = State.OFF
@@ -111,7 +127,25 @@ func take_over(from_heading: float, from_velocity: Vector2) -> void:
 func release() -> void:
 	set_physics_process(false)
 	locked_heading = NAN
+	rolling = false
 	_set_state(State.OFF)
+
+
+## Empieza la carrera de frenado por cubierta, para pararse en ese punto.
+##
+## **La frenada se calcula, no se ajusta.** Con un ritmo fijo hay que confiar en
+## que el número cuadre con la cubierta que quede por delante, y el día que no
+## cuadra el aparato se pasa. Sacándolo de lo que falta, para donde se le pide.
+func start_rollout(world_pos: Vector2) -> void:
+	if _body == null:
+		return
+	rolling = true
+	target = world_pos
+	_roll_dir = Vector2.from_angle(locked_heading) if not is_nan(locked_heading) \
+			else velocity.normalized()
+	var falta := maxf((world_pos - _body.global_position).dot(_roll_dir), 1.0)
+	var v := maxf(velocity.dot(_roll_dir), 0.0)
+	_brake = maxf(deceleration, v * v / (2.0 * falta))
 
 
 func get_state() -> State:
@@ -130,6 +164,14 @@ func steer_to(world_pos: Vector2) -> void:
 
 ## Si ya está sobre el sitio y quieto.
 func is_settled() -> bool:
+	# Rodando, llegar **es** haberse parado. Pedirle además estar a tres
+	# píxeles del punto es lo que le obligaba a volver atrás si se pasaba.
+	if rolling:
+		# Pararse **no es haber llegado**. Con sólo mirar la velocidad, uno que
+		# cruzaba la popa despacio se daba por posado ahí mismo, sobre el agua, y
+		# la cubierta lo arrastraba desde el mar hasta el ascensor.
+		var falta := (target - _body.global_position).dot(_roll_dir)
+		return falta <= arrive_radius and velocity.dot(_roll_dir) <= settle_speed
 	return _body != null \
 			and _body.global_position.distance_to(target) <= arrive_radius \
 			and velocity.length() <= settle_speed
@@ -154,9 +196,37 @@ func _physics_process(delta: float) -> void:
 				landed.emit()
 			return
 		State.SLOWING:
-			_glide(delta)
+			if rolling:
+				_roll(delta)
+			else:
+				_glide(delta)
 		_:
 			return
+
+
+## La carrera por cubierta: **sólo hacia adelante y sólo por su eje**.
+##
+## Si se pasa del punto se para donde esté, en vez de volver. Lo que sobre se lo
+## come el rodaje a la bodega, que va de frente — y por eso se le manda parar
+## **antes** del ascensor y no encima. Ver `FlightDeck.rollout_point`.
+func _roll(delta: float) -> void:
+	var falta := (target - _body.global_position).dot(_roll_dir)
+	var v := velocity.dot(_roll_dir)
+	var quiere := 0.0
+	if falta > arrive_radius:
+		quiere = sqrt(2.0 * _brake * falta)
+		# Y si se quedó corto, se recorre lo que falte rodando despacio. Un avión
+		# que se para a medias no se queda ahí: taxia hasta su sitio.
+		quiere = maxf(quiere, minf(taxi_speed, sqrt(2.0 * _brake * falta) + 1.0))
+	v = maxf(move_toward(v, quiere, _brake * delta), 0.0)
+	velocity = _roll_dir * v
+
+	var paso := deg_to_rad(yaw_speed_deg) * delta
+	if not is_nan(locked_heading):
+		heading = wrapf(heading + clampf(angle_difference(heading, locked_heading),
+				-paso, paso), -PI, PI)
+	_body.global_position += velocity * delta
+	_body.global_rotation = heading + deg_to_rad(sprite_offset_deg)
 
 
 func _glide(delta: float) -> void:
